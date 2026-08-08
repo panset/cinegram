@@ -162,8 +162,42 @@
     // track this is not owned by the clock: it persists across seeks and is
     // cleared only when the view changes.
     this.revealed = {};
-    this.theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+
+    // themePref is the reader's explicit choice, or null to keep following the
+    // system. Storing the *absence* of a choice separately is what lets the
+    // page track a system theme that changes while it is open, and stop the
+    // moment the reader says otherwise.
+    this.themePref = prefGet('dgm.theme');
+    this.theme = this.themePref || (systemDark() ? 'dark' : 'light');
+
+    // Stage transform. Reset per view: a zoom that made sense for one diagram
+    // is meaningless over the next.
+    this.zoom = 1;
+    this.panX = 0;
+    this.panY = 0;
+
     this.build();
+  }
+
+  // --- preferences ------------------------------------------------------
+  //
+  // localStorage throws outright in a sandboxed iframe and in some private
+  // modes, so every access is guarded: a page that cannot remember a
+  // preference should still play.
+
+  function prefGet(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  }
+
+  function prefSet(key, value) {
+    try {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    } catch (e) { /* not remembering is not a failure */ }
+  }
+
+  function systemDark() {
+    try { return matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) { return false; }
   }
 
   Player.prototype.view = function () {
@@ -223,13 +257,27 @@
     this.shareBtn = button('Copy link', 'dgm-btn', function () { self.copyLink(); });
     controls.appendChild(this.shareBtn);
 
+    this.zoomBtn = button('⌂', 'dgm-btn dgm-btn-icon', function () { self.resetZoom(); });
+    this.zoomBtn.title = 'Reset zoom and pan';
+    this.zoomBtn.setAttribute('aria-label', 'Reset zoom and pan');
+    controls.appendChild(this.zoomBtn);
+
     this.themeBtn = button(this.theme === 'dark' ? 'Light' : 'Dark', 'dgm-btn', function () {
       self.theme = self.theme === 'dark' ? 'light' : 'dark';
+      // An explicit choice also stops the page following the system, which is
+      // what the reader just overrode.
+      self.themePref = self.theme;
+      prefSet('dgm.theme', self.theme);
       self.themeBtn.textContent = self.theme === 'dark' ? 'Light' : 'Dark';
       document.documentElement.setAttribute('data-theme', self.theme);
       self.render();
     });
     controls.appendChild(this.themeBtn);
+
+    this.helpBtn = button('?', 'dgm-btn dgm-btn-icon', function () { self.toggleHelp(); });
+    this.helpBtn.title = 'Keyboard shortcuts';
+    this.helpBtn.setAttribute('aria-label', 'Keyboard shortcuts');
+    controls.appendChild(this.helpBtn);
 
     bar.appendChild(controls);
     this.root.appendChild(bar);
@@ -243,6 +291,7 @@
     this.overlay = el('div', 'dgm-overlay');
     this.stage.appendChild(this.overlay);
     body.appendChild(this.stage);
+    this.bindStageGestures();
 
     this.steps = el('ol', 'dgm-steps');
     body.appendChild(this.steps);
@@ -277,16 +326,29 @@
     foot.appendChild(this.clock);
     this.root.appendChild(foot);
 
+    this.help = this.buildHelp();
+    this.root.appendChild(this.help);
+
     document.documentElement.setAttribute('data-theme', this.theme);
+
+    // Follow the system theme until the reader overrides it. Without this a
+    // page left open across a scheduled light/dark switch keeps the old one.
+    try {
+      var mq = matchMedia('(prefers-color-scheme: dark)');
+      var follow = function (ev) {
+        if (self.themePref) return;
+        self.theme = ev.matches ? 'dark' : 'light';
+        self.themeBtn.textContent = self.theme === 'dark' ? 'Light' : 'Dark';
+        document.documentElement.setAttribute('data-theme', self.theme);
+        self.render();
+      };
+      if (mq.addEventListener) mq.addEventListener('change', follow);
+      else if (mq.addListener) mq.addListener(follow);
+    } catch (e) { /* no matchMedia: the initial theme stands */ }
+
     // One document-level handler for the whole page: the player swaps views
     // rather than being replaced, so these never stack up.
-    document.addEventListener('keydown', function (ev) {
-      if (ev.target && /input|select|textarea/i.test(ev.target.tagName)) return;
-      if (ev.key === ' ') { ev.preventDefault(); self.toggle(); }
-      if (ev.key === 'ArrowRight') { ev.preventDefault(); self.nextStep(1); }
-      if (ev.key === 'ArrowLeft') { ev.preventDefault(); self.nextStep(-1); }
-      if (ev.key === 'Escape' && self.stack.length) { ev.preventDefault(); self.back(); }
-    });
+    document.addEventListener('keydown', function (ev) { self.onKey(ev); });
 
     // The hash is the single source of truth for which view is showing, and
     // every navigation goes through it. That is what keeps the Back button
@@ -322,6 +384,183 @@
     }
 
     this.render();
+  };
+
+  // SHORTCUTS is both the key handler's documentation and the help overlay's
+  // content, so the two cannot drift apart.
+  var SHORTCUTS = [
+    ['Space', 'Play or pause'],
+    ['← / →', 'Previous or next step'],
+    ['Home / End', 'Jump to the start or the end'],
+    ['1 – 9', 'Jump to step n'],
+    ['Esc', 'Back out of a drilled-in view'],
+    ['?', 'Show or hide this list'],
+    ['Scroll', 'Zoom the diagram; drag to pan, ⌂ to reset']
+  ];
+
+  Player.prototype.onKey = function (ev) {
+    // Never steal a key from a control that is taking text or arrow input.
+    if (ev.target && /input|select|textarea/i.test(ev.target.tagName)) return;
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+
+    var sc = this.scenario();
+
+    if (ev.key === '?') { ev.preventDefault(); this.toggleHelp(); return; }
+    if (ev.key === 'Escape') {
+      if (this.helpOpen()) { ev.preventDefault(); this.toggleHelp(); return; }
+      if (this.stack.length) { ev.preventDefault(); this.back(); }
+      return;
+    }
+    if (ev.key === ' ') { ev.preventDefault(); this.toggle(); return; }
+    if (ev.key === 'ArrowRight') { ev.preventDefault(); this.nextStep(1); return; }
+    if (ev.key === 'ArrowLeft') { ev.preventDefault(); this.nextStep(-1); return; }
+    if (ev.key === 'Home') { ev.preventDefault(); this.pause(); this.seek(0); return; }
+    if (ev.key === 'End') { ev.preventDefault(); this.pause(); this.seek(sc.duration); return; }
+
+    if (ev.key >= '1' && ev.key <= '9') {
+      var i = parseInt(ev.key, 10) - 1;
+      if (i < sc.steps.length) {
+        ev.preventDefault();
+        this.pause();
+        this.seek(sc.steps[i].start);
+      }
+    }
+  };
+
+  Player.prototype.buildHelp = function () {
+    var self = this;
+    var box = el('div', 'dgm-help');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', 'Keyboard shortcuts');
+    box.style.display = 'none';
+
+    var panel = el('div', 'dgm-help-panel');
+    panel.appendChild(elText('div', 'dgm-help-title', 'Keyboard shortcuts'));
+
+    // With reduced motion there is no autoplay, so stepping is not a fallback
+    // — it is how the diagram is meant to be read. Say so where it is useful.
+    if (prefersReducedMotion()) {
+      panel.appendChild(elText('div', 'dgm-help-note',
+        'Your system asks for reduced motion, so playback does not start on its own. ' +
+        'Step through with the arrow keys.'));
+    }
+
+    var list = el('dl', 'dgm-help-list');
+    SHORTCUTS.forEach(function (row) {
+      list.appendChild(elText('dt', '', row[0]));
+      list.appendChild(elText('dd', '', row[1]));
+    });
+    panel.appendChild(list);
+
+    var close = button('Close', 'dgm-btn', function () { self.toggleHelp(); });
+    panel.appendChild(close);
+
+    box.appendChild(panel);
+    box.addEventListener('click', function (ev) {
+      if (ev.target === box) self.toggleHelp();
+    });
+    return box;
+  };
+
+  Player.prototype.helpOpen = function () {
+    return this.help && this.help.style.display !== 'none';
+  };
+
+  Player.prototype.toggleHelp = function () {
+    this.help.style.display = this.helpOpen() ? 'none' : '';
+  };
+
+  // --- pan and zoom -----------------------------------------------------
+  //
+  // The transform goes on the SVG holder rather than the SVG's viewBox, which
+  // keeps it out of mermaid's way entirely. It also means getBoundingClientRect
+  // on a node already reflects the zoom, so notes, badges and gauges follow
+  // their elements with no extra arithmetic.
+
+  var ZOOM_MIN = 0.4;
+  var ZOOM_MAX = 4;
+
+  Player.prototype.bindStageGestures = function () {
+    var self = this;
+
+    this.stage.addEventListener('wheel', function (ev) {
+      ev.preventDefault();
+      var factor = Math.exp(-ev.deltaY * 0.0015);
+      self.zoomAt(ev.clientX, ev.clientY, factor);
+    }, { passive: false });
+
+    this.stage.addEventListener('dblclick', function () { self.resetZoom(); });
+
+    var dragging = false, moved = false, lastX = 0, lastY = 0;
+
+    this.stage.addEventListener('pointerdown', function (ev) {
+      if (ev.button !== 0) return;
+      dragging = true;
+      moved = false;
+      lastX = ev.clientX;
+      lastY = ev.clientY;
+    });
+
+    window.addEventListener('pointermove', function (ev) {
+      if (!dragging) return;
+      var dx = ev.clientX - lastX, dy = ev.clientY - lastY;
+      // A few pixels of slop, so a click on a node is not read as a pan and
+      // the node still activates.
+      if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+      moved = true;
+      lastX = ev.clientX;
+      lastY = ev.clientY;
+      self.panX += dx;
+      self.panY += dy;
+      self.applyTransform();
+    });
+
+    window.addEventListener('pointerup', function () {
+      if (moved) self.stage.classList.remove('is-panning');
+      dragging = false;
+    });
+
+    this.stage.addEventListener('click', function (ev) {
+      // Swallow the click that ends a drag, so panning across a node does not
+      // also drill into it.
+      if (moved) { ev.stopPropagation(); ev.preventDefault(); moved = false; }
+    }, true);
+  };
+
+  Player.prototype.zoomAt = function (clientX, clientY, factor) {
+    var next = clamp(this.zoom * factor, ZOOM_MIN, ZOOM_MAX);
+    if (next === this.zoom) return;
+
+    // Keep the point under the cursor where it is: solve for the pan that
+    // leaves this stage-local point fixed across the scale change.
+    var r = this.stage.getBoundingClientRect();
+    var x = clientX - r.left, y = clientY - r.top;
+    this.panX = x - (x - this.panX) * (next / this.zoom);
+    this.panY = y - (y - this.panY) * (next / this.zoom);
+    this.zoom = next;
+    this.applyTransform();
+  };
+
+  Player.prototype.resetZoom = function () {
+    this.zoom = 1;
+    this.panX = 0;
+    this.panY = 0;
+    this.applyTransform();
+  };
+
+  Player.prototype.applyTransform = function () {
+    if (this.holder) {
+      this.holder.style.transformOrigin = '0 0';
+      this.holder.style.transform =
+        'translate(' + this.panX + 'px,' + this.panY + 'px) scale(' + this.zoom + ')';
+    }
+    if (this.zoomBtn) {
+      this.zoomBtn.classList.toggle('is-on', this.zoom !== 1 || this.panX !== 0 || this.panY !== 0);
+    }
+    // Overlay content is positioned from client rects, which the transform has
+    // just changed, so it has to be laid out again.
+    this.apply(this.time);
+    this.syncChips();
   };
 
   // isEmbedded reads the query string rather than the hash, so it survives the
@@ -500,6 +739,10 @@
     this.revealed = {};
     this.svg = null;
     this.pendingAutoplay = true;
+    // A zoom that framed one diagram means nothing over the next.
+    this.zoom = 1;
+    this.panX = 0;
+    this.panY = 0;
 
     this.buildPicker();
     this.adoptScenarioSpeed();
@@ -551,6 +794,8 @@
         self.stage.innerHTML = '';
         self.stage.appendChild(holder);
         self.stage.appendChild(self.overlay);
+        self.holder = holder;
+        self.applyTransform();
 
         self.svg = holder.querySelector('svg');
         if (self.svg) {
@@ -633,7 +878,21 @@
       }
       target.setAttribute('class', baseClass(target) + ' dgm-clickable');
       if (b.label) tooltip(target, b.label);
+
+      // Reachable by keyboard, and announced as the control it behaves like.
+      // An SVG group is not focusable or actionable by default, so every part
+      // of that has to be said explicitly.
+      target.setAttribute('tabindex', '0');
+      target.setAttribute('role', 'button');
+      target.setAttribute('aria-label', b.label || describeBinding(b));
+
       target.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        self.activate(b);
+      });
+      target.addEventListener('keydown', function (ev) {
+        if (ev.key !== 'Enter' && ev.key !== ' ') return;
         ev.preventDefault();
         ev.stopPropagation();
         self.activate(b);
@@ -644,6 +903,15 @@
     this.applyHidden();
     this.warn(problems);
   };
+
+  // describeBinding is the fallback accessible name for a clickable element
+  // that the author gave no label.
+  function describeBinding(b) {
+    if (b.kind === 'view') return 'Open the ' + (b.view || 'linked') + ' view';
+    if (b.kind === 'url') return 'Open ' + (b.url || 'link') + ' in a new tab';
+    if (b.kind === 'step') return 'Jump to step ' + (b.step || '');
+    return 'Reveal hidden detail';
+  }
 
   // elementFor resolves a binding source, which may name a node or a subgraph.
   Player.prototype.elementFor = function (id) {
@@ -797,15 +1065,23 @@
     var self = this;
     var sc = this.scenario();
     this.steps.innerHTML = '';
+    this.stepEls = [];
     sc.steps.forEach(function (st, i) {
-      var li = el('li', 'dgm-step');
-      li.appendChild(elText('span', 'dgm-step-name', st.name || st.id));
-      li.appendChild(elText('span', 'dgm-step-time', fmt(st.start) + ' – ' + fmt(st.end)));
+      var li = el('li', 'dgm-step-row');
+      // A real button, not a click handler on an <li>: it is a control, and
+      // making it one is what puts it in the tab order and gives it Enter and
+      // Space without any of that being reimplemented here.
+      var btn = el('button', 'dgm-step');
+      btn.type = 'button';
+      btn.appendChild(elText('span', 'dgm-step-name', st.name || st.id));
+      btn.appendChild(elText('span', 'dgm-step-time', fmt(st.start) + ' – ' + fmt(st.end)));
       // The list stays a compact index; the first line of the prose is enough
       // to tell two similarly named steps apart on hover.
-      if (st.desc) li.title = firstLine(st.desc);
-      li.addEventListener('click', function () { self.seek(st.start); });
+      if (st.desc) btn.title = firstLine(st.desc);
+      btn.addEventListener('click', function () { self.seek(st.start); });
+      li.appendChild(btn);
       self.steps.appendChild(li);
+      self.stepEls.push(btn);
     });
 
     this.scrub.max = String(sc.duration || 0);
@@ -890,6 +1166,16 @@
   // when the selected scenario changes — not on every render — so a theme
   // toggle does not throw away a rate the viewer chose with the button.
   Player.prototype.adoptScenarioSpeed = function () {
+    // A rate the reader chose outranks the author's default — they set it while
+    // watching this kind of content and meant it to stick, the same way a video
+    // player remembers playback speed. Only the button writes this key, so an
+    // untouched player still starts wherever the scenario said.
+    var saved = parseFloat(prefGet('dgm.speed'));
+    if (!isNaN(saved) && saved > 0) {
+      this.speed = saved;
+      this.syncSpeed();
+      return;
+    }
     var s = this.scenario().speed;
     this.speed = (typeof s === 'number' && s > 0) ? s : 1;
     this.syncSpeed();
@@ -910,6 +1196,7 @@
       if (order[i] > this.speed + 1e-9) { next = order[i]; break; }
     }
     this.speed = next;
+    prefSet('dgm.speed', String(next));
     this.syncSpeed();
   };
 
@@ -968,7 +1255,7 @@
     this.clock.textContent = fmt(this.time) + ' / ' + fmt(sc.duration);
 
     var current = null;
-    var kids = this.steps.children;
+    var kids = this.stepEls || [];
     for (var i = 0; i < kids.length; i++) {
       var st = sc.steps[i];
       var active = st && this.time >= st.start && this.time < st.end;
@@ -976,6 +1263,7 @@
       if (active) current = st;
       kids[i].classList.toggle('is-active', !!active);
       kids[i].classList.toggle('is-done', !!done);
+      kids[i].setAttribute('aria-current', active ? 'step' : 'false');
     }
     this.syncCaption(current);
   };

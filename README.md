@@ -363,11 +363,42 @@ diagramator lint    <file.dgm>                 # diagnostics only
 
 The preview page plays itself: after a view renders, a scenario with
 `autoplay` (the default) starts, unless the reader's system asks for reduced
-motion. Space toggles play, the arrow keys step, and the speed button cycles
-`0.25 → 0.5 → 1 → 1.5 → 2` starting from whatever the scenario's `speed` set —
-its label always shows the rate actually in effect. `window.DIAGRAMATOR_PLAYER`
-is the same player, so `DIAGRAMATOR_PLAYER.seek(2400)` lands on a moment
-deterministically.
+motion. `window.DIAGRAMATOR_PLAYER` is the same player, so
+`DIAGRAMATOR_PLAYER.seek(2400)` lands on a moment deterministically.
+
+### Driving the player
+
+Press `?` in the page for this list.
+
+| Key | Does |
+| --- | --- |
+| `Space` | Play or pause |
+| `←` / `→` | Previous or next step |
+| `Home` / `End` | Jump to the start or the end |
+| `1`–`9` | Jump to step *n* |
+| `Esc` | Back out of a drilled-in view, or close the help |
+| `?` | Show or hide the shortcut list |
+
+Scroll to zoom the stage — anchored on the cursor, so the thing you are
+pointing at stays put — drag to pan, and `⌂` or a double-click resets. Notes,
+badges and gauges are positioned from live element rects, so they stay glued to
+their nodes at any zoom. Zoom resets when you change view, since a framing that
+suited one diagram means nothing over the next.
+
+Every clickable element is reachable by `Tab` and activates with `Enter` or
+`Space`; the step list is real buttons, not clickable rows.
+
+Theme and speed persist in `localStorage`. The theme follows your system until
+you press the button, and then stops — an explicit choice is exactly the thing
+that should not be overridden later. A speed you chose outranks a scenario's
+`speed` for the same reason; untouched, the scenario's own rate still wins. The
+speed button cycles `0.25 → 0.5 → 1 → 1.5 → 2` and its label always shows the
+rate actually in effect.
+
+With `prefers-reduced-motion: reduce`, nothing autoplays, the decorative
+animation stops, and the help says so — stepping through with the arrow keys is
+the intended way to read it. The particle still travels, because that is the
+content rather than an effect.
 
 Relative paths are resolved against the directory you ran the command from,
 including under `bazel run` — the binary executes from its runfiles tree, so

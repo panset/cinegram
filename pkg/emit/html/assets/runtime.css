@@ -165,6 +165,92 @@ body {
   opacity: 0;
 }
 
+.dgm-btn-icon {
+  min-width: 34px;
+  padding: 6px 8px;
+  text-align: center;
+}
+
+.dgm-btn-icon.is-on {
+  border-color: var(--dgm-accent);
+  color: var(--dgm-accent);
+}
+
+/* --- focus ---------------------------------------------------------------
+   One visible ring for everything reachable by keyboard, including the SVG
+   groups that only became focusable because the runtime said so. */
+
+.dgm-btn:focus-visible,
+.dgm-select:focus-visible,
+.dgm-step:focus-visible,
+.dgm-chip:focus-visible,
+.dgm-scrub:focus-visible,
+.dgm-scrub-mark:focus-visible {
+  outline: 2px solid var(--dgm-accent);
+  outline-offset: 2px;
+}
+
+.dgm-clickable:focus-visible {
+  outline: 2px solid var(--dgm-accent);
+  outline-offset: 3px;
+}
+
+/* --- keyboard help ------------------------------------------------------- */
+
+.dgm-help {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 16px;
+}
+
+.dgm-help-panel {
+  background: var(--dgm-bg);
+  color: var(--dgm-fg);
+  border: 1px solid var(--dgm-border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  min-width: 300px;
+  max-width: 440px;
+  box-shadow: 0 20px 60px var(--dgm-shadow);
+}
+
+.dgm-help-title {
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.dgm-help-note {
+  font-size: 12px;
+  color: var(--dgm-muted);
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.dgm-help-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0 0 14px;
+  font-size: 13px;
+}
+
+.dgm-help-list dt {
+  font-family: 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--dgm-accent);
+  white-space: nowrap;
+}
+
+.dgm-help-list dd {
+  margin: 0;
+  color: var(--dgm-muted);
+}
+
 .dgm-warning {
   background: var(--dgm-warn-bg);
   color: var(--dgm-warn-fg);
@@ -189,15 +275,21 @@ body {
   }
 }
 
+/* overflow is hidden rather than scrolled: the stage is pannable now, and a
+   scrollbar competing with drag-to-pan reads as two ways to do one thing. */
 .dgm-stage {
   position: relative;
   background: var(--dgm-panel);
   border: 1px solid var(--dgm-border);
   border-radius: 12px;
   padding: 20px;
-  overflow-x: auto;
+  overflow: hidden;
   min-height: 320px;
+  cursor: grab;
+  touch-action: none;
 }
+
+.dgm-stage:active { cursor: grabbing; }
 
 .dgm-svg-holder svg {
   display: block;
@@ -222,19 +314,33 @@ body {
   overflow: hidden;
 }
 
-.dgm-step {
+.dgm-step-row {
   counter-increment: dgm-step;
+}
+
+/* A real <button>, so it is in the tab order and answers Enter and Space
+   without any of that being reimplemented. The reset undoes what being a
+   button brings with it. */
+.dgm-step {
+  appearance: none;
+  width: 100%;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  text-align: left;
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 10px 12px 10px 34px;
   position: relative;
   cursor: pointer;
+  border: 0;
   border-bottom: 1px solid var(--dgm-border);
   transition: background 0.15s;
 }
 
-.dgm-step:last-child { border-bottom: 0; }
+.dgm-step-row:last-child .dgm-step { border-bottom: 0; }
 
 .dgm-step::before {
   content: counter(dgm-step);
@@ -725,3 +831,39 @@ body {
 /* A note that had to be moved to avoid another one is no longer pointing at
    its target, so it stops pretending to. */
 .dgm-note.is-adrift::after { display: none; }
+
+/* --- reduced motion ------------------------------------------------------
+ *
+ * A reader who asks for reduced motion still wants the diagram — they want it
+ * to hold still. Autoplay is already suppressed in the runtime; what is left is
+ * the decoration that moves on its own, which goes away entirely, while the
+ * transitions that communicate a change of state are only shortened. The
+ * particle still travels: that is the content, not an effect.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .dgm-particle-halo,
+  .dgm-pulse rect,
+  .dgm-pulse circle,
+  .dgm-pulse polygon,
+  .dgm-pulse path,
+  .dgm-waypoint {
+    animation: none;
+  }
+
+  .dgm-btn,
+  .dgm-select,
+  .dgm-step,
+  .dgm-chip,
+  .dgm-caption,
+  .dgm-collapsed,
+  .dgm-unfocused,
+  .dgm-flow-active,
+  .dgm-scrub-mark,
+  .dgm-highlight,
+  .dgm-busy,
+  .dgm-dim,
+  .dgm-hidden,
+  .dgm-noted {
+    transition-duration: 0.01ms;
+  }
+}
