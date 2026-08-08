@@ -43,6 +43,14 @@ scenario "broken"
     highlight ing { status: fail }
   }
 
+  step j "gauge missing both of the things that identify it" {
+    gauge ing
+  }
+
+  step k "a persistent action cannot expire" {
+    set ing { badge: "leader", dur: 500ms }
+  }
+
   step a "duplicate step id" {
     highlight ing
   }

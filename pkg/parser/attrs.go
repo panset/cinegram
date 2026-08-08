@@ -64,6 +64,23 @@ var actionAttrs = map[ast.ActionKind]map[string]string{
 	ast.ActionNote: timingAttrs,
 	ast.ActionWait: timingAttrs,
 	ast.ActionSeq:  timingAttrs,
+
+	ast.ActionSet: extendAttrs(persistAttrs, map[string]string{
+		"badge": "string", "state": "string",
+	}),
+	ast.ActionGauge: extendAttrs(persistAttrs, map[string]string{
+		"label": "string", "value": "string",
+	}),
+	ast.ActionUnset: persistAttrs,
+}
+
+// persistAttrs are the keys a persistent action understands. Deliberately not
+// built on timingAttrs: `dur` on a `set` reads as though it would expire, and
+// it never does — the state lasts until something replaces it. Leaving the key
+// out makes that a warning instead of a silent misunderstanding.
+var persistAttrs = map[string]string{
+	"delay": "duration", "at": "duration",
+	"style": "string", "color": "string",
 }
 
 // easeNames are the progress curves a flow may travel with. The runtime remaps

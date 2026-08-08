@@ -106,6 +106,18 @@ type Scenario struct {
 	Loop     bool    `json:"loop"`
 	Autoplay bool    `json:"autoplay"`
 	Steps    []Step  `json:"steps"`
+
+	// Persistent holds state that outlives the step that set it: a badge, a
+	// gauge reading, a standing state class.
+	//
+	// It cannot live in a Step, because a renderer skips steps whose window
+	// excludes the current time — a badge set in step 1 has to survive step 6.
+	// So the compiler flattens it to scenario level and works out each window
+	// itself: a track opens when its action fires and closes when a later
+	// action writes the same slot on the same target, or at Duration. The
+	// renderer then applies any persistent track whose window contains t, and
+	// seek-determinism follows for free.
+	Persistent []Track `json:"persistent,omitempty"`
 }
 
 // Step is one beat of a scenario. Steps never overlap: each begins where the
@@ -135,6 +147,15 @@ const (
 	TrackPulse     TrackKind = "pulse"
 	TrackShow      TrackKind = "show"
 	TrackHide      TrackKind = "hide"
+
+	// Persistent kinds, found in Scenario.Persistent rather than Step.Tracks.
+	//
+	// TrackSet carries a badge in Label and a state name in Value; either may
+	// be empty. TrackGauge names the reading in Label and its current value in
+	// Value — a string, because the timeline renders readings and never does
+	// arithmetic on them.
+	TrackSet   TrackKind = "set"
+	TrackGauge TrackKind = "gauge"
 )
 
 // Track is a single animated element with absolute start and end times.
@@ -160,6 +181,7 @@ type Track struct {
 
 	Label string `json:"label,omitempty"`
 	Text  string `json:"text,omitempty"`
+	Value string `json:"value,omitempty"`
 	Style string `json:"style,omitempty"`
 	Color string `json:"color,omitempty"`
 	Ease  string `json:"ease,omitempty"`

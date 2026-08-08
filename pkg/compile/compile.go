@@ -9,6 +9,7 @@ package compile
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/tejaspanse/diagramator/pkg/ast"
 	"github.com/tejaspanse/diagramator/pkg/diag"
@@ -171,6 +172,8 @@ func compileScenario(sc *ast.Scenario, index int, table *symbol.Table, bag *diag
 		Autoplay: attrBool(sc.Attrs, "autoplay", true, bag),
 	}
 
+	p := newPersist()
+
 	cursor := 0
 	for i, st := range sc.Steps {
 		start := cursor + attrMillis(st.Attrs, "delay", 0, bag)
@@ -183,12 +186,141 @@ func compileScenario(sc *ast.Scenario, index int, table *symbol.Table, bag *diag
 			Start: start,
 			End:   start + span,
 		}
-		step.Tracks = layout(st.Actions, start, start+span, table, bag)
+		step.Tracks = layout(st.Actions, start, start+span, table, bag, p)
 		out.Steps = append(out.Steps, step)
 		cursor = step.End
 	}
 	out.Duration = cursor
+
+	// Anything still set when the scenario runs out stays set to the end.
+	p.finish(cursor)
+	out.Persistent = p.out
 	return out
+}
+
+// --- persistent state --------------------------------------------------------
+
+// persist accumulates the state that outlives the step that wrote it.
+//
+// The whole point of doing this in the compiler is that the renderer should not
+// have to. A badge is not "on from here" — it is on over a closed interval, and
+// working out where that interval ends means looking ahead at every later
+// action. The compiler already walks them in order, so it closes each window as
+// it goes and hands the renderer a list of intervals it can test against t.
+type persist struct {
+	out  []ir.Track
+	open map[string]int // "target\x00slot" -> index into out
+}
+
+func newPersist() *persist { return &persist{open: make(map[string]int)} }
+
+// slotKey identifies what a write collides with. Two writes close each other's
+// window exactly when this matches: per target, one `set` slot and one slot per
+// distinct gauge label, so two gauges on a node coexist and a repeat of one
+// replaces it.
+func slotKey(target, slot string) string { return target + "\x00" + slot }
+
+func gaugeSlot(a ast.Action) string { return "gauge:" + a.Attrs.String("label") }
+
+// closeAt ends an open window.
+//
+// Times need not arrive in order — `at:` can fire an action earlier than one
+// written above it — so a close that lands before the open is clamped to a
+// zero-length window rather than producing an inverted one the renderer would
+// treat as always-open.
+func (p *persist) closeAt(key string, at int) {
+	i, ok := p.open[key]
+	if !ok {
+		return
+	}
+	if at < p.out[i].Start {
+		at = p.out[i].Start
+	}
+	p.out[i].End = at
+	delete(p.open, key)
+}
+
+// write closes whatever held this slot and opens a new window.
+func (p *persist) write(target, slot string, at int, tr ir.Track) {
+	key := slotKey(target, slot)
+	p.closeAt(key, at)
+
+	tr.Start = at
+	tr.End = at // provisional: the next write to this slot, or finish(), extends it
+	p.out = append(p.out, tr)
+	p.open[key] = len(p.out) - 1
+}
+
+// clear ends every window on a target, which is what `unset` means.
+func (p *persist) clear(target string, at int) {
+	prefix := target + "\x00"
+	for key := range p.open {
+		if strings.HasPrefix(key, prefix) {
+			p.closeAt(key, at)
+		}
+	}
+}
+
+// finish runs every window still open to the end of the scenario.
+func (p *persist) finish(end int) {
+	for key, i := range p.open {
+		stop := end
+		if stop < p.out[i].Start {
+			stop = p.out[i].Start
+		}
+		p.out[i].End = stop
+		delete(p.open, key)
+	}
+}
+
+// layoutPersist records a persistent action. It contributes no step track: the
+// state it writes is scenario-scoped, and a step track would vanish the moment
+// the clock left the step.
+func layoutPersist(a ast.Action, at int, p *persist) {
+	for _, tgt := range a.Targets {
+		switch a.Kind {
+		case ast.ActionUnset:
+			p.clear(tgt.Name, at)
+
+		case ast.ActionGauge:
+			// An empty value retires the reading, the same way an empty badge
+			// retires a badge.
+			if a.Attrs.String("value") == "" {
+				p.closeAt(slotKey(tgt.Name, gaugeSlot(a)), at)
+				continue
+			}
+			p.write(tgt.Name, gaugeSlot(a), at, ir.Track{
+				Kind:   ir.TrackGauge,
+				Target: tgt.Name,
+				Label:  a.Attrs.String("label"),
+				Value:  a.Attrs.String("value"),
+				Style:  a.Attrs.String("style"),
+				Color:  a.Attrs.String("color"),
+			})
+
+		default: // ast.ActionSet
+			badge, state := a.Attrs.String("badge"), a.Attrs.String("state")
+			// `set x { badge: "" }` is how a badge is taken away. It closes the
+			// set slot only — the node's gauges are separate readings and have
+			// no business disappearing with it.
+			if badge == "" && state == "" {
+				p.closeAt(slotKey(tgt.Name, "set"), at)
+				continue
+			}
+			p.write(tgt.Name, "set", at, ir.Track{
+				Kind:   ir.TrackSet,
+				Target: tgt.Name,
+				Label:  badge,
+				Value:  state,
+				Style:  a.Attrs.String("style"),
+				Color:  a.Attrs.String("color"),
+			})
+		}
+	}
+}
+
+func isPersistent(k ast.ActionKind) bool {
+	return k == ast.ActionSet || k == ast.ActionGauge || k == ast.ActionUnset
 }
 
 // stepSpan decides how long a step lasts: an explicit `dur` if given, otherwise
@@ -226,13 +358,7 @@ func intrinsic(a ast.Action, bag *diag.Bag) int {
 	case ast.ActionSeq:
 		total := 0
 		for _, child := range a.Body {
-			d := intrinsic(child, bag)
-			if d == 0 {
-				// A stateful action inside a seq has no span to inherit,
-				// so it takes the default rather than collapsing to zero.
-				d = defaultStepMillis
-			}
-			total += offsetOf(child, bag) + d
+			total += offsetOf(child, bag) + seqSpan(child, bag)
 		}
 		return total
 
@@ -241,42 +367,59 @@ func intrinsic(a ast.Action, bag *diag.Bag) int {
 	}
 }
 
+// seqSpan is how much of a seq's timeline a child consumes.
+//
+// A stateful action inside a seq has no step span to inherit, so it takes the
+// default rather than collapsing to zero. A persistent action is the exception:
+// it fires at an instant and its effect is not bounded by the seq at all, so
+// giving it a slice of the chain would insert a silent pause.
+func seqSpan(child ast.Action, bag *diag.Bag) int {
+	if isPersistent(child.Kind) {
+		return 0
+	}
+	if d := intrinsic(child, bag); d != 0 {
+		return d
+	}
+	return defaultStepMillis
+}
+
 // offsetOf is how far into its container an action starts.
 func offsetOf(a ast.Action, bag *diag.Bag) int {
 	return attrMillis(a.Attrs, "delay", 0, bag) + attrMillis(a.Attrs, "at", 0, bag)
 }
 
 // layout places actions between start and end, emitting absolute-time tracks.
-func layout(actions []ast.Action, start, end int, table *symbol.Table, bag *diag.Bag) []ir.Track {
+func layout(actions []ast.Action, start, end int, table *symbol.Table, bag *diag.Bag, p *persist) []ir.Track {
 	var tracks []ir.Track
 	for _, a := range actions {
-		tracks = append(tracks, layoutAction(a, start, end, table, bag)...)
+		tracks = append(tracks, layoutAction(a, start, end, table, bag, p)...)
 	}
 	return tracks
 }
 
-func layoutAction(a ast.Action, start, end int, table *symbol.Table, bag *diag.Bag) []ir.Track {
+func layoutAction(a ast.Action, start, end int, table *symbol.Table, bag *diag.Bag, p *persist) []ir.Track {
 	at := start + offsetOf(a, bag)
 
-	switch a.Kind {
-	case ast.ActionWait:
+	switch {
+	case a.Kind == ast.ActionWait:
 		return nil // a wait only consumes time; it draws nothing
 
-	case ast.ActionSeq:
+	case isPersistent(a.Kind):
+		layoutPersist(a, at, p)
+		return nil // recorded at scenario level, not as a track of this step
+
+	case a.Kind == ast.ActionSeq:
 		var tracks []ir.Track
 		cursor := at
 		for _, child := range a.Body {
-			d := intrinsic(child, bag)
-			if d == 0 {
-				d = defaultStepMillis
-			}
+			d := seqSpan(child, bag)
 			childStart := cursor + offsetOf(child, bag)
-			tracks = append(tracks, layoutAction(child, childStart, childStart+d, table, bag)...)
+			tracks = append(tracks, layoutAction(child, childStart, childStart+d, table, bag, p)...)
 			cursor = childStart + d
 		}
 		return tracks
 
-	case ast.ActionFlow:
+	case a.Kind == ast.ActionFlow:
 		return layoutFlow(a, at, table, bag)
 
 	default:

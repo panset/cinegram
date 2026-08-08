@@ -62,6 +62,24 @@ func validateActions(actions []ast.Action, t *symbol.Table, names []string, b *d
 		if a.Kind == ast.ActionFlow {
 			validateFlowHops(a, t, b)
 		}
+		if a.Kind == ast.ActionGauge {
+			validateGauge(a, b)
+		}
+	}
+}
+
+// validateGauge checks the two attributes a gauge cannot do without.
+//
+// `label` is not decoration: it is half the identity of the reading, so two
+// gauges on one node stay separate and a later `gauge` with the same label
+// replaces rather than stacks. Without it the compiler has no slot to write.
+func validateGauge(a ast.Action, b *diag.Bag) {
+	const form = `write it as: gauge n3 { label: "term", value: 3 }`
+	if a.Attrs.String("label") == "" {
+		b.ErrorHintf(a.At, form, "gauge needs a label naming what it reads")
+	}
+	if !a.Attrs.Has("value") {
+		b.ErrorHintf(a.At, form, "gauge needs a value")
 	}
 }
 

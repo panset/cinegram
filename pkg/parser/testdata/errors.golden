@@ -43,6 +43,10 @@ scenario "broken"
     flow client -> ing {status="maybe"}
   step i "status on an action that has no outcome"
     highlight ing {status="fail"}
+  step j "gauge missing both of the things that identify it"
+    gauge ing
+  step k "a persistent action cannot expire"
+    set ing {badge="leader" dur="500ms"}
   step a "duplicate step id"
     highlight ing
 
@@ -57,7 +61,7 @@ diagnostics:
   19:40: warning: unknown highlight attribute "wobble"
     hint: known here: at, color, delay, dur, label, style
   23:5: error: unknown action "teleport"
-    hint: known actions: flow, highlight, note, dim, pulse, show, hide, wait, seq
+    hint: known actions: flow, highlight, note, dim, pulse, show, hide, set, gauge, unset, wait, seq
   27:34: warning: unknown flow attribute "colour"
     hint: did you mean color?
   27:45: warning: unknown flow attribute "durr"
@@ -70,32 +74,38 @@ diagnostics:
     hint: valid statuses are ok, fail
   43:29: warning: unknown highlight attribute "status"
     hint: known here: at, color, delay, dur, label, style
-  46:3: error: duplicate step id "a"
-  51:16: error: view "dupe" has an absolute path
+  47:5: error: gauge needs a label naming what it reads
+    hint: write it as: gauge n3 { label: "term", value: 3 }
+  47:5: error: gauge needs a value
+    hint: write it as: gauge n3 { label: "term", value: 3 }
+  51:37: warning: unknown set attribute "dur"
+    hint: known here: at, badge, color, delay, state, style
+  54:3: error: duplicate step id "a"
+  59:16: error: view "dupe" has an absolute path
     hint: use a path relative to this file so the document stays portable
-  52:1: error: duplicate view id "dupe"
-  53:1: warning: view "orphan" is declared but nothing clicks through to it
-  57:9: error: "client" already has a click binding
+  60:1: error: duplicate view id "dupe"
+  61:1: warning: view "orphan" is declared but nothing clicks through to it
+  65:9: error: "client" already has a click binding
     hint: give each clickable element a single behaviour
-  58:9: error: "nosuchnode" is not a node in this diagram
+  66:9: error: "nosuchnode" is not a node in this diagram
     hint: known nodes: client, ing, svc
-  59:21: error: no view named "missing" is declared
+  67:21: error: no view named "missing" is declared
     hint: known views: real, dupe, orphan
-  60:23: error: "notanode" is not a node in this diagram
+  68:23: error: "notanode" is not a node in this diagram
     hint: known nodes: client, ing, svc
-  61:9: error: "ing" already has a click binding
+  69:9: error: "ing" already has a click binding
     hint: give each clickable element a single behaviour
-  61:21: error: no step named "nosuchstep" in this document
+  69:21: error: no step named "nosuchstep" in this document
     hint: known steps: a, b, c, d, e, f, g, h
-  62:16: error: expected a click target but found "teleport"
+  70:16: error: expected a click target but found "teleport"
     hint: known click targets: view, reveal, step
-  63:27: error: `view` takes one name, got 2
+  71:27: error: `view` takes one name, got 2
     hint: only `reveal` accepts several targets
-  64:9: error: "ing" already has a click binding
+  72:9: error: "ing" already has a click binding
     hint: give each clickable element a single behaviour
-  64:23: error: "ing" reveals itself
+  72:23: error: "ing" reveals itself
     hint: a hidden element cannot be clicked to reveal itself
-  65:9: error: "ing" already has a click binding
+  73:9: error: "ing" already has a click binding
     hint: give each clickable element a single behaviour
-  65:36: warning: unknown click attribute "wobble"
+  73:36: warning: unknown click attribute "wobble"
     hint: known here: label, style

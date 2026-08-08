@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tejaspanse/diagramator/pkg/ir"
 	"github.com/tejaspanse/diagramator/pkg/parser"
 )
 
@@ -250,6 +251,159 @@ scenario "x"
 	if step.Tracks[1].Start != 300 || step.Tracks[1].End != 700 {
 		t.Errorf("second seq child = [%d,%d], want [300,700]", step.Tracks[1].Start, step.Tracks[1].End)
 	}
+}
+
+// TestPersistentStateLivesOutsideSteps pins the reason Persistent exists at
+// all: a renderer skips steps whose window excludes t, so state set in the
+// first step has to be reachable from the last.
+func TestPersistentStateLivesOutsideSteps(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "x"
+  step one "set it" {
+    set a { badge: "leader" }
+    flow a -> b { dur: 400ms }
+  }
+  step two "later" {
+    flow a -> b { dur: 600ms }
+  }
+`
+	tl := compileSource(t, src)
+	sc := tl.Views[0].Scenarios[0]
+
+	for _, st := range sc.Steps {
+		for _, tr := range st.Tracks {
+			if tr.Kind == "set" || tr.Kind == "gauge" {
+				t.Errorf("step %q carries a %s track; persistent state must not be a step track", st.ID, tr.Kind)
+			}
+		}
+	}
+	if len(sc.Persistent) != 1 {
+		t.Fatalf("got %d persistent tracks, want 1", len(sc.Persistent))
+	}
+	// Unreplaced state runs to the end of the scenario, not the end of its step.
+	if got := sc.Persistent[0]; got.Start != 0 || got.End != sc.Duration {
+		t.Errorf("badge window = [%d,%d], want [0,%d]", got.Start, got.End, sc.Duration)
+	}
+}
+
+// TestPersistentRewriteClosesPreviousWindow covers the bookkeeping that makes
+// scrubbing show one value rather than every value ever written: windows for a
+// slot must partition time, not overlap.
+func TestPersistentRewriteClosesPreviousWindow(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "x"
+  step one "first" {
+    gauge a { label: "term", value: 1 }
+    flow a -> b { dur: 400ms }
+  }
+  step two "second" {
+    gauge a { label: "term", value: 2 }
+    gauge a { label: "votes", value: 3 }
+    flow a -> b { dur: 600ms }
+  }
+`
+	tl := compileSource(t, src)
+	sc := tl.Views[0].Scenarios[0]
+
+	if len(sc.Persistent) != 3 {
+		t.Fatalf("got %d persistent tracks, want 3", len(sc.Persistent))
+	}
+	first, second, votes := sc.Persistent[0], sc.Persistent[1], sc.Persistent[2]
+
+	if first.End != second.Start {
+		t.Errorf("term windows overlap or gap: first ends %d, second starts %d", first.End, second.Start)
+	}
+	if first.Value != "1" || second.Value != "2" {
+		t.Errorf("term values = %q then %q, want 1 then 2", first.Value, second.Value)
+	}
+	// A different label is a different slot, so it coexists rather than
+	// replacing — two readings on one node is the normal case.
+	if votes.Label != "votes" || votes.End != sc.Duration {
+		t.Errorf("votes window = %+v, want an independent slot open to the end", votes)
+	}
+}
+
+// TestClearingSemantics separates the two ways state is taken away: an empty
+// badge retires the badge, `unset` retires everything on the node. Conflating
+// them would make a badge change silently drop the node's gauges.
+func TestClearingSemantics(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "x"
+  step one "set both" {
+    set a { badge: "leader" }
+    gauge a { label: "term", value: 1 }
+    flow a -> b { dur: 400ms }
+  }
+  step two "drop the badge only" {
+    set a { badge: "" }
+    flow a -> b { dur: 400ms }
+  }
+  step three "drop everything" {
+    unset a
+    flow a -> b { dur: 400ms }
+  }
+`
+	tl := compileSource(t, src)
+	sc := tl.Views[0].Scenarios[0]
+	steps := sc.Steps
+
+	byKind := map[string]int{}
+	for _, tr := range sc.Persistent {
+		byKind[string(tr.Kind)] = tr.End
+	}
+	if got, want := byKind["set"], steps[1].Start; got != want {
+		t.Errorf("badge closed at %d, want the empty-badge write at %d", got, want)
+	}
+	if got, want := byKind["gauge"], steps[2].Start; got != want {
+		t.Errorf("gauge closed at %d, want the unset at %d — an empty badge must not retire it", got, want)
+	}
+}
+
+// TestPersistentActionsAreInstantaneous checks they neither size a step nor
+// consume a slot of a seq: they fire at a moment, and their effect is bounded
+// by the next write rather than by the container they were written in.
+func TestPersistentActionsAreInstantaneous(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+  b --> c
+
+scenario "x"
+  step s "chained" {
+    seq {
+      flow a -> b { dur: 300ms }
+      set b { badge: "here" }
+      flow b -> c { dur: 400ms }
+    }
+  }
+`
+	tl := compileSource(t, src)
+	sc := tl.Views[0].Scenarios[0]
+
+	if sc.Duration != 700 {
+		t.Errorf("scenario duration = %d, want 300+400 with the set costing nothing", sc.Duration)
+	}
+	if len(sc.Persistent) != 1 || sc.Persistent[0].Start != 300 {
+		t.Fatalf("persistent = %+v, want one track firing at 300", sc.Persistent)
+	}
+}
+
+func compileSource(t *testing.T, src string) *ir.Timeline {
+	t.Helper()
+	res, bag := parser.Parse("inline.dgm", src)
+	if bag.HasErrors() {
+		t.Fatalf("unexpected diagnostics:\n%s", bag)
+	}
+	tl := Compile(res.Document, res.Symbols, bag)
+	if bag.HasErrors() {
+		t.Fatalf("unexpected compile diagnostics:\n%s", bag)
+	}
+	return tl
 }
 
 // TestRevealHidesGroupsTransitively pins the rule that revealing a subgraph

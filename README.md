@@ -73,6 +73,9 @@ actions inside one step to chain instead.
 | `dim` | `dim a` | Fade a node back. |
 | `pulse` | `pulse a` | Repeating pulse. |
 | `show` / `hide` | `show a` | Reveal or conceal. |
+| `set` | `set n1 { badge: "leader" }` | Standing state. Outlives its step — see below. |
+| `gauge` | `gauge n1 { label: "term", value: 2 }` | A named reading that persists and updates. |
+| `unset` | `unset n1` | Retire everything `set` or `gauge` put on a node. |
 | `wait` | `wait 500ms` | Consume time, draw nothing. |
 | `seq` | `seq { … }` | Run the contained actions in sequence. |
 
@@ -96,6 +99,8 @@ suggestion rather than a silent no-op.
 | `status` | `flow` | `ok` (default) or `fail`. Semantic, unlike `style` — see below. |
 | `repeat` | `flow`, `pulse` | Repeat count. Parsed and reserved; the runtime does not read it yet. |
 | `bidi` | `flow` | Travel both ways. Parsed and reserved; the runtime does not read it yet. |
+| `badge`, `state` | `set` | Pill text, and a standing `dgm-state-<name>` class. |
+| `label`, `value` | `gauge` | What the reading is called and what it currently says. Both required. |
 | `desc` | step | Prose narration for the step. Shown in the caption; `\n` works. |
 | `speed` | scenario | Initial playback rate, e.g. `1.5`. The player starts here; the speed button cycles from it. |
 | `loop` | scenario | Restart at the end. |
@@ -199,6 +204,46 @@ second for the length of the step.
 
 `examples/oauth-login.dgm` is the worked example: an OAuth 2.0 authorization
 code flow where every step explains what the protocol is buying with it.
+
+## Persistent state
+
+Most actions describe a moment. Some facts are not moments: which node is
+leader, what term the cluster is in, how many votes have come back. You cannot
+infer those from a particle that has already gone past, and a reader who
+scrubs to the middle of a scenario deserves to see them.
+
+```
+step timeout "n3's election timer fires first" {
+  set   n3 { badge: "candidate", state: candidate, color: "#d97706" }
+  gauge n3 { label: "term",  value: 2 }
+  gauge n3 { label: "votes", value: "1 / 5" }
+}
+
+step votes "A majority answers" {
+  gauge n3 { label: "votes", value: "3 / 5" }
+}
+```
+
+`set` writes a badge and an optional `state` name, which becomes a standing
+`dgm-state-<name>` class on the element. `gauge` writes a named reading;
+writing the same `label` again replaces it, and a different label sits
+alongside. `set n3 { badge: "" }` retires the badge; `unset n3` retires
+everything on that node.
+
+**The compiler works out the windows, not the renderer.** A badge is not "on
+from here" — it is on over a closed interval that ends when something else
+writes the same slot, or when the scenario does. Working that out means looking
+ahead at every later action, and the compiler is already walking them in order.
+So it closes each window as it goes and hands the renderer a list of intervals
+to test `t` against, which is why scrubbing to any moment shows exactly the
+state the actions before it imply.
+
+The windows are half-open. When one reading replaces another they share an
+instant, and treating both ends as inclusive would show the old and new value
+together on that one frame.
+
+`examples/raft-election.dgm` is the worked example: a leader dies, an election
+runs, and the badges and gauges say what is true at whatever moment you stop.
 
 ## Interaction
 

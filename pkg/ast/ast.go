@@ -227,6 +227,13 @@ const (
 	ActionHide      ActionKind = "hide"
 	ActionWait      ActionKind = "wait"
 	ActionSeq       ActionKind = "seq"
+
+	// Persistent actions. Unlike the rest, these do not describe a span of the
+	// step they sit in: they fire at a moment and the state they write outlives
+	// the step, until something overwrites it or the scenario ends.
+	ActionSet   ActionKind = "set"
+	ActionGauge ActionKind = "gauge"
+	ActionUnset ActionKind = "unset"
 )
 
 // Action is a single animation instruction inside a step.

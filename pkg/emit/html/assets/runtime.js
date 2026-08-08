@@ -155,6 +155,7 @@
     this.edgeState = {};
     this.particles = {};
     this.notes = {};
+    this.pills = {};
     // The trail of view ids drilled through, so Back knows where to return.
     this.stack = [];
     // Elements a reveal binding has opened in the current view. Unlike a
@@ -462,6 +463,9 @@
     }
     this.particles = {};
     this.notes = {};
+    // Pills live in the overlay, which is emptied just below, so the map has to
+    // go with them or the next frame would reuse detached nodes.
+    this.pills = {};
     this.nodeState = {};
     this.edgeState = {};
     this.overlay.innerHTML = '';
@@ -847,11 +851,126 @@
                          : nodeState('waypoint', '');
     }
 
+    // Persistent state is scenario-scoped, so it is read from its own list
+    // rather than from the steps — but it lands on the same nodes, so it has to
+    // be folded in before the class attribute is written or the frame would
+    // erase it.
+    var standing = this.collectPersistent(t, sc);
+    for (var sid in standing.states) {
+      var prior = wantNode[sid];
+      var cls = 'stated state-' + safeName(standing.states[sid].name);
+      // The frame's own colour wins: a standing colour describes what a node
+      // *is*, and a highlight describes what is happening to it now.
+      var color = (prior && prior.color) || standing.states[sid].color;
+      wantNode[sid] = prior ? nodeState(prior.cls + ' ' + cls, color)
+                            : nodeState(cls, color);
+    }
+
     this.applyNodeStates(wantNode);
     this.applyEdgeStates(wantEdge);
     this.applyFlows(wantFlow);
     this.applyNotes(wantNote);
+    this.applyPills(standing.pills);
   };
+
+  // collectPersistent gathers the badges, gauges and state classes whose window
+  // contains t.
+  //
+  // Windows are half-open. A write that replaces a badge closes the old window
+  // at exactly the instant the new one opens, and treating both ends as
+  // inclusive would show the old and new value together on that frame. The one
+  // exception is the last window of a key, which the compiler runs to the
+  // scenario duration — without letting that one include its end, every badge
+  // would blink off on the final frame.
+  Player.prototype.collectPersistent = function (t, sc) {
+    var pills = {};   // target -> [{key, kind, label, value}]
+    var states = {};  // target -> {name, color}
+    var list = sc.persistent || [];
+
+    for (var i = 0; i < list.length; i++) {
+      var tr = list[i];
+      if (t < tr.start) continue;
+      if (t >= tr.end && !(tr.end >= sc.duration && t >= sc.duration)) continue;
+
+      if (tr.kind === 'set' && tr.value) {
+        states[tr.target] = { name: tr.value, color: tr.color || '' };
+      }
+      var text = tr.kind === 'gauge' ? tr.value : tr.label;
+      if (!text) continue;
+
+      if (!pills[tr.target]) pills[tr.target] = [];
+      pills[tr.target].push({
+        key: sc.id + ':' + i,
+        kind: tr.kind,
+        label: tr.kind === 'gauge' ? tr.label : '',
+        value: text,
+        color: tr.color || '',
+        style: tr.style || ''
+      });
+    }
+    return { pills: pills, states: states };
+  };
+
+  // applyPills draws badges and gauge readings as HTML over the stage, anchored
+  // to the top-right of the element they belong to and stacking downwards when
+  // a node carries several.
+  //
+  // They are overlay HTML rather than SVG for the same reason notes are: text
+  // that has to stay legible at any zoom is far easier to lay out in the DOM
+  // than inside the diagram's coordinate system.
+  Player.prototype.applyPills = function (groups) {
+    var self = this;
+
+    var live = {};
+    Object.keys(groups).forEach(function (target) {
+      groups[target].forEach(function (p) { live[p.key] = true; });
+    });
+    for (var key in this.pills) {
+      if (!live[key]) {
+        this.pills[key].remove();
+        delete this.pills[key];
+      }
+    }
+
+    var stageRect = this.stage.getBoundingClientRect();
+    Object.keys(groups).forEach(function (target) {
+      var host = self.elementFor(target);
+      if (!host) return;
+      var r = host.getBoundingClientRect();
+
+      groups[target].forEach(function (p, i) {
+        var div = self.pills[p.key];
+        if (!div) {
+          div = makePill(p);
+          self.overlay.appendChild(div);
+          self.pills[p.key] = div;
+        }
+        div.style.left = (r.right - stageRect.left) + 'px';
+        div.style.top = (r.top - stageRect.top + i * PILL_STACK) + 'px';
+      });
+    });
+  };
+
+  var PILL_STACK = 22;
+
+  function makePill(p) {
+    var div = el('div', 'dgm-pill dgm-pill-' + p.kind + (p.style ? ' dgm-pill-' + safeName(p.style) : ''));
+    if (p.color) div.style.setProperty('--dgm-color', p.color);
+    if (p.kind === 'gauge') {
+      div.appendChild(elText('span', 'dgm-pill-label', p.label));
+      div.appendChild(elText('span', 'dgm-pill-value', p.value));
+    } else {
+      div.textContent = p.value;
+    }
+    return div;
+  }
+
+  // safeName keeps an author-chosen name usable as a CSS class. State and style
+  // names come from source text, and a space in one would otherwise turn a
+  // single class into two.
+  function safeName(s) {
+    return String(s).replace(/[^A-Za-z0-9_-]+/g, '-');
+  }
 
   // nodeState packages what a frame wants an element to look like. `key` is the
   // whole thing flattened, so the diff against the previous frame is one string

@@ -557,6 +557,59 @@ body {
   transition: opacity 0.25s ease;
 }
 
+/* --- persistent state --------------------------------------------------- */
+
+/* A standing state, as opposed to something happening to the node right now.
+   It reads as a quieter, permanent version of a highlight: an outline rather
+   than a glow, so an animation can still play over the top of it. */
+.dgm-stated rect,
+.dgm-stated circle,
+.dgm-stated polygon,
+.dgm-stated path {
+  stroke: var(--dgm-color, var(--dgm-accent)) !important;
+  stroke-width: 2px !important;
+}
+
+/* Badges and gauge readings. Anchored to the element's top-right corner and
+   stacked downwards by the runtime, so a node can carry several without them
+   landing on top of each other. */
+.dgm-pill {
+  position: absolute;
+  transform: translate(-30%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 160px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--dgm-color, var(--dgm-accent));
+  background: var(--dgm-bg);
+  color: var(--dgm-color, var(--dgm-accent));
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px var(--dgm-shadow);
+  pointer-events: none;
+}
+
+.dgm-pill-set {
+  background: var(--dgm-color, var(--dgm-accent));
+  color: var(--dgm-bg);
+}
+
+.dgm-pill-label {
+  font-weight: 500;
+  opacity: 0.75;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 9px;
+}
+
+.dgm-pill-value {
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- notes -------------------------------------------------------------- */
 
 .dgm-note {

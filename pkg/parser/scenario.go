@@ -36,7 +36,15 @@ var actionKinds = map[string]struct {
 	"note":      {ast.ActionNote, arityNote},
 	"wait":      {ast.ActionWait, arityBare},
 	"seq":       {ast.ActionSeq, arityBlock},
+	"set":       {ast.ActionSet, arityTarget},
+	"gauge":     {ast.ActionGauge, arityTarget},
+	"unset":     {ast.ActionUnset, arityTarget},
 }
+
+// knownActions lists the vocabulary for the unknown-action hint, in the order
+// a reader would want to meet them rather than the map's.
+const knownActions = "flow, highlight, note, dim, pulse, show, hide, " +
+	"set, gauge, unset, wait, seq"
 
 // parseScenario reads one `scenario` block. The block is not brace-delimited:
 // it ends at the first token that is not a `step`, which is what lets a `view`
@@ -132,7 +140,7 @@ func parseAction(s *scanner) (ast.Action, bool) {
 	kw := s.next()
 	spec, known := actionKinds[kw.text]
 	if !known {
-		s.bag.ErrorHintf(kw.at, "known actions: flow, highlight, note, dim, pulse, show, hide, wait, seq",
+		s.bag.ErrorHintf(kw.at, "known actions: "+knownActions,
 			"unknown action %q", kw.text)
 		s.skipToLineEnd()
 		return ast.Action{}, false
