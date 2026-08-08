@@ -1,0 +1,28 @@
+flowchart SIDEWAYS
+  client[Client]
+  ing[Ingress]
+  svc[Service]
+
+  client --> ing
+
+scenario "broken"
+
+  step a "unknown node" {
+    highlight ingres
+  }
+
+  step b "no edge to travel along" {
+    flow client -> svc
+  }
+
+  step c "bad duration and unknown attribute" {
+    highlight ing { dur: soon, wobble: 3 }
+  }
+
+  step d "unknown action" {
+    teleport client
+  }
+
+  step a "duplicate step id" {
+    highlight ing
+  }

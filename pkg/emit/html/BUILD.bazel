@@ -1,0 +1,21 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "html",
+    srcs = ["html.go"],
+    embedsrcs = [
+        "assets/mermaid.min.js",
+        "assets/runtime.css",
+        "assets/runtime.js",
+    ],
+    importpath = "github.com/tejaspanse/diagramator/pkg/emit/html",
+    visibility = ["//visibility:public"],
+    deps = ["//pkg/ir"],
+)
+
+go_test(
+    name = "html_test",
+    srcs = ["html_test.go"],
+    embed = [":html"],
+    deps = ["//pkg/ir"],
+)

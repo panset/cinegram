@@ -1,0 +1,34 @@
+diagram: flowchart (flowchart SIDEWAYS)
+direction: TB
+
+nodes:
+  client     label="Client"                 shape=rect      
+  ing        label="Ingress"                shape=rect      
+  svc        label="Service"                shape=rect      
+
+edges:
+  e0   client -> ing style=normal head=arrow
+
+scenario "broken"
+  step a "unknown node"
+    highlight ingres
+  step b "no edge to travel along"
+    flow client -> svc
+  step c "bad duration and unknown attribute"
+    highlight ing {dur="soon" wobble="3"}
+  step d "unknown action"
+  step a "duplicate step id"
+    highlight ing
+
+diagnostics:
+  1:11: error: unknown flowchart direction "SIDEWAYS"
+    hint: valid directions are LR, RL, TB, TD and BT
+  11:15: error: "ingres" is not a node in this diagram
+    hint: did you mean ing?
+  15:20: error: no edge between "client" and "svc" to animate along
+    hint: add `client --> svc` to the diagram, or route the flow through nodes that are connected
+  19:26: error: attribute "dur": "soon" is not a duration
+  19:40: warning: unknown highlight attribute "wobble"
+  23:5: error: unknown action "teleport"
+    hint: known actions: flow, highlight, note, dim, pulse, show, hide, wait, seq
+  26:3: error: duplicate step id "a"

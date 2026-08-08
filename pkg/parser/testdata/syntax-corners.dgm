@@ -1,0 +1,41 @@
+---
+title: Syntax corners
+---
+%% Exercises the shapes, link forms and raw statements the emitter must
+%% round-trip untouched.
+graph TD
+  a[Rect] --> b(Round)
+  b ==> c{{Hexagon}}
+  c -. retry .-> d[(Database)]
+  d -- carries --> e([Stadium])
+  e --o f[[Subroutine]]
+  f --x g((Circle))
+  g <--> h>Asymmetric]
+  h -->|piped label| i["bracket ] and --> arrow inside"]
+
+  subgraph outer[Outer Group]
+    direction LR
+    j[Nested]
+    subgraph inner[Inner Group]
+      k[Deep]
+    end
+  end
+
+  i --> j
+  j --> k
+
+  classDef busy fill:#f96,stroke:#333
+  class k busy
+  linkStyle 0 stroke:#0af
+  click a "https://example.com" "tooltip"
+
+scenario "corners"
+  step only "walk the chain" {
+    dur: 2s
+    flow a -> b -> c { label: "packet" }
+    seq {
+      highlight j
+      note k "deep note"
+    }
+    wait 250ms
+  }

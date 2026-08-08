@@ -1,0 +1,39 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "parser",
+    srcs = [
+        "flowchart.go",
+        "link.go",
+        "parser.go",
+        "scanner.go",
+        "scenario.go",
+        "shape.go",
+        "validate.go",
+    ],
+    importpath = "github.com/tejaspanse/diagramator/pkg/parser",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/ast",
+        "//pkg/diag",
+        "//pkg/registry",
+        "//pkg/source",
+        "//pkg/symbol",
+        "//pkg/units",
+    ],
+)
+
+go_test(
+    name = "parser_test",
+    srcs = [
+        "golden_test.go",
+        "link_test.go",
+        "shape_test.go",
+    ],
+    data = glob(["testdata/**"]),
+    embed = [":parser"],
+    deps = [
+        "//pkg/ast",
+        "//pkg/diag",
+    ],
+)

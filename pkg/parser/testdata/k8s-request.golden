@@ -1,0 +1,40 @@
+diagram: flowchart (flowchart LR)
+direction: LR
+
+nodes:
+  client     label="External Client"        shape=rect      
+  lb         label="Cloud Load Balancer"    shape=cylinder  
+  ing        label="Ingress Controller"     shape=rect       group=cluster
+  svc        label="ClusterIP Service"      shape=rect       group=ns
+  pod1       label="Pod A"                  shape=rect       group=ns
+  pod2       label="Pod B"                  shape=rect       group=ns
+
+groups:
+  cluster    label="Kubernetes Cluster"     parent=-          children=[ing ns]
+  ns         label="namespace: prod"        parent=cluster    children=[svc pod1 pod2]
+
+edges:
+  e0   client -> lb style=normal head=arrow
+  e1   lb -> ing style=normal head=arrow
+  e2   ing -> svc style=normal head=arrow
+  e3   svc -> pod1 style=normal head=arrow
+  e4   svc -> pod2 style=normal head=arrow
+
+scenario "GET /api/orders" {speed="1.0" loop="true"}
+  step edge "Request reaches the load balancer"
+    flow client -> lb {label="GET /api/orders" dur="700ms"}
+    highlight lb {style="active"}
+  step terminate "TLS terminates at the ingress controller"
+    flow lb -> ing {label="HTTP/1.1" dur="600ms"}
+    highlight ing {style="active"}
+  step route "Ingress rule matches host and path"
+    note ing "host: api.example.com\npath: /api/*"
+    flow ing -> svc {dur="500ms"}
+  step balance "kube-proxy picks a healthy endpoint"
+    flow svc -> pod1 {label="10.1.2.3:8080" dur="600ms"}
+    dim pod2
+  step work "Pod A handles the request"
+    highlight pod1 {style="busy" dur="900ms"}
+    note pod1 "200 OK in 14ms"
+  step respond "Response travels back to the client"
+    flow pod1 -> svc -> ing -> lb -> client {label="200 OK" dur="1400ms" style="response"}

@@ -1,0 +1,365 @@
+/*
+ * Diagramator runtime styles.
+ *
+ * Colours are defined as tokens on bare :root so the light palette always has
+ * a value, then overridden for the dark theme. The runtime stamps
+ * data-theme on <html>, and prefers-color-scheme covers the untouched default.
+ */
+
+:root {
+  --dgm-bg: #ffffff;
+  --dgm-panel: #f6f7f9;
+  --dgm-border: #dfe3e8;
+  --dgm-fg: #1c2024;
+  --dgm-muted: #6b7480;
+  --dgm-accent: #2f6feb;
+  --dgm-accent-soft: rgba(47, 111, 235, 0.14);
+  --dgm-busy: #d97706;
+  --dgm-response: #16a34a;
+  --dgm-warn-bg: #fff4e5;
+  --dgm-warn-fg: #8a4b08;
+  --dgm-shadow: rgba(16, 24, 40, 0.12);
+}
+
+:root[data-theme='dark'],
+:root:not([data-theme='light']) {
+  --dgm-bg: #0f1216;
+  --dgm-panel: #171b21;
+  --dgm-border: #2a313a;
+  --dgm-fg: #e6e9ee;
+  --dgm-muted: #98a2b0;
+  --dgm-accent: #6ea8fe;
+  --dgm-accent-soft: rgba(110, 168, 254, 0.18);
+  --dgm-busy: #fbbf24;
+  --dgm-response: #4ade80;
+  --dgm-warn-bg: #3a2a12;
+  --dgm-warn-fg: #f6c177;
+  --dgm-shadow: rgba(0, 0, 0, 0.5);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --dgm-bg: #ffffff;
+    --dgm-panel: #f6f7f9;
+    --dgm-border: #dfe3e8;
+    --dgm-fg: #1c2024;
+    --dgm-muted: #6b7480;
+    --dgm-accent: #2f6feb;
+    --dgm-accent-soft: rgba(47, 111, 235, 0.14);
+    --dgm-busy: #d97706;
+    --dgm-response: #16a34a;
+    --dgm-warn-bg: #fff4e5;
+    --dgm-warn-fg: #8a4b08;
+    --dgm-shadow: rgba(16, 24, 40, 0.12);
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--dgm-bg);
+  color: var(--dgm-fg);
+  font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.dgm {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 16px;
+  box-sizing: border-box;
+  gap: 12px;
+}
+
+/* --- chrome ------------------------------------------------------------- */
+
+.dgm-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.dgm-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.dgm-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dgm-btn,
+.dgm-select {
+  appearance: none;
+  border: 1px solid var(--dgm-border);
+  background: var(--dgm-panel);
+  color: var(--dgm-fg);
+  border-radius: 7px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.dgm-btn:hover,
+.dgm-select:hover {
+  border-color: var(--dgm-accent);
+}
+
+.dgm-btn-primary {
+  background: var(--dgm-accent);
+  border-color: var(--dgm-accent);
+  color: #fff;
+  min-width: 72px;
+  font-weight: 600;
+}
+
+.dgm-warning {
+  background: var(--dgm-warn-bg);
+  color: var(--dgm-warn-fg);
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+/* --- layout ------------------------------------------------------------- */
+
+.dgm-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .dgm-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dgm-stage {
+  position: relative;
+  background: var(--dgm-panel);
+  border: 1px solid var(--dgm-border);
+  border-radius: 12px;
+  padding: 20px;
+  overflow-x: auto;
+  min-height: 320px;
+}
+
+.dgm-svg-holder svg {
+  display: block;
+  margin: 0 auto;
+}
+
+.dgm-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* --- step list ---------------------------------------------------------- */
+
+.dgm-steps {
+  list-style: none;
+  counter-reset: dgm-step;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--dgm-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.dgm-step {
+  counter-increment: dgm-step;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px 10px 34px;
+  position: relative;
+  cursor: pointer;
+  border-bottom: 1px solid var(--dgm-border);
+  transition: background 0.15s;
+}
+
+.dgm-step:last-child { border-bottom: 0; }
+
+.dgm-step::before {
+  content: counter(dgm-step);
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1px solid var(--dgm-border);
+  font-size: 10px;
+  line-height: 17px;
+  text-align: center;
+  color: var(--dgm-muted);
+}
+
+.dgm-step:hover { background: var(--dgm-accent-soft); }
+
+.dgm-step.is-active {
+  background: var(--dgm-accent-soft);
+  box-shadow: inset 3px 0 0 var(--dgm-accent);
+}
+
+.dgm-step.is-active::before {
+  background: var(--dgm-accent);
+  border-color: var(--dgm-accent);
+  color: #fff;
+}
+
+.dgm-step.is-done .dgm-step-name { color: var(--dgm-muted); }
+
+.dgm-step-name { font-size: 13px; }
+.dgm-step-time { font-size: 11px; color: var(--dgm-muted); font-variant-numeric: tabular-nums; }
+
+/* --- transport ---------------------------------------------------------- */
+
+.dgm-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dgm-scrub {
+  flex: 1;
+  accent-color: var(--dgm-accent);
+}
+
+.dgm-clock {
+  font-size: 12px;
+  color: var(--dgm-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 96px;
+  text-align: right;
+}
+
+/* --- animation states --------------------------------------------------- */
+
+.dgm-layer {
+  pointer-events: none;
+}
+
+.dgm-particle-dot {
+  fill: var(--dgm-accent);
+}
+
+.dgm-particle-halo {
+  fill: var(--dgm-accent);
+  opacity: 0.25;
+  animation: dgm-pulse 1.1s ease-out infinite;
+}
+
+.dgm-particle-label {
+  fill: var(--dgm-fg);
+  font-size: 11px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--dgm-bg);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.dgm-particle-response .dgm-particle-dot,
+.dgm-particle-response .dgm-particle-halo {
+  fill: var(--dgm-response);
+}
+
+@keyframes dgm-pulse {
+  0%   { transform: scale(0.7); opacity: 0.35; }
+  70%  { transform: scale(1.5); opacity: 0;    }
+  100% { transform: scale(1.5); opacity: 0;    }
+}
+
+/* Node states. Mermaid draws the node body as the shape element inside g.node,
+   so the state classes target those descendants rather than the group. */
+
+.dgm-highlight rect,
+.dgm-highlight circle,
+.dgm-highlight polygon,
+.dgm-highlight path {
+  stroke: var(--dgm-accent) !important;
+  stroke-width: 3px !important;
+  filter: drop-shadow(0 0 8px var(--dgm-accent));
+}
+
+.dgm-busy rect,
+.dgm-busy circle,
+.dgm-busy polygon,
+.dgm-busy path {
+  stroke: var(--dgm-busy) !important;
+  stroke-width: 3px !important;
+  filter: drop-shadow(0 0 10px var(--dgm-busy));
+}
+
+.dgm-pulse {
+  animation: dgm-node-pulse 0.9s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes dgm-node-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.05); }
+}
+
+.dgm-dim { opacity: 0.28; }
+.dgm-hidden { opacity: 0; }
+.dgm-show { opacity: 1; }
+
+.dgm-noted rect,
+.dgm-noted circle,
+.dgm-noted polygon,
+.dgm-noted path {
+  stroke: var(--dgm-accent) !important;
+}
+
+.dgm-highlight,
+.dgm-busy,
+.dgm-dim,
+.dgm-hidden,
+.dgm-noted {
+  transition: opacity 0.25s ease;
+}
+
+/* --- notes -------------------------------------------------------------- */
+
+.dgm-note {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  background: var(--dgm-fg);
+  color: var(--dgm-bg);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-line;
+  box-shadow: 0 6px 20px var(--dgm-shadow);
+  max-width: 240px;
+  pointer-events: none;
+}
+
+.dgm-note::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  background: inherit;
+  transform: translateX(-50%) rotate(45deg);
+  border-radius: 1px;
+}

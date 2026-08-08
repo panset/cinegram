@@ -1,0 +1,44 @@
+frontmatter:
+  ---
+  title: Syntax corners
+  ---
+
+diagram: flowchart (graph TD)
+direction: TD
+
+nodes:
+  a          label="Rect"                   shape=rect      
+  b          label="Round"                  shape=round     
+  c          label="Hexagon"                shape=hexagon   
+  d          label="Database"               shape=cylinder  
+  e          label="Stadium"                shape=stadium   
+  f          label="Subroutine"             shape=subroutine
+  g          label="Circle"                 shape=circle    
+  h          label="Asymmetric"             shape=asymmetric
+  i          label="bracket ] and --> arrow inside" shape=rect      
+  j          label="Nested"                 shape=rect       group=outer
+  k          label="Deep"                   shape=rect       group=inner
+
+groups:
+  outer      label="Outer Group"            parent=-          children=[j inner]
+  inner      label="Inner Group"            parent=outer      children=[k]
+
+edges:
+  e0   a -> b style=normal head=arrow
+  e1   b -> c style=thick head=arrow
+  e2   c -> d style=dotted head=arrow label="retry"
+  e3   d -> e style=normal head=arrow label="carries"
+  e4   e -> f style=normal head=circle
+  e5   f -> g style=normal head=cross
+  e6   g -> h style=normal head=arrow bidir
+  e7   h -> i style=normal head=arrow label="piped label"
+  e8   i -> j style=normal head=arrow
+  e9   j -> k style=normal head=arrow
+
+scenario "corners"
+  step only "walk the chain" {dur="2s"}
+    flow a -> b -> c {label="packet"}
+    seq
+      highlight j
+      note k "deep note"
+    wait {dur="250ms"}

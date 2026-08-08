@@ -1,0 +1,4 @@
+common --enable_bzlmod
+
+# Keep test output useful by default.
+test --test_output=errors

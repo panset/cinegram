@@ -1,0 +1,56 @@
+%% API request path through a Kubernetes cluster.
+%% Strip the scenario block and this is ordinary Mermaid.
+flowchart LR
+  client[External Client]
+  lb[(Cloud Load Balancer)]
+
+  subgraph cluster[Kubernetes Cluster]
+    ing[Ingress Controller]
+
+    subgraph ns[namespace: prod]
+      svc[ClusterIP Service]
+      pod1[Pod A]
+      pod2[Pod B]
+    end
+  end
+
+  client --> lb
+  lb --> ing
+  ing --> svc
+  svc --> pod1
+  svc --> pod2
+
+scenario "GET /api/orders" { speed: 1.0, loop: true }
+
+  step edge "Request reaches the load balancer" {
+    flow client -> lb { label: "GET /api/orders", dur: 700ms }
+    highlight lb { style: active }
+  }
+
+  step terminate "TLS terminates at the ingress controller" {
+    flow lb -> ing { label: "HTTP/1.1", dur: 600ms }
+    highlight ing { style: active }
+  }
+
+  step route "Ingress rule matches host and path" {
+    note ing "host: api.example.com\npath: /api/*"
+    flow ing -> svc { dur: 500ms }
+  }
+
+  step balance "kube-proxy picks a healthy endpoint" {
+    flow svc -> pod1 { label: "10.1.2.3:8080", dur: 600ms }
+    dim pod2
+  }
+
+  step work "Pod A handles the request" {
+    highlight pod1 { style: busy, dur: 900ms }
+    note pod1 "200 OK in 14ms"
+  }
+
+  step respond "Response travels back to the client" {
+    flow pod1 -> svc -> ing -> lb -> client {
+      label: "200 OK",
+      dur: 1400ms,
+      style: response
+    }
+  }
