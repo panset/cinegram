@@ -1,0 +1,144 @@
+%% A data platform, deliberately too big for one screen.
+%% ---
+%% Its size is the point. This is the example that needs pan and zoom, that
+%% makes Home and End worth having, and where jumping to step 7 with a digit
+%% key beats pressing the right arrow six times.
+flowchart LR
+  subgraph sources[Sources]
+    app[Application DB]
+    events[Event Producers]
+    saas[SaaS Connectors]
+    files[File Drops]
+  end
+
+  subgraph ingest[Ingestion]
+    cdc[CDC Reader]
+    gateway[Event Gateway]
+    loader[Batch Loader]
+  end
+
+  subgraph bus[Streaming]
+    kafka[Kafka]
+    schema[(Schema Registry)]
+    dlq[(Dead Letter Queue)]
+  end
+
+  subgraph stream[Stream Processing]
+    flink[Flink Jobs]
+    dedupe[Deduplication]
+    enrich[Enrichment]
+  end
+
+  subgraph lake[Lake]
+    bronze[(Bronze)]
+    silver[(Silver)]
+    gold[(Gold)]
+  end
+
+  subgraph warehouse[Warehouse]
+    dw[(Columnar Store)]
+    marts[Data Marts]
+    semantic[Semantic Layer]
+  end
+
+  subgraph serve[Serving]
+    bi[BI Dashboards]
+    reverse[Reverse ETL]
+    ml[Feature Store]
+  end
+
+  subgraph orchestration[Orchestration and Governance]
+    scheduler[Scheduler]
+    quality[Quality Checks]
+    lineage[(Lineage Catalog)]
+  end
+
+  app --> cdc
+  events --> gateway
+  saas --> loader
+  files --> loader
+
+  cdc --> kafka
+  gateway --> kafka
+  gateway --> schema
+  kafka --> dlq
+  loader --> bronze
+
+  kafka --> flink
+  flink --> dedupe
+  dedupe --> enrich
+  enrich --> bronze
+
+  bronze --> silver
+  silver --> gold
+  gold --> dw
+  dw --> marts
+  marts --> semantic
+
+  semantic --> bi
+  gold --> reverse
+  gold --> ml
+
+  scheduler --> loader
+  quality --> silver
+  silver --> lineage
+
+scenario "a row's journey" { speed: 1.0 }
+
+  step change "A row changes in the application database" {
+    desc: "Change data capture reads the write-ahead log rather than polling the table, so the platform learns about the change without the application knowing the platform exists."
+    focus sources
+    flow app -> cdc { label: "UPDATE orders", dur: 700ms }
+  }
+
+  step publish "The change is published to the log" {
+    desc: "From here it is an immutable event with a schema. Everything downstream is a consumer, and none of them can slow the producer down."
+    focus bus
+    flow cdc -> kafka { label: "orders.v2", dur: 600ms }
+    gauge kafka { label: "lag", value: "0.4s" }
+  }
+
+  step process "Stream processing cleans it up" {
+    desc: "Deduplication first, because at-least-once delivery means the same event will arrive twice and every later stage would otherwise have to cope with it."
+    focus stream
+    flow kafka -> flink -> dedupe -> enrich { label: "one event", dur: 1500ms }
+  }
+
+  step land "It lands in the lake as bronze" {
+    desc: "Bronze is the raw truth: whatever arrived, exactly as it arrived. Nothing is ever corrected here, only downstream, so a bad transformation can always be replayed."
+    focus lake
+    flow enrich -> bronze { label: "append", dur: 600ms }
+  }
+
+  step refine "Quality checks promote it to silver" {
+    desc: "This is the first stage that can reject a row. A check that fails here stops the promotion rather than propagating a quiet error into everything built on top."
+    focus lake
+    flow quality -> silver { label: "assertions pass", dur: 600ms }
+    flow bronze -> silver { label: "promote", dur: 600ms }
+    set silver { badge: "validated", state: ok, color: "#16a34a" }
+  }
+
+  step model "Gold is the modelled, business-facing shape" {
+    desc: "Gold is where table names stop describing systems and start describing the business. Two teams reading the same gold table should mean the same thing by it."
+    focus lake
+    flow silver -> gold { label: "dbt model", dur: 700ms }
+  }
+
+  step warehouse-load "The warehouse takes a copy" {
+    desc: "The lake keeps history and the warehouse serves queries. Copying rather than querying the lake directly is the trade the platform makes for predictable latency."
+    focus warehouse
+    flow gold -> dw -> marts -> semantic { label: "load", dur: 1400ms }
+  }
+
+  step consume "Three very different consumers" {
+    desc: "The same gold table feeds a dashboard, a sync back into the CRM, and a model's features. Sharing that one definition is most of what a data platform is for."
+    focus serve
+    flow semantic -> bi { label: "query", dur: 600ms }
+    flow gold -> reverse { label: "sync", dur: 600ms }
+    flow gold -> ml { label: "features", dur: 600ms }
+  }
+
+  step whole "The whole platform at once" {
+    desc: "Zoom out. Every arrow on this diagram exists because one of the eight steps above needed it, which is the only honest way to draw a picture this size."
+    flow app -> cdc -> kafka { label: "end to end", dur: 1200ms }
+  }

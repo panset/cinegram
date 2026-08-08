@@ -49,30 +49,45 @@ bazel run //cmd/diagramator -- lint    examples/k8s-request.dgm
 
 ## Architecture
 
-A `.dgm` source is a Mermaid diagram body followed by `scenario` blocks. The
-pipeline is `parser → compile → emit`:
+A `.dgm` source is a Mermaid diagram body followed by `scenario`, `view` and
+`interact` blocks. The pipeline is `loader → parser → compile → emit`:
 
 ```
-source.dgm ─► pkg/parser ─► ast.Document + symbol.Table
-                              │
-                              ├─► pkg/compile ─► ir.Timeline
-                              │
-                              └─► pkg/emit/{mermaid,html}
+source.dgm ─► pkg/loader ─► the file and every `view` it references
+                  │
+                  └─► pkg/parser ─► ast.Document + symbol.Table   (per file)
+                                      │
+                                      ├─► pkg/compile ─► ir.Timeline
+                                      │
+                                      └─► pkg/emit/{mermaid,html}
 ```
+
+**`pkg/parser` does no I/O and must stay that way.** `Parse(filename, content)`
+takes a string, so the parser works from a webview or a WASM build with no
+filesystem. `pkg/loader` resolves `view … from "path"` declarations and takes
+its read function as an argument, so it is testable against an in-memory map.
 
 ### The two halves never meet except through symbol.Table
 
 This is the load-bearing decision in the codebase. `pkg/parser/flowchart.go`
-parses the diagram; `pkg/parser/scenario.go` parses the animation and contains
-**no diagram vocabulary at all** — it emits nothing but named references.
-`pkg/parser/validate.go` is the only place the halves meet, and it works purely
-against `symbol.Table`.
+parses the diagram; `pkg/parser/scenario.go` and `pkg/parser/interact.go` parse
+the animation and the click bindings and contain **no diagram vocabulary at
+all** — they emit nothing but named references. `pkg/parser/validate.go` is the
+only place the halves meet, and it works purely against `symbol.Table`.
 
-Adding a Mermaid diagram type (`sequenceDiagram`, `architecture-beta`) therefore
-means writing one parser that implements `registry.DiagramParser` and registers
-itself in `init()`. Scenario parsing, validation, and the timeline compiler need
-zero changes. **Keep flowchart specifics out of `scenario.go`, `validate.go`,
-`pkg/compile`, and `pkg/ir`.**
+Adding a Mermaid diagram type (`architecture-beta`, say) therefore means writing
+one parser that implements `registry.DiagramParser` and registers itself in
+`init()`. Scenario parsing, validation, and the timeline compiler need zero
+changes. **Keep flowchart specifics out of `scenario.go`, `interact.go`,
+`validate.go`, `pkg/compile`, and `pkg/ir`.**
+
+`pkg/parser/sequence.go` is the worked proof of that claim: `sequenceDiagram`
+cost one parser plus one runtime indexer, and nothing in between. The runtime
+is the part that does need a second strategy per diagram type — see below.
+
+A diagram parser must hand the cursor back at every keyword in
+`isTopLevelKeyword` (`interact.go`), not just at `scenario` — that list is the
+contract in `registry.DiagramParser.Parse`.
 
 ### Mermaid emission is a reprint, not a regeneration
 
@@ -85,10 +100,15 @@ for the symbol table, never rewrite the text.
 
 ### The timeline is the renderer contract
 
-`pkg/ir` holds absolute integer milliseconds and **no geometry** — tracks
-reference node and edge IDs only. Two consequences worth protecting: a renderer
-is just a clock plus a scrubber, and a Go-native SVG backend remains possible
-later without touching the compiler. Do not add coordinates to `ir`.
+`pkg/ir` holds absolute integer milliseconds and **no geometry** — tracks and
+bindings reference node, edge and group IDs only. Two consequences worth
+protecting: a renderer is just a clock plus a scrubber, and a Go-native SVG
+backend remains possible later without touching the compiler. Do not add
+coordinates to `ir`.
+
+A `Timeline` holds one `View` per diagram in the bundle, plus a `Root` naming
+the one to open on. `Compile` still lowers a single document (wrapping it in one
+view); `CompileBundle` lowers a whole `loader.Bundle`.
 
 Timing rules live entirely in `pkg/compile`:
 
@@ -119,8 +139,33 @@ after touching that file.
 endpoints to node centres. This is intentional: mermaid's edge-id format has
 changed between releases, and geometric matching additionally detects paths
 mermaid drew from the far end (composed with `Reverse` as `!reverse !== !flip`).
-Unbound nodes or edges surface in a warning banner on the page rather than
-silently failing to animate.
+Unbound nodes, edges or click sources surface in a warning banner on the page
+rather than silently failing.
+
+A sequence diagram has neither `g.node` nor `.edgePaths`, so `index()` picks a
+strategy from `ir.Diagram.Type`. Actors are recovered by **column** — the parts
+of one actor are loose rects and texts sharing a lifeline x — and wrapped in a
+`g.dgm-actor` so that every existing `.dgm-highlight rect` rule applies
+unchanged. Messages are matched to edges by **order**, because mermaid draws
+them top to bottom in message order and that is far more robust than recovering
+identity from geometry. Only the direction a line was drawn in is read from
+geometry, and it composes with `Reverse` exactly as the flowchart `flip` does.
+
+One `Player` hosts every view and swaps between them, rather than one Player per
+view: `build()` installs a **document-level** keydown handler, which would stack
+up and fight over Space and the arrow keys if the chrome were built more than
+once. Click listeners attach in `index()`, the one place that runs per mermaid
+render with the id→element maps in hand; they live on SVG elements that
+`render()` replaces wholesale, so they never need removing.
+
+**`baseClass` strips `dgm-*` classes and `applyNodeStates` rewrites the whole
+class attribute every frame.** Anything that must outlive a frame — the click
+affordance, reveal state — has to be listed in `STICKY` or the clock will erase
+it the moment a node animates.
+
+Navigation goes through `location.hash`: `navigate()` only moves the hash and
+`applyHash()` does the work, so a click and a browser history move follow the
+same path and the Back button cannot disagree with the browser's own.
 
 ## Constraints
 
@@ -144,14 +189,39 @@ silently failing to animate.
 ## Verifying animation changes
 
 Bazel tests cover the parser, compiler and emitters, but not the browser
-runtime. To check a runtime change actually renders, serve the page (the Chrome
-extension blocks `file://`) and drive the player, which is exposed as
+runtime. To check a runtime change actually renders, serve the page — the
+Chrome extension blocks `file://` — and drive the player, which is exposed as
 `window.DIAGRAMATOR_PLAYER`:
 
 ```sh
-bazel run //cmd/diagramator -- preview examples/k8s-request.dgm -o /tmp/dgm/k8s.html
-(cd /tmp/dgm && python3 -m http.server 8731)   # http://127.0.0.1:8731/k8s.html
+bazel run //cmd/diagramator -- preview examples/k8s-request.dgm --serve --watch
+# http://127.0.0.1:8731/ — edit the .dgm and the page reloads itself
 ```
 
 `DIAGRAMATOR_PLAYER.seek(ms)` jumps to a moment deterministically, which is far
-more reliable for verification than watching playback.
+more reliable for verification than watching playback. Two traps to know about:
+
+- A CSS `transition` means `getComputedStyle` right after a class change
+  returns the *starting* value. Wait ~250ms before asserting on a colour or a
+  width, or you will measure the frame before the change.
+- Never put a CSS `transform` on a `g.node`. Mermaid positions nodes with a
+  `transform` **attribute**, and the CSS property replaces it rather than
+  composing — the node jumps to the origin. Animate the shape inside the node
+  with `transform-box: fill-box`, or animate something else entirely.
+
+For a still, `frame` captures one exact millisecond with no race against the
+animation, because the deep link it opens lands paused:
+
+```sh
+bazel run //cmd/diagramator -- frame examples/payment-checkout.dgm \
+  --at 1620ms --scenario s1 -o /tmp/fail.png
+```
+
+It shells out to a headless Chrome found on `PATH` or named by
+`$DIAGRAMATOR_CHROME`. The opt-in end-to-end test for it must run **outside**
+the Bazel sandbox, which denies the browser what it needs to start:
+
+```sh
+DIAGRAMATOR_CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  bazel-bin/cmd/diagramator/diagramator_test_/diagramator_test -test.run TestFrameEndToEnd
+```

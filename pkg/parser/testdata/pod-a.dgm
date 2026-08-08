@@ -1,0 +1,57 @@
+%% What Pod A does with a request once kube-proxy has picked it.
+%% Reached by clicking Pod A in k8s-request.dgm, and previewable on its own.
+flowchart LR
+  in[Request from Service]
+
+  subgraph pod[Pod A]
+    proxy[Envoy Sidecar]
+    app[Order API Container]
+    cache[(Local Cache)]
+  end
+
+  db[(Orders Postgres)]
+
+  in --> proxy
+  proxy --> app
+  app --> cache
+  app --> db
+
+scenario "fetch orders" { speed: 1.0, loop: true }
+
+  step admit "Sidecar admits the request" {
+    flow in -> proxy { label: "GET /api/orders", dur: 500ms }
+    highlight proxy { style: active }
+  }
+
+  step forward "Proxy forwards to the app container" {
+    flow proxy -> app { label: "localhost:8080", dur: 400ms }
+    note proxy "mTLS terminated\nrate limit ok"
+  }
+
+  step lookup "App checks its local cache first" {
+    flow app -> cache { label: "orders:u42", dur: 350ms }
+    note cache "miss"
+  }
+
+  step query "Cache miss, so the app queries Postgres" {
+    flow app -> db { label: "SELECT * FROM orders", dur: 700ms }
+    highlight db { style: busy }
+  }
+
+  step rows "Postgres returns the rows" {
+    flow db -> app { label: "14 rows", dur: 600ms, style: response }
+    highlight app { style: busy, dur: 500ms }
+  }
+
+  step fill "App fills the cache and answers" {
+    flow app -> cache { label: "SET orders:u42", dur: 300ms }
+    note app "200 OK in 14ms"
+  }
+
+  step reply "Response leaves the pod" {
+    flow app -> proxy -> in {
+      label: "200 OK",
+      dur: 800ms,
+      style: response
+    }
+  }

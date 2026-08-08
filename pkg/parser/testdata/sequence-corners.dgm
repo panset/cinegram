@@ -1,0 +1,33 @@
+%% Every form the sequence grammar has to survive, including the ones it
+%% deliberately does not model.
+sequenceDiagram
+  autonumber
+  participant A
+  participant Addressee as Address Book
+  actor U as User
+
+  box Grey The back end
+    participant D as Database
+  end
+
+  U->>A: plain arrow
+  A-->>U: dotted reply
+  A-)D: async open arrow
+  D--)A: dotted async
+  A-xD: cross
+  D--xA: dotted cross
+  A->D: no arrowhead
+  A-->D: dotted, no arrowhead
+  A->>A: talks to itself
+
+  Note right of U: a note with x->y inside it
+  activate D
+  loop every 30s
+    A->>D: poll
+  end
+  deactivate D
+
+scenario "corners"
+  step only "walk" {
+    flow U -> A { label: "hello" }
+  }

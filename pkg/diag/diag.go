@@ -60,6 +60,11 @@ func (b *Bag) Warnf(pos source.Pos, format string, args ...any) {
 	b.add(Diagnostic{Pos: pos, Severity: SeverityWarning, Msg: fmt.Sprintf(format, args...)})
 }
 
+// WarnHintf records a warning at pos along with a suggested fix.
+func (b *Bag) WarnHintf(pos source.Pos, hint, format string, args ...any) {
+	b.add(Diagnostic{Pos: pos, Severity: SeverityWarning, Msg: fmt.Sprintf(format, args...), Hint: hint})
+}
+
 // add records d, ignoring an exact repeat.
 //
 // Several passes legitimately inspect the same attribute — validation checks

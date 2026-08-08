@@ -3,11 +3,16 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "parser",
     srcs = [
+        "attrs.go",
+        "comments.go",
+        "coverage.go",
         "flowchart.go",
+        "interact.go",
         "link.go",
         "parser.go",
         "scanner.go",
         "scenario.go",
+        "sequence.go",
         "shape.go",
         "validate.go",
     ],

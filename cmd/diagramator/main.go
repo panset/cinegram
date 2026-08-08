@@ -6,6 +6,7 @@
 //	diagramator compile <file.dgm>   # timeline JSON on stdout
 //	diagramator mermaid <file.dgm>   # the diagram as plain Mermaid
 //	diagramator preview <file.dgm>   # self-contained animated HTML
+//	diagramator narrate <file.dgm>   # the animation as a written walkthrough
 //	diagramator lint    <file.dgm>   # diagnostics only
 package main
 
@@ -22,8 +23,11 @@ import (
 	"github.com/tejaspanse/diagramator/pkg/diag"
 	"github.com/tejaspanse/diagramator/pkg/emit/html"
 	"github.com/tejaspanse/diagramator/pkg/emit/mermaid"
+	"github.com/tejaspanse/diagramator/pkg/emit/narrate"
 	"github.com/tejaspanse/diagramator/pkg/ir"
+	"github.com/tejaspanse/diagramator/pkg/loader"
 	"github.com/tejaspanse/diagramator/pkg/parser"
+	"github.com/tejaspanse/diagramator/pkg/units"
 )
 
 const version = "0.1.0"
@@ -51,6 +55,10 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return cmdPreview(rest, stdout, stderr)
 	case "lint":
 		return cmdLint(rest, stdout, stderr)
+	case "narrate":
+		return cmdNarrate(rest, stdout, stderr)
+	case "frame":
+		return cmdFrame(rest, stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintln(stdout, "diagramator", version)
 		return nil
@@ -70,7 +78,15 @@ Usage:
   diagramator compile <file.dgm> [-o out.json]   compile to an animation timeline
   diagramator mermaid <file.dgm> [-o out.mmd]    emit the diagram as plain Mermaid
   diagramator preview <file.dgm> [-o out.html]   build a self-contained animated page
-  diagramator lint    <file.dgm>                 report diagnostics only
+  diagramator preview <file.dgm> --serve [--watch] [--addr host:port]
+                                                 serve it, rebuilding as you edit
+  diagramator frame   <file.dgm> --at 2400ms -o out.png
+                                                 screenshot one exact moment
+                                                 (--frames N -o dir/ for a sequence)
+  diagramator narrate <file.dgm> [-o out.md] [--format=md|json]
+                                                 the animation as a walkthrough
+  diagramator lint    <file.dgm> [--format=text|json]
+                                                 report diagnostics only
   diagramator version
 
 Warnings never fail a build; errors do.
@@ -89,11 +105,22 @@ func load(path string, stderr io.Writer) (*parser.Result, *diag.Bag, error) {
 }
 
 func report(bag *diag.Bag, stderr io.Writer) error {
-	if bag.Len() > 0 {
-		fmt.Fprintln(stderr, bag)
+	return reportAll([]*diag.Bag{bag}, stderr)
+}
+
+// reportAll prints the diagnostics of every file in a bundle. Each bag is
+// labelled with its own filename, so a problem in a drilled-into diagram is
+// attributable to the file that actually contains it.
+func reportAll(bags []*diag.Bag, stderr io.Writer) error {
+	errs := 0
+	for _, bag := range bags {
+		if bag.Len() > 0 {
+			fmt.Fprintln(stderr, bag)
+		}
+		errs += countErrors(bag)
 	}
-	if bag.HasErrors() {
-		return fmt.Errorf("%s", plural(countErrors(bag), "error"))
+	if errs > 0 {
+		return fmt.Errorf("%s", plural(errs, "error"))
 	}
 	return nil
 }
@@ -121,8 +148,17 @@ func plural(n int, word string) string {
 // package stops parsing at the first non-flag word and `preview file.dgm -o
 // out.html` is the order people naturally type.
 func parseArgs(name string, args []string) (input, output string, err error) {
+	return parseArgsWith(name, args, nil)
+}
+
+// parseArgsWith is parseArgs with room for a command's own flags. `extra`
+// registers them against the same set, so they hoist and parse identically.
+func parseArgsWith(name string, args []string, extra func(*flag.FlagSet)) (input, output string, err error) {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.StringVar(&output, "o", "", "write output to this file instead of stdout")
+	if extra != nil {
+		extra(fs)
+	}
 	if err = fs.Parse(hoistFlags(args)); err != nil {
 		return "", "", err
 	}
@@ -155,7 +191,17 @@ func resolvePath(p string) string {
 }
 
 // valueFlags are the flags that consume the following argument.
-var valueFlags = map[string]bool{"-o": true, "--o": true}
+var valueFlags = map[string]bool{
+	"-o": true, "--o": true,
+	"-format": true, "--format": true,
+	"-addr": true, "--addr": true,
+	"-at": true, "--at": true,
+	"-frames": true, "--frames": true,
+	"-scenario": true, "--scenario": true,
+	"-view": true, "--view": true,
+	"-width": true, "--width": true,
+	"-height": true, "--height": true,
+}
 
 func hoistFlags(args []string) []string {
 	var flags, positional []string
@@ -187,12 +233,12 @@ func cmdCompile(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	res, bag, err := load(input, stderr)
+	bundle, err := loader.Load(input, os.ReadFile)
 	if err != nil {
 		return err
 	}
-	timeline := compile.Compile(res.Document, res.Symbols, bag)
-	if err := report(bag, stderr); err != nil {
+	timeline := compile.CompileBundle(bundle)
+	if err := reportAll(bundle.Bags(), stderr); err != nil {
 		return err
 	}
 
@@ -219,23 +265,36 @@ func cmdMermaid(args []string, stdout, stderr io.Writer) error {
 }
 
 func cmdPreview(args []string, stdout, stderr io.Writer) error {
-	input, output, err := parseArgs("preview", args)
+	var addr string
+	var serve, watch bool
+	input, output, err := parseArgsWith("preview", args, func(fs *flag.FlagSet) {
+		fs.BoolVar(&serve, "serve", false, "serve the page over HTTP instead of writing a file")
+		fs.StringVar(&addr, "addr", defaultAddr, "address to serve on")
+		fs.BoolVar(&watch, "watch", false, "rebuild and reload when the source changes")
+	})
 	if err != nil {
 		return err
 	}
+
+	// --watch on its own plainly means "serve and watch": there is nothing to
+	// watch for when the output is a file written once.
+	if serve || watch {
+		return runServe(input, addr, watch, stderr)
+	}
+
 	if output == "" {
 		output = defaultOutputPath(input)
 	}
 
-	res, bag, err := load(input, stderr)
+	bundle, err := loader.Load(input, os.ReadFile)
 	if err != nil {
 		return err
 	}
-	timeline := compile.Compile(res.Document, res.Symbols, bag)
-	if err := report(bag, stderr); err != nil {
+	timeline := compile.CompileBundle(bundle)
+	if err := reportAll(bundle.Bags(), stderr); err != nil {
 		return err
 	}
-	if len(timeline.Scenarios) == 0 {
+	if rootHasNoScenarios(timeline) {
 		fmt.Fprintln(stderr, "diagramator: warning: no scenarios, the page will render a static diagram")
 	}
 
@@ -256,28 +315,174 @@ func defaultOutputPath(input string) string {
 	return strings.TrimSuffix(input, filepath.Ext(input)) + ".html"
 }
 
+// title names the page after the root view, falling back to its first scenario.
 func title(t *ir.Timeline) string {
-	if len(t.Scenarios) > 0 && t.Scenarios[0].Name != "" {
-		return t.Scenarios[0].Name
+	if v := rootView(t); v != nil {
+		if v.Title != "" {
+			return v.Title
+		}
+		// Only fall back to a scenario name when it is the only one; with
+		// several, naming the page after one of them is a claim the page does
+		// not keep once the reader picks another.
+		if len(v.Scenarios) == 1 && v.Scenarios[0].Name != "" {
+			return v.Scenarios[0].Name
+		}
+		if v.ID != "" {
+			return v.ID
+		}
 	}
 	return "Diagramator"
 }
 
+func rootView(t *ir.Timeline) *ir.View {
+	for i := range t.Views {
+		if t.Views[i].ID == t.Root {
+			return &t.Views[i]
+		}
+	}
+	return nil
+}
+
+func rootHasNoScenarios(t *ir.Timeline) bool {
+	v := rootView(t)
+	return v == nil || len(v.Scenarios) == 0
+}
+
 func cmdLint(args []string, stdout, stderr io.Writer) error {
-	input, _, err := parseArgs("lint", args)
+	var format string
+	input, _, err := parseArgsWith("lint", args, func(fs *flag.FlagSet) {
+		fs.StringVar(&format, "format", "text", "text or json")
+	})
 	if err != nil {
 		return err
 	}
-	res, bag, err := load(input, stderr)
+	// Lint follows view references too, so a `from` path that points at
+	// nothing is caught here rather than at preview time.
+	bundle, err := loader.Load(input, os.ReadFile)
 	if err != nil {
 		return err
 	}
 	// Compile as well: some problems (a bad duration on an action that
 	// validation skipped) only surface during the timing pass.
-	compile.Compile(res.Document, res.Symbols, bag)
-	if err := report(bag, stderr); err != nil {
+	compile.CompileBundle(bundle)
+
+	if format == "json" {
+		return lintJSON(bundle.Bags(), stdout)
+	}
+	if format != "text" {
+		return fmt.Errorf("unknown --format %q: use text or json", format)
+	}
+	if err := reportAll(bundle.Bags(), stderr); err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "%s: ok\n", input)
 	return nil
+}
+
+// jsonDiagnostic is the machine-readable shape of a diagnostic. It is declared
+// here rather than in pkg/diag because it is a wire format: the fields are
+// flat, the severity is a word rather than an enum, and it should not move when
+// the internal type does.
+type jsonDiagnostic struct {
+	File     string `json:"file"`
+	Line     int    `json:"line"`
+	Col      int    `json:"col"`
+	Severity string `json:"severity"`
+	Message  string `json:"message"`
+	Hint     string `json:"hint,omitempty"`
+}
+
+// lintJSON writes every diagnostic in the bundle as one array on stdout.
+//
+// Exit-code semantics are unchanged — warnings 0, errors 1 — so a caller can
+// branch on the status and read the detail, rather than having to choose.
+func lintJSON(bags []*diag.Bag, stdout io.Writer) error {
+	out := []jsonDiagnostic{}
+	errs := 0
+
+	for _, bag := range bags {
+		for _, d := range bag.All() {
+			if d.Severity == diag.SeverityError {
+				errs++
+			}
+			out = append(out, jsonDiagnostic{
+				File:     bag.Filename,
+				Line:     d.Pos.Line,
+				Col:      d.Pos.Col,
+				Severity: d.Severity.String(),
+				Message:  d.Msg,
+				Hint:     d.Hint,
+			})
+		}
+	}
+
+	encoded, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return err
+	}
+	if _, err := stdout.Write(append(encoded, '\n')); err != nil {
+		return err
+	}
+	if errs > 0 {
+		return fmt.Errorf("%s", plural(errs, "error"))
+	}
+	return nil
+}
+
+func cmdFrame(args []string, stdout, stderr io.Writer) error {
+	var at, scenario, view string
+	var frames, width, height int
+	input, output, err := parseArgsWith("frame", args, func(fs *flag.FlagSet) {
+		fs.StringVar(&at, "at", "0", "the moment to capture, e.g. 2400ms or 2.4s")
+		fs.IntVar(&frames, "frames", 1, "capture N evenly spaced moments into -o as a directory")
+		fs.StringVar(&scenario, "scenario", "", "scenario id or name (default: the first)")
+		fs.StringVar(&view, "view", "", "view id (default: the one the document opens on)")
+		fs.IntVar(&width, "width", 1400, "viewport width")
+		fs.IntVar(&height, "height", 900, "viewport height")
+	})
+	if err != nil {
+		return err
+	}
+
+	ms, err := units.ParseMillis(at)
+	if err != nil {
+		return fmt.Errorf("--at %q: %w", at, err)
+	}
+
+	return runCapture(captureOptions{
+		input: input, output: output, at: ms, frames: frames,
+		scenario: scenario, view: view, width: width, height: height,
+	}, stderr)
+}
+
+func cmdNarrate(args []string, stdout, stderr io.Writer) error {
+	var format string
+	input, output, err := parseArgsWith("narrate", args, func(fs *flag.FlagSet) {
+		fs.StringVar(&format, "format", "md", "md or json")
+	})
+	if err != nil {
+		return err
+	}
+	bundle, err := loader.Load(input, os.ReadFile)
+	if err != nil {
+		return err
+	}
+	timeline := compile.CompileBundle(bundle)
+	if err := reportAll(bundle.Bags(), stderr); err != nil {
+		return err
+	}
+
+	doc := narrate.Build(timeline, title(timeline))
+	switch format {
+	case "md":
+		return write(output, narrate.Markdown(doc), stdout)
+	case "json":
+		encoded, err := narrate.JSON(doc)
+		if err != nil {
+			return err
+		}
+		return write(output, encoded, stdout)
+	default:
+		return fmt.Errorf("unknown --format %q: use md or json", format)
+	}
 }

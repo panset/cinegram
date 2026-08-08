@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "narrate",
+    srcs = ["narrate.go"],
+    importpath = "github.com/tejaspanse/diagramator/pkg/emit/narrate",
+    visibility = ["//visibility:public"],
+    deps = ["//pkg/ir"],
+)
+
+go_test(
+    name = "narrate_test",
+    srcs = ["narrate_test.go"],
+    data = glob(["testdata/**"]),
+    embed = [":narrate"],
+    deps = [
+        "//pkg/compile",
+        "//pkg/parser",
+    ],
+)

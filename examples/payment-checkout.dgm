@@ -1,0 +1,70 @@
+%% Checkout, told twice. The first scenario is the path everyone draws; the
+%% second is the one that actually costs money, and it is the reason `status`
+%% exists as a first-class attribute rather than a colour convention.
+flowchart LR
+  browser[Shopper's Browser]
+  checkout[Checkout Service]
+
+  subgraph psp[Payment Providers]
+    gw[Primary Gateway]
+    backup[Backup Gateway]
+  end
+
+  ledger[(Order Ledger)]
+
+  browser --> checkout
+  checkout --> gw
+  checkout --> backup
+  checkout --> ledger
+
+scenario "happy path" { speed: 1.0 }
+
+  step submit "Shopper submits the order" {
+    flow browser -> checkout { label: "POST /checkout", dur: 600ms }
+    highlight checkout { style: active }
+  }
+
+  step authorize "The primary gateway authorises the card" {
+    flow checkout -> gw { label: "authorize $84.10", dur: 700ms, ease: out }
+    highlight gw
+  }
+
+  step record "The order is written to the ledger" {
+    flow gw -> checkout -> ledger { label: "order 8812", dur: 900ms }
+  }
+
+  step confirm "Confirmation travels back to the shopper" {
+    flow checkout -> browser { label: "201 Created", dur: 600ms, style: response }
+  }
+
+scenario "gateway outage"
+
+  step outage-submit "Shopper submits the same order" {
+    flow browser -> checkout { label: "POST /checkout", dur: 600ms }
+    highlight checkout { style: active }
+  }
+
+  step attempt "The primary gateway never answers" {
+    flow checkout -> gw {
+      label: "authorize $84.10",
+      dur: 1100ms,
+      status: fail
+    }
+    note gw "no response in 8s\nconnect timeout"
+  }
+
+  step retry "Checkout fails over to the backup provider" {
+    flow checkout -> backup { label: "retry: authorize", dur: 700ms, ease: in-out }
+    dim gw
+    highlight backup
+  }
+
+  step settle "The backup gateway approves it" {
+    flow backup -> checkout -> ledger { label: "approved · order 8812", dur: 1000ms }
+    dim gw
+  }
+
+  step outage-confirm "The shopper sees the same 201 either way" {
+    flow checkout -> browser { label: "201 Created", dur: 600ms, style: response }
+    dim gw
+  }

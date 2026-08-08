@@ -1,0 +1,78 @@
+%% Raft leader election in a five-node cluster.
+%% ---
+%% The point of this example is that the cluster's state is legible at any
+%% scrub position. Who is leader, what term we are in and how many votes a
+%% candidate has collected are not things you can infer from a particle that
+%% has already gone past — so they are `set` and `gauge` state, which the
+%% compiler keeps open until something replaces it.
+flowchart TB
+  subgraph cluster[Raft Cluster]
+    n1[n1]
+    n2[n2]
+    n3[n3]
+    n4[n4]
+    n5[n5]
+  end
+
+  n1 --> n2
+  n1 --> n3
+  n1 --> n4
+  n1 --> n5
+
+  n3 --> n1
+  n3 --> n2
+  n3 --> n4
+  n3 --> n5
+
+scenario "leader failure and re-election" { speed: 1.0 }
+
+  step steady "n1 is leader and heartbeats the followers" {
+    desc: "A Raft leader holds its position by talking. Every follower that hears an AppendEntries within its election timeout stays a follower."
+    set n1 { badge: "leader", state: leader, color: "#16a34a" }
+    gauge n1 { label: "term", value: 1 }
+    flow n1 -> n2 { label: "AppendEntries", dur: 500ms }
+    flow n1 -> n3 { dur: 500ms }
+    flow n1 -> n4 { dur: 500ms }
+    flow n1 -> n5 { dur: 500ms }
+  }
+
+  step down "n1 stops responding" {
+    desc: "Nothing announces a leader failure. The followers only observe an absence, which is why the whole protocol is built on a timeout rather than on a notification."
+    unset n1
+    dim n1
+    flow n1 -> n3 { label: "heartbeat lost", dur: 600ms, status: fail }
+  }
+
+  step timeout "n3's election timer fires first" {
+    desc: "Election timeouts are randomised precisely so that one node usually reaches zero first. n3 increments the term, votes for itself, and asks the others to agree."
+    set n3 { badge: "candidate", state: candidate, color: "#d97706" }
+    gauge n3 { label: "term", value: 2 }
+    gauge n3 { label: "votes", value: "1 / 5" }
+    dim n1
+    flow n3 -> n2 { label: "RequestVote", dur: 500ms }
+    flow n3 -> n4 { dur: 500ms }
+  }
+
+  step votes "A majority answers" {
+    desc: "Each follower grants at most one vote per term, so two candidates in the same term cannot both win. Three of five is a majority and that is enough."
+    gauge n3 { label: "votes", value: "3 / 5" }
+    dim n1
+    flow n2 -> n3 { label: "granted", dur: 450ms, style: response }
+    flow n4 -> n3 { label: "granted", dur: 450ms, style: response }
+  }
+
+  step elected "n3 becomes leader for term 2" {
+    desc: "The badge moves because the role moved. n1's leadership was retired the moment it went silent, and nothing in the diagram still claims otherwise."
+    set n3 { badge: "leader", state: leader, color: "#16a34a" }
+    gauge n3 { label: "votes", value: "" }
+    dim n1
+    pulse n3
+  }
+
+  step replicate "Log replication resumes under the new leader" {
+    desc: "From here the cluster is back to the steady state it started in, one term later and one node down. Scrub back and forth: the badges and gauges say what is true at that moment, not what happened to animate last."
+    dim n1
+    flow n3 -> n2 { label: "AppendEntries", dur: 500ms }
+    flow n3 -> n4 { dur: 500ms }
+    flow n3 -> n5 { dur: 500ms }
+  }

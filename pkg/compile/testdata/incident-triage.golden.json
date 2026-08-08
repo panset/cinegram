@@ -1,0 +1,360 @@
+{
+  "version": 2,
+  "root": "main",
+  "views": [
+    {
+      "id": "main",
+      "title": "the cascade",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% A service map for the twenty minutes when it matters.\n%% ---\n%% Every service links out to where you would actually go next — its dashboard\n%% or its runbook — because a diagram consulted during an incident is a\n%% navigation surface, not an illustration. The scenario replays the cascade so\n%% a link to one moment explains itself.\nflowchart LR\n  users[Users]\n  edge[Edge / CDN]\n  subgraph core[Core Services]\n    api[API Gateway]\n    orders[Orders]\n    inventory[Inventory]\n  end\n  subgraph deps[Dependencies]\n    db[(Orders DB)]\n    queue[Job Queue]\n  end\n  pager[On-call Pager]\n  users --\u003e edge\n  edge --\u003e api\n  api --\u003e orders\n  api --\u003e inventory\n  orders --\u003e db\n  inventory --\u003e queue\n  orders --\u003e pager\n"
+      },
+      "nodes": [
+        {
+          "id": "users",
+          "label": "Users",
+          "shape": "rect"
+        },
+        {
+          "id": "edge",
+          "label": "Edge / CDN",
+          "shape": "rect"
+        },
+        {
+          "id": "api",
+          "label": "API Gateway",
+          "shape": "rect",
+          "group": "core"
+        },
+        {
+          "id": "orders",
+          "label": "Orders",
+          "shape": "rect",
+          "group": "core"
+        },
+        {
+          "id": "inventory",
+          "label": "Inventory",
+          "shape": "rect",
+          "group": "core"
+        },
+        {
+          "id": "db",
+          "label": "Orders DB",
+          "shape": "cylinder",
+          "group": "deps"
+        },
+        {
+          "id": "queue",
+          "label": "Job Queue",
+          "shape": "rect",
+          "group": "deps"
+        },
+        {
+          "id": "pager",
+          "label": "On-call Pager",
+          "shape": "rect"
+        }
+      ],
+      "groups": [
+        {
+          "id": "core",
+          "label": "Core Services",
+          "children": [
+            "api",
+            "orders",
+            "inventory"
+          ]
+        },
+        {
+          "id": "deps",
+          "label": "Dependencies",
+          "children": [
+            "db",
+            "queue"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "users",
+          "to": "edge",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "edge",
+          "to": "api",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "api",
+          "to": "orders",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "api",
+          "to": "inventory",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "orders",
+          "to": "db",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "inventory",
+          "to": "queue",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e6",
+          "from": "orders",
+          "to": "pager",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "the cascade",
+          "duration": 3900,
+          "speed": 1,
+          "loop": false,
+          "autoplay": true,
+          "steps": [
+            {
+              "id": "normal",
+              "name": "Traffic is normal",
+              "desc": "Baseline. Worth a beat at the start so the shape of healthy traffic is on screen before anything goes wrong.",
+              "start": 0,
+              "end": 900,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 450,
+                  "edge": "e0",
+                  "from": "users",
+                  "to": "edge",
+                  "label": "12k rps"
+                },
+                {
+                  "kind": "flow",
+                  "start": 450,
+                  "end": 900,
+                  "edge": "e1",
+                  "from": "edge",
+                  "to": "api",
+                  "label": "12k rps"
+                },
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 500,
+                  "edge": "e2",
+                  "from": "api",
+                  "to": "orders",
+                  "label": "checkout"
+                }
+              ]
+            },
+            {
+              "id": "slow",
+              "name": "The orders database starts timing out",
+              "desc": "The first real signal, and it is not an error rate — it is latency. Nothing has failed yet, which is exactly why it is easy to miss.",
+              "start": 900,
+              "end": 1800,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 900,
+                  "end": 1800,
+                  "target": "deps"
+                },
+                {
+                  "kind": "flow",
+                  "start": 900,
+                  "end": 1800,
+                  "edge": "e4",
+                  "from": "orders",
+                  "to": "db",
+                  "label": "p99 2.4s",
+                  "color": "#d97706"
+                },
+                {
+                  "kind": "note",
+                  "start": 900,
+                  "end": 1800,
+                  "target": "db",
+                  "text": "connection pool\nsaturated",
+                  "side": "below"
+                }
+              ]
+            },
+            {
+              "id": "retry",
+              "name": "Orders retries, and makes it worse",
+              "desc": "Retries against a saturated dependency add load to the thing that is already the bottleneck. This is the moment the incident stops being about the database.",
+              "start": 1800,
+              "end": 2600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1800,
+                  "end": 2600,
+                  "edge": "e4",
+                  "from": "orders",
+                  "to": "db",
+                  "label": "retry x3",
+                  "status": "fail"
+                }
+              ]
+            },
+            {
+              "id": "spread",
+              "name": "The gateway's thread pool fills",
+              "desc": "Inventory is healthy and still unreachable: it is queued behind Orders in a pool they share. Independent services, one shared resource, one blast radius.",
+              "start": 2600,
+              "end": 3300,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 2600,
+                  "end": 3300,
+                  "target": "core"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2600,
+                  "end": 3300,
+                  "edge": "e3",
+                  "from": "api",
+                  "to": "inventory",
+                  "label": "queued",
+                  "status": "fail"
+                },
+                {
+                  "kind": "note",
+                  "start": 2600,
+                  "end": 3300,
+                  "target": "api",
+                  "text": "shared thread pool",
+                  "side": "above"
+                }
+              ]
+            },
+            {
+              "id": "page",
+              "name": "The pager goes off",
+              "desc": "By the time the alert fires the cause is three hops from the symptom. Click any service to open its dashboard from here.",
+              "start": 3300,
+              "end": 3900,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3300,
+                  "end": 3900,
+                  "edge": "e6",
+                  "from": "orders",
+                  "to": "pager",
+                  "label": "SLO burn 14x",
+                  "color": "#dc2626"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "gauge",
+              "start": 900,
+              "end": 1800,
+              "target": "db",
+              "label": "p99",
+              "value": "2.4s"
+            },
+            {
+              "kind": "gauge",
+              "start": 1800,
+              "end": 3900,
+              "target": "db",
+              "label": "p99",
+              "value": "8.1s"
+            },
+            {
+              "kind": "set",
+              "start": 1800,
+              "end": 3300,
+              "target": "orders",
+              "value": "degraded",
+              "color": "#d97706"
+            },
+            {
+              "kind": "set",
+              "start": 2600,
+              "end": 3900,
+              "target": "api",
+              "label": "saturated",
+              "value": "degraded",
+              "color": "#dc2626"
+            },
+            {
+              "kind": "set",
+              "start": 3300,
+              "end": 3900,
+              "target": "orders",
+              "label": "page raised",
+              "value": "down",
+              "color": "#dc2626"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "source": "api",
+          "kind": "url",
+          "url": "https://example.com/dashboards/api-gateway",
+          "label": "API Gateway dashboard"
+        },
+        {
+          "source": "orders",
+          "kind": "url",
+          "url": "https://example.com/runbooks/orders",
+          "label": "Orders runbook"
+        },
+        {
+          "source": "inventory",
+          "kind": "url",
+          "url": "https://example.com/dashboards/inventory",
+          "label": "Inventory dashboard"
+        },
+        {
+          "source": "db",
+          "kind": "url",
+          "url": "https://example.com/dashboards/orders-db",
+          "label": "Orders DB dashboard"
+        },
+        {
+          "source": "pager",
+          "kind": "url",
+          "url": "https://example.com/oncall",
+          "label": "Who is on call"
+        }
+      ]
+    }
+  ]
+}

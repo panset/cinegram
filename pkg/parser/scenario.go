@@ -1,10 +1,6 @@
 package parser
 
-import (
-	"github.com/tejaspanse/diagramator/pkg/ast"
-	"github.com/tejaspanse/diagramator/pkg/diag"
-	"github.com/tejaspanse/diagramator/pkg/source"
-)
+import "github.com/tejaspanse/diagramator/pkg/ast"
 
 // The scenario grammar is deliberately free of diagram vocabulary: it produces
 // nothing but named references, durations and styles. That is what lets the
@@ -37,35 +33,23 @@ var actionKinds = map[string]struct {
 	"pulse":     {ast.ActionPulse, arityTarget},
 	"show":      {ast.ActionShow, arityTarget},
 	"hide":      {ast.ActionHide, arityTarget},
+	"focus":     {ast.ActionFocus, arityTarget},
 	"note":      {ast.ActionNote, arityNote},
 	"wait":      {ast.ActionWait, arityBare},
 	"seq":       {ast.ActionSeq, arityBlock},
+	"set":       {ast.ActionSet, arityTarget},
+	"gauge":     {ast.ActionGauge, arityTarget},
+	"unset":     {ast.ActionUnset, arityTarget},
 }
 
-// parseScenarios reads every scenario block from the cursor to end of input.
-func parseScenarios(c *source.Cursor, b *diag.Bag) []*ast.Scenario {
-	s := newScanner(c, b)
-	var out []*ast.Scenario
+// knownActions lists the vocabulary for the unknown-action hint, in the order
+// a reader would want to meet them rather than the map's.
+const knownActions = "flow, highlight, note, dim, pulse, focus, show, hide, " +
+	"set, gauge, unset, wait, seq"
 
-	for {
-		s.skipNewlines()
-		t := s.peek()
-		if t.kind == tokEOF {
-			return out
-		}
-		if !s.atKeyword("scenario") {
-			b.ErrorHintf(t.at, "scenario blocks must start with the `scenario` keyword",
-				"expected `scenario` but found %s", describe(t))
-			s.skipToLineEnd()
-			s.skipNewlines()
-			continue
-		}
-		if sc := parseScenario(s); sc != nil {
-			out = append(out, sc)
-		}
-	}
-}
-
+// parseScenario reads one `scenario` block. The block is not brace-delimited:
+// it ends at the first token that is not a `step`, which is what lets a `view`
+// or `interact` block follow it without a terminator.
 func parseScenario(s *scanner) *ast.Scenario {
 	kw := s.next() // "scenario"
 	sc := &ast.Scenario{StartPos: kw.at}
@@ -157,7 +141,7 @@ func parseAction(s *scanner) (ast.Action, bool) {
 	kw := s.next()
 	spec, known := actionKinds[kw.text]
 	if !known {
-		s.bag.ErrorHintf(kw.at, "known actions: flow, highlight, note, dim, pulse, show, hide, wait, seq",
+		s.bag.ErrorHintf(kw.at, "known actions: "+knownActions,
 			"unknown action %q", kw.text)
 		s.skipToLineEnd()
 		return ast.Action{}, false

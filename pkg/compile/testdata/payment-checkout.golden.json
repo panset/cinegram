@@ -1,0 +1,336 @@
+{
+  "version": 2,
+  "root": "main",
+  "views": [
+    {
+      "id": "main",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% Checkout, told twice. The first scenario is the path everyone draws; the\n%% second is the one that actually costs money, and it is the reason `status`\n%% exists as a first-class attribute rather than a colour convention.\nflowchart LR\n  browser[Shopper's Browser]\n  checkout[Checkout Service]\n  subgraph psp[Payment Providers]\n    gw[Primary Gateway]\n    backup[Backup Gateway]\n  end\n  ledger[(Order Ledger)]\n  browser --\u003e checkout\n  checkout --\u003e gw\n  checkout --\u003e backup\n  checkout --\u003e ledger\n"
+      },
+      "nodes": [
+        {
+          "id": "browser",
+          "label": "Shopper's Browser",
+          "shape": "rect"
+        },
+        {
+          "id": "checkout",
+          "label": "Checkout Service",
+          "shape": "rect"
+        },
+        {
+          "id": "gw",
+          "label": "Primary Gateway",
+          "shape": "rect",
+          "group": "psp"
+        },
+        {
+          "id": "backup",
+          "label": "Backup Gateway",
+          "shape": "rect",
+          "group": "psp"
+        },
+        {
+          "id": "ledger",
+          "label": "Order Ledger",
+          "shape": "cylinder"
+        }
+      ],
+      "groups": [
+        {
+          "id": "psp",
+          "label": "Payment Providers",
+          "children": [
+            "gw",
+            "backup"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "browser",
+          "to": "checkout",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "checkout",
+          "to": "gw",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "checkout",
+          "to": "backup",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "checkout",
+          "to": "ledger",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "happy path",
+          "duration": 2800,
+          "speed": 1,
+          "loop": false,
+          "autoplay": true,
+          "steps": [
+            {
+              "id": "submit",
+              "name": "Shopper submits the order",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "browser",
+                  "to": "checkout",
+                  "label": "POST /checkout"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 600,
+                  "target": "checkout",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "authorize",
+              "name": "The primary gateway authorises the card",
+              "start": 600,
+              "end": 1300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "checkout",
+                  "to": "gw",
+                  "label": "authorize $84.10",
+                  "ease": "out"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 600,
+                  "end": 1300,
+                  "target": "gw"
+                }
+              ]
+            },
+            {
+              "id": "record",
+              "name": "The order is written to the ledger",
+              "start": 1300,
+              "end": 2200,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1300,
+                  "end": 1750,
+                  "edge": "e1",
+                  "from": "gw",
+                  "to": "checkout",
+                  "reverse": true,
+                  "label": "order 8812"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1750,
+                  "end": 2200,
+                  "edge": "e3",
+                  "from": "checkout",
+                  "to": "ledger",
+                  "label": "order 8812"
+                }
+              ]
+            },
+            {
+              "id": "confirm",
+              "name": "Confirmation travels back to the shopper",
+              "start": 2200,
+              "end": 2800,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2200,
+                  "end": 2800,
+                  "edge": "e0",
+                  "from": "checkout",
+                  "to": "browser",
+                  "reverse": true,
+                  "label": "201 Created",
+                  "style": "response"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "s1",
+          "name": "gateway outage",
+          "duration": 4000,
+          "speed": 1,
+          "loop": false,
+          "autoplay": true,
+          "steps": [
+            {
+              "id": "outage-submit",
+              "name": "Shopper submits the same order",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "browser",
+                  "to": "checkout",
+                  "label": "POST /checkout"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 600,
+                  "target": "checkout",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "attempt",
+              "name": "The primary gateway never answers",
+              "start": 600,
+              "end": 1700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1700,
+                  "edge": "e1",
+                  "from": "checkout",
+                  "to": "gw",
+                  "label": "authorize $84.10",
+                  "status": "fail"
+                },
+                {
+                  "kind": "note",
+                  "start": 600,
+                  "end": 1700,
+                  "target": "gw",
+                  "text": "no response in 8s\nconnect timeout"
+                }
+              ]
+            },
+            {
+              "id": "retry",
+              "name": "Checkout fails over to the backup provider",
+              "start": 1700,
+              "end": 2400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1700,
+                  "end": 2400,
+                  "edge": "e2",
+                  "from": "checkout",
+                  "to": "backup",
+                  "label": "retry: authorize",
+                  "ease": "in-out"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1700,
+                  "end": 2400,
+                  "target": "gw"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1700,
+                  "end": 2400,
+                  "target": "backup"
+                }
+              ]
+            },
+            {
+              "id": "settle",
+              "name": "The backup gateway approves it",
+              "start": 2400,
+              "end": 3400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2400,
+                  "end": 2900,
+                  "edge": "e2",
+                  "from": "backup",
+                  "to": "checkout",
+                  "reverse": true,
+                  "label": "approved · order 8812"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2900,
+                  "end": 3400,
+                  "edge": "e3",
+                  "from": "checkout",
+                  "to": "ledger",
+                  "label": "approved · order 8812"
+                },
+                {
+                  "kind": "dim",
+                  "start": 2400,
+                  "end": 3400,
+                  "target": "gw"
+                }
+              ]
+            },
+            {
+              "id": "outage-confirm",
+              "name": "The shopper sees the same 201 either way",
+              "start": 3400,
+              "end": 4000,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3400,
+                  "end": 4000,
+                  "edge": "e0",
+                  "from": "checkout",
+                  "to": "browser",
+                  "reverse": true,
+                  "label": "201 Created",
+                  "style": "response"
+                },
+                {
+                  "kind": "dim",
+                  "start": 3400,
+                  "end": 4000,
+                  "target": "gw"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

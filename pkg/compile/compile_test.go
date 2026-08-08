@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tejaspanse/diagramator/pkg/ir"
 	"github.com/tejaspanse/diagramator/pkg/parser"
 )
 
@@ -80,32 +81,33 @@ func TestTimingInvariants(t *testing.T) {
 		res, bag := parser.Parse(filepath.Base(src), string(content))
 		tl := Compile(res.Document, res.Symbols, bag)
 
-		for _, sc := range tl.Scenarios {
-			prevEnd := 0
-			for i, st := range sc.Steps {
-				if st.Start < prevEnd {
-					t.Errorf("%s: step %q starts at %d, before the previous step ended at %d",
-						src, st.ID, st.Start, prevEnd)
-				}
-				if st.End < st.Start {
-					t.Errorf("%s: step %q ends before it starts", src, st.ID)
-				}
-				prevEnd = st.End
+		for _, v := range tl.Views {
+			for _, sc := range v.Scenarios {
+				prevEnd := 0
+				for _, st := range sc.Steps {
+					if st.Start < prevEnd {
+						t.Errorf("%s: step %q starts at %d, before the previous step ended at %d",
+							src, st.ID, st.Start, prevEnd)
+					}
+					if st.End < st.Start {
+						t.Errorf("%s: step %q ends before it starts", src, st.ID)
+					}
+					prevEnd = st.End
 
-				for _, tr := range st.Tracks {
-					if tr.End < tr.Start {
-						t.Errorf("%s: track in step %q ends before it starts", src, st.ID)
-					}
-					if tr.Start < st.Start || tr.End > st.End {
-						t.Errorf("%s: track [%d,%d] in step %q escapes the step span [%d,%d]",
-							src, tr.Start, tr.End, st.ID, st.Start, st.End)
+					for _, tr := range st.Tracks {
+						if tr.End < tr.Start {
+							t.Errorf("%s: track in step %q ends before it starts", src, st.ID)
+						}
+						if tr.Start < st.Start || tr.End > st.End {
+							t.Errorf("%s: track [%d,%d] in step %q escapes the step span [%d,%d]",
+								src, tr.Start, tr.End, st.ID, st.Start, st.End)
+						}
 					}
 				}
-				_ = i
-			}
-			if len(sc.Steps) > 0 && sc.Duration != sc.Steps[len(sc.Steps)-1].End {
-				t.Errorf("%s: scenario duration %d does not match final step end %d",
-					src, sc.Duration, sc.Steps[len(sc.Steps)-1].End)
+				if len(sc.Steps) > 0 && sc.Duration != sc.Steps[len(sc.Steps)-1].End {
+					t.Errorf("%s: scenario duration %d does not match final step end %d",
+						src, sc.Duration, sc.Steps[len(sc.Steps)-1].End)
+				}
 			}
 		}
 	}
@@ -131,7 +133,7 @@ scenario "x"
 	}
 	tl := Compile(res.Document, res.Symbols, bag)
 
-	tracks := tl.Scenarios[0].Steps[0].Tracks
+	tracks := tl.Views[0].Scenarios[0].Steps[0].Tracks
 	if len(tracks) != 3 {
 		t.Fatalf("got %d tracks, want 3", len(tracks))
 	}
@@ -167,7 +169,7 @@ scenario "x"
 	}
 	tl := Compile(res.Document, res.Symbols, bag)
 
-	tracks := tl.Scenarios[0].Steps[0].Tracks
+	tracks := tl.Views[0].Scenarios[0].Steps[0].Tracks
 	if len(tracks) != 1 {
 		t.Fatalf("got %d tracks, want 1", len(tracks))
 	}
@@ -198,7 +200,7 @@ scenario "x"
 	}
 	tl := Compile(res.Document, res.Symbols, bag)
 
-	step := tl.Scenarios[0].Steps[0]
+	step := tl.Views[0].Scenarios[0].Steps[0]
 	if step.End != 900 {
 		t.Fatalf("step span = %d, want 900 from the flow", step.End)
 	}
@@ -236,7 +238,7 @@ scenario "x"
 	}
 	tl := Compile(res.Document, res.Symbols, bag)
 
-	step := tl.Scenarios[0].Steps[0]
+	step := tl.Views[0].Scenarios[0].Steps[0]
 	if step.End != 700 {
 		t.Errorf("step span = %d, want 300+400", step.End)
 	}
@@ -248,5 +250,256 @@ scenario "x"
 	}
 	if step.Tracks[1].Start != 300 || step.Tracks[1].End != 700 {
 		t.Errorf("second seq child = [%d,%d], want [300,700]", step.Tracks[1].Start, step.Tracks[1].End)
+	}
+}
+
+// TestPersistentStateLivesOutsideSteps pins the reason Persistent exists at
+// all: a renderer skips steps whose window excludes t, so state set in the
+// first step has to be reachable from the last.
+func TestPersistentStateLivesOutsideSteps(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "x"
+  step one "set it" {
+    set a { badge: "leader" }
+    flow a -> b { dur: 400ms }
+  }
+  step two "later" {
+    flow a -> b { dur: 600ms }
+  }
+`
+	tl := compileSource(t, src)
+	sc := tl.Views[0].Scenarios[0]
+
+	for _, st := range sc.Steps {
+		for _, tr := range st.Tracks {
+			if tr.Kind == "set" || tr.Kind == "gauge" {
+				t.Errorf("step %q carries a %s track; persistent state must not be a step track", st.ID, tr.Kind)
+			}
+		}
+	}
+	if len(sc.Persistent) != 1 {
+		t.Fatalf("got %d persistent tracks, want 1", len(sc.Persistent))
+	}
+	// Unreplaced state runs to the end of the scenario, not the end of its step.
+	if got := sc.Persistent[0]; got.Start != 0 || got.End != sc.Duration {
+		t.Errorf("badge window = [%d,%d], want [0,%d]", got.Start, got.End, sc.Duration)
+	}
+}
+
+// TestPersistentRewriteClosesPreviousWindow covers the bookkeeping that makes
+// scrubbing show one value rather than every value ever written: windows for a
+// slot must partition time, not overlap.
+func TestPersistentRewriteClosesPreviousWindow(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "x"
+  step one "first" {
+    gauge a { label: "term", value: 1 }
+    flow a -> b { dur: 400ms }
+  }
+  step two "second" {
+    gauge a { label: "term", value: 2 }
+    gauge a { label: "votes", value: 3 }
+    flow a -> b { dur: 600ms }
+  }
+`
+	tl := compileSource(t, src)
+	sc := tl.Views[0].Scenarios[0]
+
+	if len(sc.Persistent) != 3 {
+		t.Fatalf("got %d persistent tracks, want 3", len(sc.Persistent))
+	}
+	first, second, votes := sc.Persistent[0], sc.Persistent[1], sc.Persistent[2]
+
+	if first.End != second.Start {
+		t.Errorf("term windows overlap or gap: first ends %d, second starts %d", first.End, second.Start)
+	}
+	if first.Value != "1" || second.Value != "2" {
+		t.Errorf("term values = %q then %q, want 1 then 2", first.Value, second.Value)
+	}
+	// A different label is a different slot, so it coexists rather than
+	// replacing — two readings on one node is the normal case.
+	if votes.Label != "votes" || votes.End != sc.Duration {
+		t.Errorf("votes window = %+v, want an independent slot open to the end", votes)
+	}
+}
+
+// TestClearingSemantics separates the two ways state is taken away: an empty
+// badge retires the badge, `unset` retires everything on the node. Conflating
+// them would make a badge change silently drop the node's gauges.
+func TestClearingSemantics(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "x"
+  step one "set both" {
+    set a { badge: "leader" }
+    gauge a { label: "term", value: 1 }
+    flow a -> b { dur: 400ms }
+  }
+  step two "drop the badge only" {
+    set a { badge: "" }
+    flow a -> b { dur: 400ms }
+  }
+  step three "drop everything" {
+    unset a
+    flow a -> b { dur: 400ms }
+  }
+`
+	tl := compileSource(t, src)
+	sc := tl.Views[0].Scenarios[0]
+	steps := sc.Steps
+
+	byKind := map[string]int{}
+	for _, tr := range sc.Persistent {
+		byKind[string(tr.Kind)] = tr.End
+	}
+	if got, want := byKind["set"], steps[1].Start; got != want {
+		t.Errorf("badge closed at %d, want the empty-badge write at %d", got, want)
+	}
+	if got, want := byKind["gauge"], steps[2].Start; got != want {
+		t.Errorf("gauge closed at %d, want the unset at %d — an empty badge must not retire it", got, want)
+	}
+}
+
+// TestPersistentActionsAreInstantaneous checks they neither size a step nor
+// consume a slot of a seq: they fire at a moment, and their effect is bounded
+// by the next write rather than by the container they were written in.
+func TestPersistentActionsAreInstantaneous(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+  b --> c
+
+scenario "x"
+  step s "chained" {
+    seq {
+      flow a -> b { dur: 300ms }
+      set b { badge: "here" }
+      flow b -> c { dur: 400ms }
+    }
+  }
+`
+	tl := compileSource(t, src)
+	sc := tl.Views[0].Scenarios[0]
+
+	if sc.Duration != 700 {
+		t.Errorf("scenario duration = %d, want 300+400 with the set costing nothing", sc.Duration)
+	}
+	if len(sc.Persistent) != 1 || sc.Persistent[0].Start != 300 {
+		t.Fatalf("persistent = %+v, want one track firing at 300", sc.Persistent)
+	}
+}
+
+func compileSource(t *testing.T, src string) *ir.Timeline {
+	t.Helper()
+	res, bag := parser.Parse("inline.dgm", src)
+	if bag.HasErrors() {
+		t.Fatalf("unexpected diagnostics:\n%s", bag)
+	}
+	tl := Compile(res.Document, res.Symbols, bag)
+	if bag.HasErrors() {
+		t.Fatalf("unexpected compile diagnostics:\n%s", bag)
+	}
+	return tl
+}
+
+// TestRevealHidesGroupsTransitively pins the rule that revealing a subgraph
+// conceals everything inside it. Hiding the frame while its members stayed
+// drawn would look broken, and the renderer must not have to work that out.
+func TestRevealHidesGroupsTransitively(t *testing.T) {
+	const src = `flowchart LR
+  a[A]
+
+  subgraph outer[Outer]
+    b[B]
+    subgraph inner[Inner]
+      c[C]
+    end
+  end
+
+  a --> b
+  b --> c
+
+interact {
+  click a -> reveal outer
+}
+
+scenario "x"
+  step s "walk" {
+    flow a -> b
+  }
+`
+	res, bag := parser.Parse("inline.dgm", src)
+	if bag.HasErrors() {
+		t.Fatalf("unexpected diagnostics:\n%s", bag)
+	}
+	tl := Compile(res.Document, res.Symbols, bag)
+	v := tl.Views[0]
+
+	want := map[string]bool{"outer": true, "b": true, "inner": true, "c": true}
+	if len(v.Hidden) != len(want) {
+		t.Fatalf("hidden = %v, want %d elements", v.Hidden, len(want))
+	}
+	for _, id := range v.Hidden {
+		if !want[id] {
+			t.Errorf("hidden contains %q, which is not inside outer", id)
+		}
+	}
+
+	// The binding's own targets are expanded the same way, so the renderer
+	// toggles exactly the set it conceals.
+	if len(v.Bindings) != 1 {
+		t.Fatalf("got %d bindings, want 1", len(v.Bindings))
+	}
+	if len(v.Bindings[0].Targets) != len(v.Hidden) {
+		t.Errorf("binding targets = %v, want the same set as hidden %v",
+			v.Bindings[0].Targets, v.Hidden)
+	}
+}
+
+// TestBindingsLowerTheirKinds checks each verb reaches the IR in the shape the
+// runtime reads.
+func TestBindingsLowerTheirKinds(t *testing.T) {
+	const src = `flowchart LR
+  a[A]
+  b[B]
+  c[C]
+  a --> b
+  b --> c
+
+view sub "Sub" from "sub.dgm"
+
+interact {
+  click a -> view sub { label: "drill" }
+  click b -> step only
+  click c -> reveal b
+}
+
+scenario "x"
+  step only "walk" {
+    flow a -> b
+  }
+`
+	res, bag := parser.Parse("inline.dgm", src)
+	if bag.HasErrors() {
+		t.Fatalf("unexpected diagnostics:\n%s", bag)
+	}
+	tl := Compile(res.Document, res.Symbols, bag)
+	got := tl.Views[0].Bindings
+
+	if len(got) != 3 {
+		t.Fatalf("got %d bindings, want 3", len(got))
+	}
+	if got[0].Kind != "view" || got[0].View != "sub" || got[0].Label != "drill" {
+		t.Errorf("view binding = %+v", got[0])
+	}
+	if got[1].Kind != "step" || got[1].Step != "only" {
+		t.Errorf("step binding = %+v", got[1])
+	}
+	if got[2].Kind != "reveal" || len(got[2].Targets) != 1 || got[2].Targets[0] != "b" {
+		t.Errorf("reveal binding = %+v", got[2])
 	}
 }

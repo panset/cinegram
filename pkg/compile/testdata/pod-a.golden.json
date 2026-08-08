@@ -1,0 +1,274 @@
+{
+  "version": 2,
+  "root": "main",
+  "views": [
+    {
+      "id": "main",
+      "title": "fetch orders",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% What Pod A does with a request once kube-proxy has picked it.\n%% Reached by clicking Pod A in k8s-request.dgm, and previewable on its own.\nflowchart LR\n  in[Request from Service]\n  subgraph pod[Pod A]\n    proxy[Envoy Sidecar]\n    app[Order API Container]\n    cache[(Local Cache)]\n  end\n  db[(Orders Postgres)]\n  in --\u003e proxy\n  proxy --\u003e app\n  app --\u003e cache\n  app --\u003e db\n"
+      },
+      "nodes": [
+        {
+          "id": "in",
+          "label": "Request from Service",
+          "shape": "rect"
+        },
+        {
+          "id": "proxy",
+          "label": "Envoy Sidecar",
+          "shape": "rect",
+          "group": "pod"
+        },
+        {
+          "id": "app",
+          "label": "Order API Container",
+          "shape": "rect",
+          "group": "pod"
+        },
+        {
+          "id": "cache",
+          "label": "Local Cache",
+          "shape": "cylinder",
+          "group": "pod"
+        },
+        {
+          "id": "db",
+          "label": "Orders Postgres",
+          "shape": "cylinder"
+        }
+      ],
+      "groups": [
+        {
+          "id": "pod",
+          "label": "Pod A",
+          "children": [
+            "proxy",
+            "app",
+            "cache"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "in",
+          "to": "proxy",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "proxy",
+          "to": "app",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "app",
+          "to": "cache",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "app",
+          "to": "db",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "fetch orders",
+          "duration": 3650,
+          "speed": 1,
+          "loop": true,
+          "autoplay": true,
+          "steps": [
+            {
+              "id": "admit",
+              "name": "Sidecar admits the request",
+              "start": 0,
+              "end": 500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 500,
+                  "edge": "e0",
+                  "from": "in",
+                  "to": "proxy",
+                  "label": "GET /api/orders"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 500,
+                  "target": "proxy",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "forward",
+              "name": "Proxy forwards to the app container",
+              "start": 500,
+              "end": 900,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 500,
+                  "end": 900,
+                  "edge": "e1",
+                  "from": "proxy",
+                  "to": "app",
+                  "label": "localhost:8080"
+                },
+                {
+                  "kind": "note",
+                  "start": 500,
+                  "end": 900,
+                  "target": "proxy",
+                  "text": "mTLS terminated\nrate limit ok"
+                }
+              ]
+            },
+            {
+              "id": "lookup",
+              "name": "App checks its local cache first",
+              "start": 900,
+              "end": 1250,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 900,
+                  "end": 1250,
+                  "edge": "e2",
+                  "from": "app",
+                  "to": "cache",
+                  "label": "orders:u42"
+                },
+                {
+                  "kind": "note",
+                  "start": 900,
+                  "end": 1250,
+                  "target": "cache",
+                  "text": "miss"
+                }
+              ]
+            },
+            {
+              "id": "query",
+              "name": "Cache miss, so the app queries Postgres",
+              "start": 1250,
+              "end": 1950,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1250,
+                  "end": 1950,
+                  "edge": "e3",
+                  "from": "app",
+                  "to": "db",
+                  "label": "SELECT * FROM orders"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1250,
+                  "end": 1950,
+                  "target": "db",
+                  "style": "busy"
+                }
+              ]
+            },
+            {
+              "id": "rows",
+              "name": "Postgres returns the rows",
+              "start": 1950,
+              "end": 2550,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1950,
+                  "end": 2550,
+                  "edge": "e3",
+                  "from": "db",
+                  "to": "app",
+                  "reverse": true,
+                  "label": "14 rows",
+                  "style": "response"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1950,
+                  "end": 2450,
+                  "target": "app",
+                  "style": "busy"
+                }
+              ]
+            },
+            {
+              "id": "fill",
+              "name": "App fills the cache and answers",
+              "start": 2550,
+              "end": 2850,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2550,
+                  "end": 2850,
+                  "edge": "e2",
+                  "from": "app",
+                  "to": "cache",
+                  "label": "SET orders:u42"
+                },
+                {
+                  "kind": "note",
+                  "start": 2550,
+                  "end": 2850,
+                  "target": "app",
+                  "text": "200 OK in 14ms"
+                }
+              ]
+            },
+            {
+              "id": "reply",
+              "name": "Response leaves the pod",
+              "start": 2850,
+              "end": 3650,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2850,
+                  "end": 3250,
+                  "edge": "e1",
+                  "from": "app",
+                  "to": "proxy",
+                  "reverse": true,
+                  "label": "200 OK",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3250,
+                  "end": 3650,
+                  "edge": "e0",
+                  "from": "proxy",
+                  "to": "in",
+                  "reverse": true,
+                  "label": "200 OK",
+                  "style": "response"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

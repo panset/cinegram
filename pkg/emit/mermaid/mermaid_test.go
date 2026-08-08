@@ -32,6 +32,12 @@ flowchart LR
   class svc busy
   click ing "https://example.com" "docs"
 
+view detail "Detail" from "detail.dgm"
+
+interact {
+  click svc -> view detail { label: "zoom" }
+}
+
 scenario "req"
   step one "hop" {
     flow client -> lb { dur: 400ms }
@@ -47,6 +53,13 @@ scenario "req"
 
 	if strings.Contains(got, "scenario") || strings.Contains(got, "highlight") {
 		t.Errorf("scenario content leaked into the Mermaid output:\n%s", got)
+	}
+
+	// View and interact blocks drop out for the same reason scenarios do —
+	// but mermaid's own `click` directive in the diagram body must survive,
+	// which is why this checks for the block rather than for the word.
+	if strings.Contains(got, "interact") || strings.Contains(got, "view detail") {
+		t.Errorf("interaction content leaked into the Mermaid output:\n%s", got)
 	}
 
 	// Statements the parser does not model semantically must survive verbatim.

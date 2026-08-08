@@ -1,0 +1,69 @@
+%% OAuth 2.0 authorization code flow, told as an explorable explanation.
+%% ---
+%% Every step carries a `desc` that says *why* the protocol does what it does,
+%% not just what moves where. The animation shows the mechanics; the narration
+%% carries the argument.
+flowchart LR
+  browser[User's Browser]
+  app[Your Application]
+
+  subgraph provider[Identity Provider]
+    auth[Authorization Server]
+    tokens[(Token Store)]
+  end
+
+  api[Resource API]
+
+  browser --> app
+  app --> auth
+  auth --> tokens
+  app --> api
+
+scenario "authorization code flow" { speed: 1.0 }
+
+  step start "The user asks to sign in" {
+    desc: "The application has no credentials of its own to check, so it does not try. It hands the browser off to the identity provider and steps out of the conversation entirely."
+    flow browser -> app { label: "GET /login", dur: 600ms }
+    highlight app { style: active }
+  }
+
+  step redirect "The app redirects to the authorization server" {
+    desc: "The redirect carries a client id, a redirect URI and a scope — but no secret, because anything in a redirect is visible to the user and to anything watching. What it asks for is permission, not proof."
+    flow app -> auth { label: "302 → /authorize", dur: 700ms }
+    highlight auth { style: active }
+  }
+
+  step consent "The user authenticates and consents" {
+    desc: "This is the only moment a password exists, and it exists between the user and the provider alone. The application never sees it, which is why a breach of the application cannot leak it."
+    note auth "user signs in\nand approves the scopes"
+    pulse auth
+  }
+
+  step code "The browser comes back carrying a code" {
+    desc: "The provider redirects back with a short-lived authorization code. A code is deliberately useless on its own: intercepting it buys nothing without the client secret that only the application holds."
+    flow auth -> app { label: "302 ?code=Ab3x…", dur: 800ms, style: response }
+    highlight app { style: active }
+  }
+
+  step exchange "The app trades the code for tokens" {
+    desc: "Now the application speaks to the provider directly, back channel, server to server. It sends the code together with its client secret, and that pairing is what proves the exchange is genuine."
+    flow app -> auth { label: "POST /token + secret", dur: 700ms }
+    flow auth -> tokens { label: "mint & record", dur: 500ms, delay: 300ms }
+  }
+
+  step issued "Tokens come back over the back channel" {
+    desc: "The access token returns on a channel the browser was never part of, so it is never exposed to the address bar, to history, or to a referrer header. The one-time code is burned in the process."
+    flow auth -> app { label: "access + refresh token", dur: 700ms, style: response }
+    highlight app { color: "#16a34a" }
+  }
+
+  step call "The app calls the API on the user's behalf" {
+    desc: "The API trusts the token, not the caller: it validates the signature and the scopes and never contacts the application. That is what lets the same token work across services that have never heard of each other."
+    flow app -> api { label: "Authorization: Bearer …", dur: 700ms }
+    highlight api { style: active }
+  }
+
+  step done "The user is signed in" {
+    desc: "The application ends up able to act for the user without ever having held the user's password. Every step above exists to make that sentence true."
+    flow api -> app -> browser { label: "200 OK", dur: 1000ms, style: response }
+  }

@@ -11,14 +11,18 @@ import (
 func sample() *ir.Timeline {
 	return &ir.Timeline{
 		Version: ir.Version,
-		Diagram: ir.Diagram{Type: "flowchart", Direction: "LR", Mermaid: "flowchart LR\n  a --> b\n"},
-		Nodes:   []ir.Node{{ID: "a", Label: "A"}, {ID: "b", Label: "B"}},
-		Edges:   []ir.Edge{{ID: "e0", From: "a", To: "b"}},
-		Scenarios: []ir.Scenario{{
-			ID: "s0", Name: "demo", Duration: 600, Speed: 1,
-			Steps: []ir.Step{{
-				ID: "s", Name: "hop", Start: 0, End: 600,
-				Tracks: []ir.Track{{Kind: ir.TrackFlow, Start: 0, End: 600, Edge: "e0"}},
+		Root:    "main",
+		Views: []ir.View{{
+			ID:      "main",
+			Diagram: ir.Diagram{Type: "flowchart", Direction: "LR", Mermaid: "flowchart LR\n  a --> b\n"},
+			Nodes:   []ir.Node{{ID: "a", Label: "A"}, {ID: "b", Label: "B"}},
+			Edges:   []ir.Edge{{ID: "e0", From: "a", To: "b"}},
+			Scenarios: []ir.Scenario{{
+				ID: "s0", Name: "demo", Duration: 600, Speed: 1,
+				Steps: []ir.Step{{
+					ID: "s", Name: "hop", Start: 0, End: 600,
+					Tracks: []ir.Track{{Kind: ir.TrackFlow, Start: 0, End: 600, Edge: "e0"}},
+				}},
 			}},
 		}},
 	}
@@ -50,7 +54,7 @@ func TestPageIsSelfContained(t *testing.T) {
 // script tag is neutralised rather than breaking out of the script element.
 func TestScriptPayloadCannotEscape(t *testing.T) {
 	tl := sample()
-	tl.Diagram.Mermaid = "flowchart LR\n  a[\"</script><script>alert(1)</script>\"] --> b\n"
+	tl.Views[0].Diagram.Mermaid = "flowchart LR\n  a[\"</script><script>alert(1)</script>\"] --> b\n"
 
 	page, err := Render(tl, Options{Title: "esc"})
 	if err != nil {

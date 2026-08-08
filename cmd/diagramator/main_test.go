@@ -1,6 +1,14 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"encoding/json"
+	"flag"
+	"testing"
+
+	"github.com/tejaspanse/diagramator/pkg/diag"
+	"github.com/tejaspanse/diagramator/pkg/source"
+)
 
 // TestResolvePathUnderBazelRun covers the case that `bazel run` creates: the
 // binary executes from its runfiles tree, so a relative path the user typed
@@ -87,5 +95,85 @@ func TestDefaultOutputPath(t *testing.T) {
 		if got := defaultOutputPath(tc.in); got != tc.want {
 			t.Errorf("defaultOutputPath(%q) = %q, want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+// TestParseArgsWithFormat covers a flag a command adds for itself, including
+// the `--format json` spelling that has to survive being hoisted past the
+// positional argument.
+func TestParseArgsWithFormat(t *testing.T) {
+	t.Setenv("BUILD_WORKING_DIRECTORY", "")
+
+	tests := []struct {
+		name       string
+		args       []string
+		wantIn     string
+		wantFormat string
+	}{
+		{name: "equals form", args: []string{"a.dgm", "--format=json"}, wantIn: "a.dgm", wantFormat: "json"},
+		{name: "separate value", args: []string{"a.dgm", "--format", "json"}, wantIn: "a.dgm", wantFormat: "json"},
+		{name: "single dash", args: []string{"-format", "json", "a.dgm"}, wantIn: "a.dgm", wantFormat: "json"},
+		{name: "default", args: []string{"a.dgm"}, wantIn: "a.dgm", wantFormat: "md"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var format string
+			in, _, err := parseArgsWith("narrate", tc.args, func(fs *flag.FlagSet) {
+				fs.StringVar(&format, "format", "md", "")
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if in != tc.wantIn {
+				t.Errorf("input = %q, want %q", in, tc.wantIn)
+			}
+			if format != tc.wantFormat {
+				t.Errorf("format = %q, want %q", format, tc.wantFormat)
+			}
+		})
+	}
+}
+
+// TestLintJSONExitCodes pins the contract a caller scripts against: the payload
+// is always valid JSON on stdout, and the exit status still separates warnings
+// from errors rather than that distinction being folded into the data.
+func TestLintJSONExitCodes(t *testing.T) {
+	warned := diag.NewBag("warn.dgm")
+	warned.WarnHintf(source.Pos{Line: 3, Col: 5}, "a hint", "a warning")
+
+	failed := diag.NewBag("bad.dgm")
+	failed.Errorf(source.Pos{Line: 1, Col: 1}, "an error")
+
+	tests := []struct {
+		name    string
+		bags    []*diag.Bag
+		wantErr bool
+		wantLen int
+	}{
+		{name: "clean", bags: []*diag.Bag{diag.NewBag("ok.dgm")}, wantLen: 0},
+		{name: "warnings only", bags: []*diag.Bag{warned}, wantLen: 1},
+		{name: "errors", bags: []*diag.Bag{failed}, wantErr: true, wantLen: 1},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			err := lintJSON(tc.bags, &out)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("error = %v, wantErr %v", err, tc.wantErr)
+			}
+
+			var got []jsonDiagnostic
+			if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+				t.Fatalf("output is not valid JSON: %v\n%s", err, out.String())
+			}
+			if len(got) != tc.wantLen {
+				t.Fatalf("got %d diagnostics, want %d", len(got), tc.wantLen)
+			}
+			if tc.wantLen > 0 && got[0].File == "" {
+				t.Error("diagnostic is missing its filename")
+			}
+		})
 	}
 }

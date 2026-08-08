@@ -1,0 +1,88 @@
+%% A layered service, walked one layer at a time.
+%% ---
+%% A diagram this size is unreadable all at once, which is the point: `focus`
+%% takes a layer and lets everything else recede, so each step has exactly one
+%% thing to look at. The cross-cutting concerns are real but they are not the
+%% request path, so they start folded away behind a chip.
+flowchart TB
+  subgraph edge[Edge Layer]
+    cdn[CDN]
+    gw[API Gateway]
+  end
+
+  subgraph app[Application Layer]
+    orders[Orders Service]
+    pricing[Pricing Service]
+  end
+
+  subgraph domain[Domain Layer]
+    rules[Pricing Rules]
+    basket[Basket Aggregate]
+  end
+
+  subgraph data[Data Layer]
+    pg[(PostgreSQL)]
+    cache[(Redis)]
+  end
+
+  subgraph cross[Cross-cutting Concerns]
+    authn[AuthN / AuthZ]
+    otel[Tracing]
+    audit[(Audit Log)]
+  end
+
+  cdn --> gw
+  gw --> orders
+  orders --> pricing
+  pricing --> rules
+  orders --> basket
+  basket --> pg
+  pricing --> cache
+  gw --> authn
+  orders --> otel
+  basket --> audit
+
+interact {
+  %% The concerns every layer depends on and nobody wants drawn through the
+  %% middle of the request path. The chip says how much is behind the click.
+  click edge -> reveal cross
+}
+
+scenario "a priced order request" { speed: 1.0 }
+
+  step arrive "The request lands at the edge" {
+    desc: "Everything the edge layer does — termination, routing, rate limiting — happens before any of your code runs."
+    focus edge
+    flow cdn -> gw { label: "POST /orders", dur: 600ms }
+    note gw "TLS terminated\nrate limit ok" { side: right }
+  }
+
+  step orchestrate "The application layer orchestrates" {
+    desc: "This layer coordinates and owns no rules of its own. If you find business logic here, it has escaped from the domain layer below."
+    focus app
+    flow gw -> orders { label: "createOrder", dur: 500ms }
+    flow orders -> pricing { label: "priceBasket", dur: 500ms }
+    note orders "no business rules here" { side: right }
+  }
+
+  step decide "The domain layer decides" {
+    desc: "The rules that make this a pricing system rather than a CRUD system live here, and they run without knowing whether a request or a batch job called them."
+    focus domain
+    flow pricing -> rules { label: "apply discounts", dur: 500ms }
+    flow orders -> basket { label: "reserve lines", dur: 500ms }
+    note rules "pure functions of the basket" { side: left }
+    note basket "invariants enforced here" { side: right }
+  }
+
+  step persist "The data layer stores the result" {
+    desc: "Only the layer that can be swapped for another database sits down here. Anything above it that names a table has crossed a line."
+    focus data
+    flow basket -> pg { label: "INSERT order", dur: 500ms }
+    flow pricing -> cache { label: "cache price", dur: 500ms }
+    note pg "the only writer" { side: below }
+  }
+
+  step whole "The whole path, end to end" {
+    desc: "With nothing focused, the layers come back at once — and the shape of what just happened is the diagram you started with."
+    flow cdn -> gw -> orders -> pricing { label: "one request", dur: 1200ms }
+  }

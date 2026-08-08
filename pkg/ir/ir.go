@@ -7,23 +7,59 @@
 //     A renderer is then a clock and a scrubber, with no timing logic of its
 //     own and no accumulated float drift.
 //
-//   - Geometry never appears here. Tracks reference node, edge and group IDs
-//     only, so the same timeline can drive a mermaid.js overlay today and a
-//     Go-native SVG backend later without recompilation.
+//   - Geometry never appears here. Tracks and bindings reference node, edge and
+//     group IDs only, so the same timeline can drive a mermaid.js overlay today
+//     and a Go-native SVG backend later without recompilation.
 package ir
 
 // Version is the timeline schema version, carried in every document so a
 // renderer can reject input it does not understand.
-const Version = 1
+//
+// Version 2 introduced Views: a timeline holds a set of diagrams that clicks
+// navigate between, where version 1 held exactly one.
+const Version = 2
 
-// Timeline is the complete compiled output for one source file.
+// Timeline is the complete compiled output for a source file and every
+// document it references.
 type Timeline struct {
-	Version   int        `json:"version"`
+	Version int    `json:"version"`
+	Root    string `json:"root"` // ID of the view the renderer opens on
+	Views   []View `json:"views"`
+}
+
+// View is one diagram together with its scenarios and click bindings.
+type View struct {
+	ID        string     `json:"id"`
+	Title     string     `json:"title,omitempty"`
 	Diagram   Diagram    `json:"diagram"`
 	Nodes     []Node     `json:"nodes"`
 	Groups    []Group    `json:"groups"`
 	Edges     []Edge     `json:"edges"`
 	Scenarios []Scenario `json:"scenarios"`
+	Bindings  []Binding  `json:"bindings,omitempty"`
+
+	// Hidden lists elements that start concealed because a reveal binding
+	// points at them. It is derived during compilation, not authored: being
+	// revealable is what makes an element initially hidden.
+	Hidden []string `json:"hidden,omitempty"`
+}
+
+// Binding makes one element clickable.
+//
+// Reveal state is deliberately not a Track. Tracks are timeline state that the
+// clock owns and resets on every seek; a reveal is interaction state that
+// persists until the viewer leaves the view.
+type Binding struct {
+	Source string `json:"source"`
+	Kind   string `json:"kind"` // view | reveal | step | url
+
+	View    string   `json:"view,omitempty"` // target view ID, for kind "view"
+	Step    string   `json:"step,omitempty"` // target step ID, for kind "step"
+	URL     string   `json:"url,omitempty"`  // destination, for kind "url"
+	Targets []string `json:"targets,omitempty"`
+
+	Label string `json:"label,omitempty"`
+	Style string `json:"style,omitempty"`
 }
 
 // Diagram carries the static structure, including the Mermaid source a
@@ -71,13 +107,31 @@ type Scenario struct {
 	Loop     bool    `json:"loop"`
 	Autoplay bool    `json:"autoplay"`
 	Steps    []Step  `json:"steps"`
+
+	// Persistent holds state that outlives the step that set it: a badge, a
+	// gauge reading, a standing state class.
+	//
+	// It cannot live in a Step, because a renderer skips steps whose window
+	// excludes the current time — a badge set in step 1 has to survive step 6.
+	// So the compiler flattens it to scenario level and works out each window
+	// itself: a track opens when its action fires and closes when a later
+	// action writes the same slot on the same target, or at Duration. The
+	// renderer then applies any persistent track whose window contains t, and
+	// seek-determinism follows for free.
+	Persistent []Track `json:"persistent,omitempty"`
 }
 
 // Step is one beat of a scenario. Steps never overlap: each begins where the
 // previous one ended, plus any explicit delay.
 type Step struct {
-	ID     string  `json:"id"`
-	Name   string  `json:"name,omitempty"`
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+
+	// Desc is the prose explaining what this step means, as opposed to Name,
+	// which only labels it. A renderer shows it as narration alongside the
+	// animation; `narrate`-style tooling reads it as the body text.
+	Desc string `json:"desc,omitempty"`
+
 	Start  int     `json:"start"`
 	End    int     `json:"end"`
 	Tracks []Track `json:"tracks"`
@@ -94,6 +148,21 @@ const (
 	TrackPulse     TrackKind = "pulse"
 	TrackShow      TrackKind = "show"
 	TrackHide      TrackKind = "hide"
+
+	// TrackFocus names what should hold attention. The track lists only what is
+	// focused; working out that everything else recedes — and that a group
+	// means its contents — is the renderer's job, because it is the side that
+	// knows the containment tree it already has in View.Groups.
+	TrackFocus TrackKind = "focus"
+
+	// Persistent kinds, found in Scenario.Persistent rather than Step.Tracks.
+	//
+	// TrackSet carries a badge in Label and a state name in Value; either may
+	// be empty. TrackGauge names the reading in Label and its current value in
+	// Value — a string, because the timeline renders readings and never does
+	// arithmetic on them.
+	TrackSet   TrackKind = "set"
+	TrackGauge TrackKind = "gauge"
 )
 
 // Track is a single animated element with absolute start and end times.
@@ -119,7 +188,20 @@ type Track struct {
 
 	Label string `json:"label,omitempty"`
 	Text  string `json:"text,omitempty"`
+	Value string `json:"value,omitempty"`
 	Style string `json:"style,omitempty"`
 	Color string `json:"color,omitempty"`
 	Ease  string `json:"ease,omitempty"`
+
+	// Side is which way a note is placed relative to its target: above (the
+	// default), below, left or right. A preference, not a position — the
+	// renderer still has to keep the note inside the stage.
+	Side string `json:"side,omitempty"`
+
+	// Status is a flow's outcome: empty or "ok" for one that succeeded, "fail"
+	// for one that did not. It is deliberately separate from Style, which is a
+	// free-form CSS hook the renderer passes through: Status is a closed set
+	// with meaning, so a renderer may draw a failure differently — an error
+	// particle, a struck-through arrival — rather than just recolouring it.
+	Status string `json:"status,omitempty"`
 }

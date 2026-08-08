@@ -36,10 +36,7 @@ type Options struct {
 func Render(t *ir.Timeline, opts Options) ([]byte, error) {
 	title := opts.Title
 	if title == "" {
-		title = "Diagramator"
-		if len(t.Scenarios) > 0 && t.Scenarios[0].Name != "" {
-			title = t.Scenarios[0].Name
-		}
+		title = defaultTitle(t)
 	}
 
 	payload, err := json.Marshal(struct {
@@ -79,6 +76,26 @@ func Render(t *ir.Timeline, opts Options) ([]byte, error) {
 	b.WriteString("</script>\n</body>\n</html>\n")
 
 	return b.Bytes(), nil
+}
+
+// defaultTitle names the page after the view it opens on, since that is what
+// the reader sees first.
+func defaultTitle(t *ir.Timeline) string {
+	for _, v := range t.Views {
+		if v.ID != t.Root {
+			continue
+		}
+		if v.Title != "" {
+			return v.Title
+		}
+		if len(v.Scenarios) == 1 && v.Scenarios[0].Name != "" {
+			return v.Scenarios[0].Name
+		}
+		if v.ID != "" {
+			return v.ID
+		}
+	}
+	return "Diagramator"
 }
 
 // jsStringLiteral encodes data as a JavaScript string literal that is safe to

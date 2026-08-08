@@ -1,11 +1,11 @@
 // Package parser turns Diagramator source into an ast.Document.
 //
 // A document is parsed in two independent halves. The diagram body is handed to
-// whichever registry.DiagramParser claims its opening keyword; the scenario
-// blocks that follow are parsed by this package's shared, diagram-agnostic
-// scenario parser. Neither half knows about the other — they meet only in the
-// validation pass, which resolves scenario references against the symbol table
-// the diagram parser produced.
+// whichever registry.DiagramParser claims its opening keyword; the `scenario`,
+// `view` and `interact` blocks that follow are parsed by this package's shared,
+// diagram-agnostic parser. Neither half knows about the other — they meet only
+// in the validation pass, which resolves the names those blocks mention against
+// the symbol table the diagram parser produced.
 package parser
 
 import (
@@ -36,7 +36,7 @@ func Parse(filename, content string) (*Result, *diag.Bag) {
 	doc := &ast.Document{}
 	doc.Frontmatter = parseFrontmatter(cur)
 
-	doc.Preamble = skipToHeader(cur)
+	doc.Preamble = skipToHeader(cur, bag)
 
 	line, ok := cur.Peek()
 	if !ok {
@@ -58,8 +58,15 @@ func Parse(filename, content string) (*Result, *diag.Bag) {
 	diagram, table := dp.Parse(cur, bag)
 	doc.Diagram = diagram
 
-	doc.Scenarios = parseScenarios(cur, bag)
+	top := parseTopLevel(cur, bag)
+	doc.Scenarios = top.Scenarios
+	doc.Views = top.Views
+	doc.Interactions = top.Interactions
+
+	checkComments(doc.Diagram, bag)
 	validateScenarios(doc.Scenarios, table, bag)
+	validateInteract(doc, table, bag)
+	validateCoverage(doc, table, bag)
 
 	return &Result{Document: doc, Symbols: table, File: file}, bag
 }
@@ -67,7 +74,7 @@ func Parse(filename, content string) (*Result, *diag.Bag) {
 // skipToHeader advances past blank lines and the comments or `%%{init}%%`
 // directives that commonly sit above a Mermaid header, returning those lines so
 // emitters can put them back.
-func skipToHeader(c *source.Cursor) []string {
+func skipToHeader(c *source.Cursor, b *diag.Bag) []string {
 	var preamble []string
 	for {
 		line, ok := c.Peek()
@@ -79,6 +86,7 @@ func skipToHeader(c *source.Cursor) []string {
 			c.Next()
 		case strings.HasPrefix(line.Text, "%%"):
 			c.Next()
+			checkCommentLine(line.Text, line.Start(), b)
 			preamble = append(preamble, line.Text)
 		default:
 			return preamble

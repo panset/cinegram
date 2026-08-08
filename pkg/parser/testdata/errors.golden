@@ -9,6 +9,24 @@ nodes:
 edges:
   e0   client -> ing style=normal head=arrow
 
+views:
+  real       title="Fine"               from="other.dgm"
+  dupe       title=""                   from="/etc/passwd"
+  dupe       title=""                   from="again.dgm"
+  orphan     title=""                   from="nobody-clicks-me.dgm"
+
+interact:
+  click client     -> view real
+  click client     -> reveal svc
+  click nosuchnode -> reveal svc
+  click ing        -> view missing
+  click svc        -> reveal notanode
+  click ing        -> step nosuchstep
+  click ing        -> reveal ing
+  click ing        -> view real {wobble="3"}
+  click svc        -> url javascript:alert(1)
+  click svc        -> url 
+
 scenario "broken"
   step a "unknown node"
     highlight ingres
@@ -17,6 +35,20 @@ scenario "broken"
   step c "bad duration and unknown attribute"
     highlight ing {dur="soon" wobble="3"}
   step d "unknown action"
+  step e "misspelt attributes"
+    flow client -> ing {colour="red" durr="300ms"}
+  step f "attribute that belongs to another action"
+    highlight ing {ease="in-out"}
+  step g "unknown easing"
+    flow client -> ing {ease="bouncy"}
+  step h "unknown status"
+    flow client -> ing {status="maybe"}
+  step i "status on an action that has no outcome"
+    highlight ing {status="fail"}
+  step j "gauge missing both of the things that identify it"
+    gauge ing
+  step k "a persistent action cannot expire"
+    set ing {badge="leader" dur="500ms"}
   step a "duplicate step id"
     highlight ing
 
@@ -29,6 +61,63 @@ diagnostics:
     hint: add `client --> svc` to the diagram, or route the flow through nodes that are connected
   19:26: error: attribute "dur": "soon" is not a duration
   19:40: warning: unknown highlight attribute "wobble"
+    hint: known here: at, color, delay, dur, label, style
   23:5: error: unknown action "teleport"
-    hint: known actions: flow, highlight, note, dim, pulse, show, hide, wait, seq
-  26:3: error: duplicate step id "a"
+    hint: known actions: flow, highlight, note, dim, pulse, focus, show, hide, set, gauge, unset, wait, seq
+  27:34: warning: unknown flow attribute "colour"
+    hint: did you mean color?
+  27:45: warning: unknown flow attribute "durr"
+    hint: did you mean dur?
+  31:27: warning: unknown highlight attribute "ease"
+    hint: known here: at, color, delay, dur, label, style
+  35:32: error: attribute "ease": "bouncy" is not an easing
+    hint: valid easings are linear, in, out, in-out
+  39:34: error: attribute "status": "maybe" is not a status
+    hint: valid statuses are ok, fail
+  43:29: warning: unknown highlight attribute "status"
+    hint: known here: at, color, delay, dur, label, style
+  47:5: error: gauge needs a label naming what it reads
+    hint: write it as: gauge n3 { label: "term", value: 3 }
+  47:5: error: gauge needs a value
+    hint: write it as: gauge n3 { label: "term", value: 3 }
+  51:37: warning: unknown set attribute "dur"
+    hint: known here: at, badge, color, delay, state, style
+  54:3: error: duplicate step id "a"
+  59:16: error: view "dupe" has an absolute path
+    hint: use a path relative to this file so the document stays portable
+  60:1: error: duplicate view id "dupe"
+  61:1: warning: view "orphan" is declared but nothing clicks through to it
+  65:9: error: "client" already has a click binding
+    hint: give each clickable element a single behaviour
+  66:9: error: "nosuchnode" is not a node in this diagram
+    hint: known nodes: client, ing, svc
+  67:21: error: no view named "missing" is declared
+    hint: known views: real, dupe, orphan
+  68:23: error: "notanode" is not a node in this diagram
+    hint: known nodes: client, ing, svc
+  69:9: error: "ing" already has a click binding
+    hint: give each clickable element a single behaviour
+  69:21: error: no step named "nosuchstep" in this document
+    hint: known steps: a, b, c, d, e, f, g, h
+  70:16: error: expected a click target but found "teleport"
+    hint: known click targets: view, reveal, step, url
+  71:27: error: `view` takes one name, got 2
+    hint: only `reveal` accepts several targets
+  72:9: error: "ing" already has a click binding
+    hint: give each clickable element a single behaviour
+  72:23: error: "ing" reveals itself
+    hint: a hidden element cannot be clicked to reveal itself
+  73:9: error: "ing" already has a click binding
+    hint: give each clickable element a single behaviour
+  73:36: warning: unknown click attribute "wobble"
+    hint: known here: label, style
+  74:9: error: "svc" already has a click binding
+    hint: give each clickable element a single behaviour
+  74:20: warning: click url "javascript:alert(1)" is not an http(s) address; the browser may refuse to open it
+    hint: use an absolute http:// or https:// URL
+  75:9: error: "svc" already has a click binding
+    hint: give each clickable element a single behaviour
+  75:20: error: click url has an empty destination
+    hint: give a destination, e.g. "https://example.com/runbook"
+  76:20: error: expected a quoted URL but found "notquoted"
+    hint: quote the destination, e.g. click svc -> url "https://example.com/runbook"
