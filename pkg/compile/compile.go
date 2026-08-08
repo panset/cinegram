@@ -183,6 +183,9 @@ func compileScenario(sc *ast.Scenario, index int, table *symbol.Table, bag *diag
 	}
 
 	p := newPersist()
+	// Occurrence tracking is per scenario: each walkthrough consumes the
+	// diagram's repeated messages from the start.
+	seen := hopCount{}
 
 	cursor := 0
 	for i, st := range sc.Steps {
@@ -196,7 +199,7 @@ func compileScenario(sc *ast.Scenario, index int, table *symbol.Table, bag *diag
 			Start: start,
 			End:   start + span,
 		}
-		step.Tracks = layout(st.Actions, start, start+span, table, bag, p)
+		step.Tracks = layout(st.Actions, start, start+span, table, bag, p, seen)
 		out.Steps = append(out.Steps, step)
 		cursor = step.End
 	}
@@ -399,15 +402,15 @@ func offsetOf(a ast.Action, bag *diag.Bag) int {
 }
 
 // layout places actions between start and end, emitting absolute-time tracks.
-func layout(actions []ast.Action, start, end int, table *symbol.Table, bag *diag.Bag, p *persist) []ir.Track {
+func layout(actions []ast.Action, start, end int, table *symbol.Table, bag *diag.Bag, p *persist, seen hopCount) []ir.Track {
 	var tracks []ir.Track
 	for _, a := range actions {
-		tracks = append(tracks, layoutAction(a, start, end, table, bag, p)...)
+		tracks = append(tracks, layoutAction(a, start, end, table, bag, p, seen)...)
 	}
 	return tracks
 }
 
-func layoutAction(a ast.Action, start, end int, table *symbol.Table, bag *diag.Bag, p *persist) []ir.Track {
+func layoutAction(a ast.Action, start, end int, table *symbol.Table, bag *diag.Bag, p *persist, seen hopCount) []ir.Track {
 	at := start + offsetOf(a, bag)
 
 	switch {
@@ -424,23 +427,53 @@ func layoutAction(a ast.Action, start, end int, table *symbol.Table, bag *diag.B
 		for _, child := range a.Body {
 			d := seqSpan(child, bag)
 			childStart := cursor + offsetOf(child, bag)
-			tracks = append(tracks, layoutAction(child, childStart, childStart+d, table, bag, p)...)
+			tracks = append(tracks, layoutAction(child, childStart, childStart+d, table, bag, p, seen)...)
 			cursor = childStart + d
 		}
 		return tracks
 
 	case a.Kind == ast.ActionFlow:
-		return layoutFlow(a, at, table, bag)
+		return layoutFlow(a, at, table, bag, seen)
 
 	default:
 		return layoutState(a, at, end, bag)
 	}
 }
 
+// hopCount tracks how many times a scenario has already animated a pair, so
+// repeated messages between the same two participants are consumed in order
+// rather than all landing on the first one.
+type hopCount map[[2]string]int
+
+// occurrence decides which of several parallel edges a hop should use.
+//
+// With one candidate there is nothing to choose and every hop takes it — which
+// is every flowchart, and why this changes nothing there. With several, an
+// explicit `msg:` wins, and otherwise the scenario consumes them in order: a
+// sequence diagram where A messages B three times should animate the three
+// arrows in turn rather than the first one three times.
+func occurrence(a ast.Action, from, to string, table *symbol.Table, seen hopCount, bag *diag.Bag) int {
+	if table.CountEdges(from, to) < 2 {
+		return 1
+	}
+	if a.Attrs.Has("msg") {
+		return attrInt(a.Attrs, "msg", 1, bag)
+	}
+
+	// Keyed unordered, because the two directions resolve against the same
+	// pool once FindEdgeN has decided which direction it is matching.
+	key := [2]string{from, to}
+	if to < from {
+		key = [2]string{to, from}
+	}
+	seen[key]++
+	return seen[key]
+}
+
 // layoutFlow splits a hop chain into one track per edge. Hop boundaries are
 // computed from the total rather than accumulated, so the hops always sum to
 // exactly the requested duration however it divides.
-func layoutFlow(a ast.Action, at int, table *symbol.Table, bag *diag.Bag) []ir.Track {
+func layoutFlow(a ast.Action, at int, table *symbol.Table, bag *diag.Bag, seen hopCount) []ir.Track {
 	hops := len(a.Targets) - 1
 	if hops < 1 {
 		return nil
@@ -450,7 +483,7 @@ func layoutFlow(a ast.Action, at int, table *symbol.Table, bag *diag.Bag) []ir.T
 	var tracks []ir.Track
 	for i := 0; i < hops; i++ {
 		from, to := a.Targets[i].Name, a.Targets[i+1].Name
-		edge, reversed, ok := table.FindEdge(from, to)
+		edge, reversed, ok := table.FindEdgeN(from, to, occurrence(a, from, to, table, seen, bag))
 		if !ok {
 			// Already reported during validation; skip so the rest of the
 			// timeline still compiles.
@@ -534,6 +567,19 @@ func attrFloat(a ast.Attrs, key string, def float64, bag *diag.Bag) float64 {
 		return def
 	}
 	return f
+}
+
+func attrInt(a ast.Attrs, key string, def int, bag *diag.Bag) int {
+	v, ok := a.Get(key)
+	if !ok {
+		return def
+	}
+	f, err := units.ParseFloat(v.Raw)
+	if err != nil {
+		bag.Errorf(v.At, "attribute %q: %v", key, err)
+		return def
+	}
+	return int(f)
 }
 
 func attrBool(a ast.Attrs, key string, def bool, bag *diag.Bag) bool {

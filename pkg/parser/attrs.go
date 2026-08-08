@@ -50,7 +50,7 @@ var timingAttrs = map[string]string{
 var actionAttrs = map[ast.ActionKind]map[string]string{
 	ast.ActionFlow: extendAttrs(timingAttrs, map[string]string{
 		"color": "string", "ease": "ease", "status": "status",
-		"repeat": "float", "bidi": "bool",
+		"repeat": "float", "bidi": "bool", "msg": "float",
 	}),
 	ast.ActionHighlight: extendAttrs(timingAttrs, map[string]string{
 		"color": "string",

@@ -1,0 +1,60 @@
+%% A WebSocket upgrade, as a sequenceDiagram.
+%% ---
+%% This example exists to prove a claim the architecture makes: a second
+%% diagram type costs one parser and nothing else. Every feature used below —
+%% step `desc`, `gauge`, `focus`, a `click` that drills into a flowchart — was
+%% written for flowcharts and none of it needed changing.
+%% ---
+%% Note the flows carry no `label`: a sequence diagram already draws the
+%% message text, so a label would print a second copy on top of it.
+sequenceDiagram
+  participant C as Browser
+  participant L as Load Balancer
+  participant S as WebSocket Server
+
+  C->>L: GET /socket (Upgrade: websocket)
+  L->>S: forward upgrade
+  S-->>C: 101 Switching Protocols
+  C->>S: ping
+  S-->>C: pong
+  C->>S: close
+
+view internals "Inside the server" from "pod-a.dgm"
+
+interact {
+  click S -> view internals { label: "What the server is doing" }
+}
+
+scenario "the upgrade" { speed: 1.0 }
+
+  step ask "The browser asks to change protocol" {
+    desc: "A WebSocket connection starts life as an ordinary HTTP request. That is the whole trick: it travels through proxies and firewalls that would never have let a new protocol through on its own."
+    flow C -> L { dur: 700ms }
+    highlight L { style: active }
+  }
+
+  step forward "The load balancer passes it through" {
+    desc: "A proxy that does not understand the upgrade header will happily strip it, which is why this hop is where most WebSocket deployments break."
+    flow L -> S { dur: 600ms }
+  }
+
+  step switch "The server agrees to switch" {
+    desc: "101 is the only status code that means the connection is no longer HTTP. From here the same TCP socket carries frames in both directions, and neither side has to ask before sending."
+    flow S -> C { dur: 800ms, style: response, msg: 1 }
+    set S { badge: "upgraded", state: open, color: "#16a34a" }
+    gauge S { label: "open", value: 1 }
+  }
+
+  step keepalive "Frames travel both ways" {
+    desc: "Ping and pong are not application messages — they are how each side finds out the other is still there, on a connection that may sit silent for hours."
+    focus S
+    flow C -> S { dur: 500ms, msg: 1 }
+    flow S -> C { dur: 500ms, style: response, msg: 2 }
+  }
+
+  step close "The browser closes it" {
+    desc: "A close frame is a request, not a fact. The connection is not gone until both sides have sent one, which is why a well-behaved client waits rather than dropping the socket."
+    flow C -> S { dur: 600ms, msg: 2 }
+    unset S
+    gauge S { label: "open", value: 0 }
+  }

@@ -172,13 +172,55 @@ func (t *Table) Edges() []*Edge { return t.edges }
 // in the opposite direction, reporting reversed=true, because animations
 // routinely travel back along a request path that was drawn one way.
 func (t *Table) FindEdge(from, to string) (e *Edge, reversed bool, ok bool) {
-	if es := t.byPair[[2]string{from, to}]; len(es) > 0 {
-		return es[0], false, true
+	return t.FindEdgeN(from, to, 1)
+}
+
+// EdgesBetween returns the edges drawn from→to and those drawn to→from.
+func (t *Table) EdgesBetween(from, to string) (forward, backward []*Edge) {
+	return t.byPair[[2]string{from, to}], t.byPair[[2]string{to, from}]
+}
+
+// FindEdgeN picks the nth (1-based) edge a flow from→to can travel along.
+//
+// Same-direction edges are preferred and exhausted before reversed ones. In a
+// flowchart that changes nothing — there is normally one arrow, and a response
+// runs back along it. In a sequence diagram it is the difference between right
+// and wrong: a reply is its own message with its own line, and matching it
+// against the request's line would light the wrong arrow and travel backwards
+// along it.
+//
+// n beyond the number of candidates clamps to the last rather than failing. A
+// scenario that animates the same pair more times than the diagram draws it is
+// reusing an arrow deliberately, which is the ordinary case for a flowchart.
+func (t *Table) FindEdgeN(from, to string, n int) (e *Edge, reversed bool, ok bool) {
+	if n < 1 {
+		n = 1
 	}
-	if es := t.byPair[[2]string{to, from}]; len(es) > 0 {
-		return es[0], true, true
+	forward, backward := t.EdgesBetween(from, to)
+
+	if len(forward) > 0 {
+		if n > len(forward) {
+			n = len(forward)
+		}
+		return forward[n-1], false, true
+	}
+	if len(backward) > 0 {
+		if n > len(backward) {
+			n = len(backward)
+		}
+		return backward[n-1], true, true
 	}
 	return nil, false, false
+}
+
+// CountEdges is how many edges a from→to flow could pick between, in whichever
+// direction it will end up matching.
+func (t *Table) CountEdges(from, to string) int {
+	forward, backward := t.EdgesBetween(from, to)
+	if len(forward) > 0 {
+		return len(forward)
+	}
+	return len(backward)
 }
 
 func edgeID(i int) string { return "e" + strconv.Itoa(i) }

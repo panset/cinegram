@@ -99,6 +99,18 @@ func validateFlowHops(a ast.Action, t *symbol.Table, b *diag.Bag) {
 			b.ErrorHintf(to.At,
 				"add `"+from.Name+" --> "+to.Name+"` to the diagram, or route the flow through nodes that are connected",
 				"no edge between %q and %q to animate along", from.Name, to.Name)
+			continue
+		}
+
+		// Several arrows between the same pair is the normal case in a sequence
+		// diagram, where every message is its own line. The compiler consumes
+		// them in order, which is usually what was meant — but "usually" is
+		// worth saying out loud, because the alternative is silently animating
+		// an arrow the author was not thinking of.
+		if n := t.CountEdges(from.Name, to.Name); n > 1 && !a.Attrs.Has("msg") {
+			b.WarnHintf(to.At,
+				"flows between this pair are matched in order; add `msg: <n>` to pick one explicitly",
+				"%d messages run between %q and %q", n, from.Name, to.Name)
 		}
 	}
 }

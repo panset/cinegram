@@ -182,6 +182,52 @@ func (s *RawStmt) Raw() string     { return s.Text }
 func (s *RawStmt) Pos() source.Pos { return s.StartPos }
 
 // ---------------------------------------------------------------------------
+// Sequence
+// ---------------------------------------------------------------------------
+
+// Sequence is a `sequenceDiagram` body.
+type Sequence struct {
+	HeaderText string
+	Statements []Statement
+	StartPos   source.Pos
+}
+
+func (s *Sequence) Kind() string      { return "sequenceDiagram" }
+func (s *Sequence) Header() string    { return s.HeaderText }
+func (s *Sequence) Body() []Statement { return s.Statements }
+
+// ParticipantStmt declares an actor, with or without a display alias.
+type ParticipantStmt struct {
+	ID    string
+	Label string
+	Actor bool // written as `actor` rather than `participant`
+
+	Text     string
+	StartPos source.Pos
+}
+
+func (s *ParticipantStmt) Raw() string     { return s.Text }
+func (s *ParticipantStmt) Pos() source.Pos { return s.StartPos }
+
+// MessageStmt is one message between two participants.
+//
+// Every occurrence is its own statement and its own edge, even when the same
+// pair exchanges the same message twice: in a sequence diagram the arrows are
+// the timeline, so two identical messages are two distinct things to animate.
+type MessageStmt struct {
+	From     string
+	To       string
+	Operator string // the arrow as written, e.g. "->>" or "--)"
+	Label    string // the text after the colon
+
+	Text     string
+	StartPos source.Pos
+}
+
+func (s *MessageStmt) Raw() string     { return s.Text }
+func (s *MessageStmt) Pos() source.Pos { return s.StartPos }
+
+// ---------------------------------------------------------------------------
 // Scenario (diagram-agnostic)
 // ---------------------------------------------------------------------------
 

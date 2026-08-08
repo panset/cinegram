@@ -75,11 +75,15 @@ the animation and the click bindings and contain **no diagram vocabulary at
 all** — they emit nothing but named references. `pkg/parser/validate.go` is the
 only place the halves meet, and it works purely against `symbol.Table`.
 
-Adding a Mermaid diagram type (`sequenceDiagram`, `architecture-beta`) therefore
-means writing one parser that implements `registry.DiagramParser` and registers
-itself in `init()`. Scenario parsing, validation, and the timeline compiler need
-zero changes. **Keep flowchart specifics out of `scenario.go`, `interact.go`,
+Adding a Mermaid diagram type (`architecture-beta`, say) therefore means writing
+one parser that implements `registry.DiagramParser` and registers itself in
+`init()`. Scenario parsing, validation, and the timeline compiler need zero
+changes. **Keep flowchart specifics out of `scenario.go`, `interact.go`,
 `validate.go`, `pkg/compile`, and `pkg/ir`.**
+
+`pkg/parser/sequence.go` is the worked proof of that claim: `sequenceDiagram`
+cost one parser plus one runtime indexer, and nothing in between. The runtime
+is the part that does need a second strategy per diagram type — see below.
 
 A diagram parser must hand the cursor back at every keyword in
 `isTopLevelKeyword` (`interact.go`), not just at `scenario` — that list is the
@@ -137,6 +141,15 @@ changed between releases, and geometric matching additionally detects paths
 mermaid drew from the far end (composed with `Reverse` as `!reverse !== !flip`).
 Unbound nodes, edges or click sources surface in a warning banner on the page
 rather than silently failing.
+
+A sequence diagram has neither `g.node` nor `.edgePaths`, so `index()` picks a
+strategy from `ir.Diagram.Type`. Actors are recovered by **column** — the parts
+of one actor are loose rects and texts sharing a lifeline x — and wrapped in a
+`g.dgm-actor` so that every existing `.dgm-highlight rect` rule applies
+unchanged. Messages are matched to edges by **order**, because mermaid draws
+them top to bottom in message order and that is far more robust than recovering
+identity from geometry. Only the direction a line was drawn in is read from
+geometry, and it composes with `Reverse` exactly as the flowchart `flip` does.
 
 One `Player` hosts every view and swaps between them, rather than one Player per
 view: `build()` installs a **document-level** keydown handler, which would stack

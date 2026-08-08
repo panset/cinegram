@@ -98,6 +98,7 @@ suggestion rather than a silent no-op.
 | `color` | `flow`, `highlight`, `pulse` | Any CSS colour, e.g. `"#22c55e"` or `green`. Quote anything starting with `#`. |
 | `ease` | `flow` | `linear` (default), `in`, `out`, `in-out`. |
 | `status` | `flow` | `ok` (default) or `fail`. Semantic, unlike `style` — see below. |
+| `msg` | `flow` | Which arrow to use, 1-based, when several run between the same pair. |
 | `repeat` | `flow`, `pulse` | Repeat count. Parsed and reserved; the runtime does not read it yet. |
 | `bidi` | `flow` | Travel both ways. Parsed and reserved; the runtime does not read it yet. |
 | `side` | `note` | `above` (default), `below`, `left`, `right`. |
@@ -177,6 +178,48 @@ step attempt "The primary gateway never answers" {
 `examples/payment-checkout.dgm` runs the same checkout twice — one scenario
 where the gateway answers and one where it times out and traffic fails over to
 a backup provider. Failure paths are first-class, not an afterthought in red.
+
+## Sequence diagrams
+
+`sequenceDiagram` bodies work too, and nothing else changed to make them:
+
+```
+sequenceDiagram
+  participant C as Browser
+  participant S as WebSocket Server
+
+  C->>S: GET /socket (Upgrade: websocket)
+  S-->>C: 101 Switching Protocols
+  C->>S: ping
+  S-->>C: pong
+
+scenario "the upgrade"
+  step keepalive "Frames travel both ways" {
+    desc: "Ping and pong are how each side finds out the other is still there."
+    focus S
+    flow C -> S { dur: 500ms, msg: 1 }
+    flow S -> C { dur: 500ms, style: response, msg: 2 }
+  }
+```
+
+Participants become nodes and each message becomes its own edge; `Note`,
+`activate`, `loop`/`alt`/`opt`/`end` and `box` round-trip verbatim as
+unmodelled syntax. Everything on top — `desc`, `set`/`gauge`, `focus`,
+`click … -> view`, `narrate`, `frame` — is the same code it was for flowcharts.
+A bundle can mix the two: `examples/websocket-handshake.dgm` drills from an
+actor into a flowchart of the server's internals.
+
+Two things are worth knowing when animating one:
+
+**`msg` picks between repeated messages.** A flowchart usually draws one arrow
+between two nodes; a sequence diagram draws one per message, and `ping` then
+`close` from the same participant are two different arrows. Flows consume them
+in order and lint says so when it had to guess, so `msg: 2` is how you say
+which one you meant. A reply is matched as its own message rather than as the
+request run backwards.
+
+**Leave `label` off.** The diagram already draws the message text, so a flow
+label prints a second copy on top of it.
 
 ## Narration
 
@@ -574,8 +617,13 @@ module, because module scripts are blocked on `file://` and awkward in webviews.
 ## Status
 
 Working today: flowcharts (`flowchart` / `graph`) with every Mermaid node shape
-and link form, nested subgraphs, frontmatter, scenarios, the timeline compiler,
-clickable drill-down between diagrams, and the animated HTML preview.
+and link form, `sequenceDiagram`, nested subgraphs, frontmatter, scenarios with
+narration and persistent state, focus, deep links and embedding, the timeline
+compiler, clickable drill-down between diagrams of different types, the
+animated HTML preview, a serve/watch authoring loop, `narrate`, and PNG frame
+capture.
 
-Not built yet: sequence diagrams and `architecture-beta` (the registry seam
-exists for them), the VS Code plugin, WASM builds, and animated SVG/GIF export.
+Not built yet: `architecture-beta` and the other Mermaid diagram types (the
+registry seam exists for them), the VS Code plugin, and WASM builds. GIF export
+is deliberately out of scope — `frame --frames` plus ffmpeg does it better than
+a Go encoder would.

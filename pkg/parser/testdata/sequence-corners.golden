@@ -1,0 +1,27 @@
+diagram: sequenceDiagram (sequenceDiagram)
+
+nodes:
+  A          label="A"                      shape=actor     
+  Addressee  label="Address Book"           shape=actor     
+  U          label="User"                   shape=actor     
+  D          label="Database"               shape=actor     
+
+edges:
+  e0   U -> A style=normal head=arrow label="plain arrow"
+  e1   A -> U style=dotted head=arrow label="dotted reply"
+  e2   A -> D style=normal head=open label="async open arrow"
+  e3   D -> A style=dotted head=open label="dotted async"
+  e4   A -> D style=normal head=cross label="cross"
+  e5   D -> A style=dotted head=cross label="dotted cross"
+  e6   A -> D style=normal head=none label="no arrowhead"
+  e7   A -> D style=dotted head=none label="dotted, no arrowhead"
+  e8   A -> A style=normal head=arrow label="talks to itself"
+  e9   A -> D style=normal head=arrow label="poll"
+
+scenario "corners"
+  step only "walk"
+    flow U -> A {label="hello"}
+
+diagnostics:
+  6:3: warning: "Addressee" is declared but nothing references it
+    hint: is Addressee supposed to be animated, or connected to something?

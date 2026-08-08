@@ -12,6 +12,7 @@ go_library(
         "parser.go",
         "scanner.go",
         "scenario.go",
+        "sequence.go",
         "shape.go",
         "validate.go",
     ],

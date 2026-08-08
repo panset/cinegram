@@ -132,6 +132,171 @@
   }
 
   // ---------------------------------------------------------------------
+  // Sequence diagrams
+  //
+  // Nothing here looks like a flowchart. There is no g.node and no .edgePaths:
+  // an actor is a pair of loose rects and a pair of loose texts that happen to
+  // share a column, and a message is a loose <line> (or a <path>, when an actor
+  // messages itself) sitting at the top level of the SVG.
+  //
+  // Actors are found by column, because the column is the one thing that
+  // actually identifies an actor in the output. Messages are matched by order,
+  // because mermaid emits them top to bottom in message order and that is far
+  // more robust than trying to recover identity from geometry.
+  // ---------------------------------------------------------------------
+
+  // COLUMN_SLOP is how far from a lifeline a rect or label may sit and still
+  // belong to it. Half an actor box is the natural bound.
+  var COLUMN_SLOP = 90;
+
+  function indexActors(svg, view, anchors) {
+    var columns = actorColumns(svg);
+    if (!columns.length) return {};
+
+    // The SVG knows actors by their display label; the timeline knows them by
+    // id. `participant C as Client` is exactly the case that makes these
+    // different, so translate rather than assuming they match.
+    var byLabel = {};
+    view.nodes.forEach(function (n) {
+      if (!byLabel[n.label]) byLabel[n.label] = n.id;
+      if (!byLabel[n.id]) byLabel[n.id] = n.id;
+    });
+
+    var map = {};
+    for (var i = 0; i < columns.length; i++) {
+      var col = columns[i];
+      var id = byLabel[col.label];
+      // Order is the fallback when a label was not matched — two actors may
+      // legitimately share a display name.
+      if (!id && view.nodes[i]) id = view.nodes[i].id;
+      if (!id) continue;
+
+      map[id] = wrapActor(svg, col);
+      // Notes and pills anchor to the top box rather than the wrapper, whose
+      // rect spans the full height of the lifeline.
+      anchors[id] = col.top || map[id];
+    }
+    return map;
+  }
+
+  // actorColumns groups the loose parts of the diagram by the lifeline they
+  // belong to.
+  function actorColumns(svg) {
+    var columns = [];
+    var lifelines = svg.querySelectorAll('line.actor-line');
+    for (var i = 0; i < lifelines.length; i++) {
+      columns.push({
+        x: parseFloat(lifelines[i].getAttribute('x1')),
+        parts: [lifelines[i]],
+        top: null,
+        label: ''
+      });
+    }
+    if (!columns.length) return columns;
+    columns.sort(function (a, b) { return a.x - b.x; });
+
+    function nearest(x) {
+      var best = null, bestGap = COLUMN_SLOP;
+      for (var k = 0; k < columns.length; k++) {
+        var gap = Math.abs(columns[k].x - x);
+        if (gap <= bestGap) { bestGap = gap; best = columns[k]; }
+      }
+      return best;
+    }
+
+    var rects = svg.querySelectorAll('rect.actor, rect.actor-top, rect.actor-bottom');
+    for (var r = 0; r < rects.length; r++) {
+      var rect = rects[r];
+      var cx = parseFloat(rect.getAttribute('x')) + parseFloat(rect.getAttribute('width')) / 2;
+      var col = nearest(cx);
+      if (!col) continue;
+      col.parts.push(rect);
+      // The top box is the one nearer the start of the diagram.
+      var y = parseFloat(rect.getAttribute('y'));
+      if (!col.top || y < parseFloat(col.top.getAttribute('y'))) col.top = rect;
+    }
+
+    var texts = svg.querySelectorAll('text.actor-box, text.actor');
+    for (var t = 0; t < texts.length; t++) {
+      var text = texts[t];
+      var tcol = nearest(parseFloat(text.getAttribute('x')));
+      if (!tcol) continue;
+      tcol.parts.push(text);
+      if (!tcol.label) tcol.label = (text.textContent || '').trim();
+    }
+
+    return columns;
+  }
+
+  // wrapActor gathers a column's parts into one group.
+  //
+  // This is what makes an actor animate like a node without a second set of
+  // CSS: every existing rule is written as `.dgm-highlight rect`, so giving the
+  // parts a common parent to put the class on is the whole adaptation.
+  function wrapActor(svg, col) {
+    var g = document.createElementNS(SVG_NS, 'g');
+    g.setAttribute('class', 'dgm-actor');
+
+    var first = col.parts[0];
+    if (first && first.parentNode) {
+      first.parentNode.insertBefore(g, first);
+    } else {
+      svg.appendChild(g);
+    }
+    for (var i = 0; i < col.parts.length; i++) {
+      g.appendChild(col.parts[i]);
+    }
+    return g;
+  }
+
+  // indexMessages pairs each compiled edge with the line mermaid drew for it.
+  //
+  // Strictly by order: the compiler emits one edge per message occurrence in
+  // source order, and mermaid draws them top to bottom in the same order.
+  // Geometry is used only to decide which end the line starts at.
+  function indexMessages(svg, view, anchors) {
+    var lines = svg.querySelectorAll(
+      'line.messageLine0, line.messageLine1, path.messageLine0, path.messageLine1');
+
+    var map = {};
+    for (var i = 0; i < view.edges.length && i < lines.length; i++) {
+      var edge = view.edges[i];
+      var el = lines[i];
+
+      var ends = null;
+      try {
+        var len = el.getTotalLength();
+        ends = { start: el.getPointAtLength(0), end: el.getPointAtLength(len) };
+      } catch (e) { ends = null; }
+
+      map[edge.id] = {
+        path: el,
+        flip: ends ? startsAtTheFarEnd(ends, edge, anchors) : false,
+        matrix: null
+      };
+    }
+    return map;
+  }
+
+  // startsAtTheFarEnd reports whether mermaid drew this line from the message's
+  // destination rather than its source, which composes with a flow's own
+  // `reverse` exactly as it does for a flowchart path.
+  function startsAtTheFarEnd(ends, edge, anchors) {
+    var from = centreX(anchors[edge.from]);
+    var to = centreX(anchors[edge.to]);
+    if (from === null || to === null || from === to) return false;
+    return Math.abs(ends.start.x - to) < Math.abs(ends.start.x - from);
+  }
+
+  function centreX(el) {
+    if (!el) return null;
+    var x = parseFloat(el.getAttribute('x'));
+    var w = parseFloat(el.getAttribute('width'));
+    if (isNaN(x)) return null;
+    return isNaN(w) ? x : x + w / 2;
+  }
+
+  // ---------------------------------------------------------------------
   // Player
   // ---------------------------------------------------------------------
 
@@ -836,10 +1001,25 @@
   Player.prototype.index = function () {
     if (!this.svg) return;
     var v = this.view();
-    this.nodes = indexNodes(this.svg);
-    this.clusters = indexClusters(this.svg, v);
-    this.layer = makeLayer(this.svg);
-    this.edges = indexEdges(this.svg, v, this.nodes);
+
+    // Two indexing strategies, chosen by diagram type. Everything after this
+    // point — states, flows, notes, pills, chips — works off the same three
+    // maps, which is what lets a second diagram type cost one indexer instead
+    // of a second runtime.
+    this.sequence = (v.diagram && v.diagram.type) === 'sequenceDiagram';
+    this.anchors = {};
+
+    if (this.sequence) {
+      this.layer = makeLayer(this.svg);
+      this.clusters = {};
+      this.nodes = indexActors(this.svg, v, this.anchors);
+      this.edges = indexMessages(this.svg, v, this.anchors);
+    } else {
+      this.nodes = indexNodes(this.svg);
+      this.clusters = indexClusters(this.svg, v);
+      this.layer = makeLayer(this.svg);
+      this.edges = indexEdges(this.svg, v, this.nodes);
+    }
 
     // Cache each path's transform into the overlay's coordinate system, so
     // positions stay exact even if a future mermaid release puts a transform
@@ -992,7 +1172,7 @@
 
     (this.view().bindings || []).forEach(function (b) {
       if (b.kind !== 'reveal' && b.kind !== 'view') return;
-      var host = self.elementFor(b.source);
+      var host = (self.anchors && self.anchors[b.source]) || self.elementFor(b.source);
       if (!host) return; // already reported by the binding pass in index()
 
       var chip = el('button', 'dgm-chip dgm-chip-' + b.kind);
@@ -1503,7 +1683,7 @@
 
     var stageRect = this.stage.getBoundingClientRect();
     Object.keys(groups).forEach(function (target) {
-      var host = self.elementFor(target);
+      var host = (self.anchors && self.anchors[target]) || self.elementFor(target);
       if (!host) return;
       var r = host.getBoundingClientRect();
 
@@ -1640,6 +1820,9 @@
 
   Player.prototype.applyFlows = function (want) {
     var key;
+    // Where the action is, this frame. Sequence-diagram notes anchor to it, and
+    // it is recomputed from scratch every frame like everything else.
+    this.flowY = null;
     for (key in this.particles) {
       if (!want[key]) {
         disposeFlow(this.particles[key]);
@@ -1674,6 +1857,10 @@
         pt = pt.matrixTransform(bind.matrix);
       }
       fx.group.setAttribute('transform', 'translate(' + pt.x + ',' + pt.y + ')');
+      if (this.sequence) {
+        var box = fx.group.getBoundingClientRect();
+        this.flowY = box.top + box.height / 2;
+      }
 
       if (fx.trail) this.drawTrail(fx.trail, along, len, backwards);
       if (tr.status === 'fail') {
@@ -1844,8 +2031,8 @@
 
     for (key in want) {
       var tr = want[key];
-      var host = this.elementFor(tr.target);
-      if (!host) continue;
+      var hostRect = this.anchorRect(tr.target);
+      if (!hostRect) continue;
 
       var div = this.notes[key];
       if (!div) {
@@ -1861,7 +2048,7 @@
       // Measured after the class is set, because the side decides the arrow and
       // an arrow is part of the box the layout has to fit.
       var box = div.getBoundingClientRect();
-      var anchor = rectIn(host.getBoundingClientRect(), stageRect);
+      var anchor = rectIn(hostRect, stageRect);
       var spot = place(side, anchor, box.width, box.height);
 
       var shoved = settle(spot, box.width, box.height, placed,
@@ -1877,6 +2064,26 @@
       div.style.left = shoved.left + 'px';
       div.style.top = shoved.top + 'px';
     }
+  };
+
+  // anchorRect is where overlay content should point for an element.
+  //
+  // For a flowchart it is simply the node's box. For a sequence diagram it is
+  // the actor's column at the height of whatever message is moving right now —
+  // a note about a message belongs beside that message, not up at the actor
+  // box where the whole conversation would pile up. It falls back to the box
+  // when nothing is in flight.
+  Player.prototype.anchorRect = function (id) {
+    var host = (this.anchors && this.anchors[id]) || this.elementFor(id);
+    if (!host) return null;
+
+    var r = host.getBoundingClientRect();
+    if (!this.sequence || this.flowY === null || this.flowY === undefined) return r;
+
+    return {
+      left: r.left, right: r.right, width: r.width,
+      top: this.flowY, bottom: this.flowY, height: 0
+    };
   };
 
   function sideOf(s) {

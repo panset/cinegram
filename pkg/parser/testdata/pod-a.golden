@@ -1,0 +1,40 @@
+diagram: flowchart (flowchart LR)
+direction: LR
+
+nodes:
+  in         label="Request from Service"   shape=rect      
+  proxy      label="Envoy Sidecar"          shape=rect       group=pod
+  app        label="Order API Container"    shape=rect       group=pod
+  cache      label="Local Cache"            shape=cylinder   group=pod
+  db         label="Orders Postgres"        shape=cylinder  
+
+groups:
+  pod        label="Pod A"                  parent=-          children=[proxy app cache]
+
+edges:
+  e0   in -> proxy style=normal head=arrow
+  e1   proxy -> app style=normal head=arrow
+  e2   app -> cache style=normal head=arrow
+  e3   app -> db style=normal head=arrow
+
+scenario "fetch orders" {speed="1.0" loop="true"}
+  step admit "Sidecar admits the request"
+    flow in -> proxy {label="GET /api/orders" dur="500ms"}
+    highlight proxy {style="active"}
+  step forward "Proxy forwards to the app container"
+    flow proxy -> app {label="localhost:8080" dur="400ms"}
+    note proxy "mTLS terminated\nrate limit ok"
+  step lookup "App checks its local cache first"
+    flow app -> cache {label="orders:u42" dur="350ms"}
+    note cache "miss"
+  step query "Cache miss, so the app queries Postgres"
+    flow app -> db {label="SELECT * FROM orders" dur="700ms"}
+    highlight db {style="busy"}
+  step rows "Postgres returns the rows"
+    flow db -> app {label="14 rows" dur="600ms" style="response"}
+    highlight app {style="busy" dur="500ms"}
+  step fill "App fills the cache and answers"
+    flow app -> cache {label="SET orders:u42" dur="300ms"}
+    note app "200 OK in 14ms"
+  step reply "Response leaves the pod"
+    flow app -> proxy -> in {label="200 OK" dur="800ms" style="response"}
