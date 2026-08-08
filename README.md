@@ -93,6 +93,7 @@ suggestion rather than a silent no-op.
 | `style` | any action | A name the renderer maps to CSS (`response` and `busy` ship styled). |
 | `color` | `flow`, `highlight`, `pulse` | Any CSS colour, e.g. `"#22c55e"` or `green`. Quote anything starting with `#`. |
 | `ease` | `flow` | `linear` (default), `in`, `out`, `in-out`. |
+| `status` | `flow` | `ok` (default) or `fail`. Semantic, unlike `style` — see below. |
 | `repeat` | `flow`, `pulse` | Repeat count. Parsed and reserved; the runtime does not read it yet. |
 | `bidi` | `flow` | Travel both ways. Parsed and reserved; the runtime does not read it yet. |
 | `speed` | scenario | Initial playback rate, e.g. `1.5`. The player starts here; the speed button cycles from it. |
@@ -137,6 +138,37 @@ Durations behave predictably:
 A flow may travel **against** the direction an edge was drawn. Response paths
 are the normal case, so `flow pod1 -> svc` reuses the `svc --> pod1` edge and
 marks the track reversed rather than demanding you draw a second arrow.
+
+### What a flow draws
+
+A flow is not just a dot. While its track is open the edge underneath lights
+up, a comet trails the particle along the real path geometry, and the last
+moments before it lands pulse the node it is arriving at — so a multi-hop
+`flow a -> b -> c` reads as two arrivals rather than one long slide.
+
+All of it is computed from the current time and nothing else. The trail is a
+dash window whose position is a function of `t`; the arrival pulse is on
+whenever `t` falls in the tail of a hop. Scrub backwards and everything
+un-happens, because there was never any accumulated state to unwind.
+
+**`status` is not `style`.** `style: error` is a CSS hook — it names a class
+and the stylesheet decides what that looks like. `status: fail` says the flow
+*did not succeed*, which the runtime draws rather than merely recolours: the
+particle takes an error appearance, the edge is marked failed, and a ✕ lands at
+the destination end of the path for the last fifth of the track. The set is
+closed to `ok` and `fail`, so an unrecognised value is an error rather than a
+class nobody styles.
+
+```
+step attempt "The primary gateway never answers" {
+  flow checkout -> gw { label: "authorize $84.10", dur: 1100ms, status: fail }
+  note gw "no response in 8s\nconnect timeout"
+}
+```
+
+`examples/payment-checkout.dgm` runs the same checkout twice — one scenario
+where the gateway answers and one where it times out and traffic fails over to
+a backup provider. Failure paths are first-class, not an afterthought in red.
 
 ## Interaction
 

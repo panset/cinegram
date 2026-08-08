@@ -16,6 +16,7 @@
   --dgm-accent-soft: rgba(47, 111, 235, 0.14);
   --dgm-busy: #d97706;
   --dgm-response: #16a34a;
+  --dgm-fail: #dc2626;
   --dgm-warn-bg: #fff4e5;
   --dgm-warn-fg: #8a4b08;
   --dgm-shadow: rgba(16, 24, 40, 0.12);
@@ -32,6 +33,7 @@
   --dgm-accent-soft: rgba(110, 168, 254, 0.18);
   --dgm-busy: #fbbf24;
   --dgm-response: #4ade80;
+  --dgm-fail: #f87171;
   --dgm-warn-bg: #3a2a12;
   --dgm-warn-fg: #f6c177;
   --dgm-shadow: rgba(0, 0, 0, 0.5);
@@ -48,6 +50,7 @@
     --dgm-accent-soft: rgba(47, 111, 235, 0.14);
     --dgm-busy: #d97706;
     --dgm-response: #16a34a;
+    --dgm-fail: #dc2626;
     --dgm-warn-bg: #fff4e5;
     --dgm-warn-fg: #8a4b08;
     --dgm-shadow: rgba(16, 24, 40, 0.12);
@@ -307,10 +310,74 @@ body {
   fill: var(--dgm-color, var(--dgm-response));
 }
 
+/* A failing flow reads as failing before it arrives, so the particle carries
+   the outcome the whole way rather than only at the ✕. */
+.dgm-particle-fail .dgm-particle-dot,
+.dgm-particle-fail .dgm-particle-halo {
+  fill: var(--dgm-color, var(--dgm-fail));
+}
+
+.dgm-particle-fail .dgm-particle-dot {
+  stroke: var(--dgm-bg);
+  stroke-width: 1.5px;
+}
+
 @keyframes dgm-pulse {
   0%   { transform: scale(0.7); opacity: 0.35; }
   70%  { transform: scale(1.5); opacity: 0;    }
   100% { transform: scale(1.5); opacity: 0;    }
+}
+
+/* --- active edges ------------------------------------------------------- */
+
+/* While a flow track is open its edge is lit. The transition is short and on
+   the edge itself rather than on a wrapper, so a scrub that closes the track
+   fades the edge back instead of snapping. */
+
+.dgm-flow-active {
+  stroke: var(--dgm-color, var(--dgm-accent)) !important;
+  stroke-width: 2.6px !important;
+  transition: stroke 0.15s ease, stroke-width 0.15s ease;
+}
+
+.dgm-flow-response {
+  stroke: var(--dgm-color, var(--dgm-response)) !important;
+}
+
+/* Ordered after the style hooks so a failure wins the colour: `status` is
+   semantic and `style` is decoration, and the two can appear together. */
+.dgm-flow-fail {
+  stroke: var(--dgm-color, var(--dgm-fail)) !important;
+}
+
+/* The comet. A clone of the edge path with a dash window the runtime slides
+   along it, drawn in .dgm-layer so it sits above the edge but below the
+   particle that leads it. */
+.dgm-trail {
+  fill: none;
+  stroke: var(--dgm-color, var(--dgm-accent));
+  stroke-width: 5px;
+  stroke-linecap: round;
+  opacity: 0.4;
+}
+
+.dgm-trail-response {
+  stroke: var(--dgm-color, var(--dgm-response));
+}
+
+.dgm-trail-fail {
+  stroke: var(--dgm-color, var(--dgm-fail));
+}
+
+.dgm-fail-mark circle {
+  fill: var(--dgm-bg);
+  opacity: 0.92;
+}
+
+.dgm-fail-mark line {
+  stroke: var(--dgm-fail);
+  stroke-width: 3px;
+  stroke-linecap: round;
 }
 
 /* Node states. Mermaid draws the node body as the shape element inside g.node,
@@ -351,6 +418,28 @@ body {
 @keyframes dgm-node-pulse {
   0%, 100% { transform: scale(1); }
   50%      { transform: scale(1.05); }
+}
+
+/* A hop's destination, in the last moments before the particle lands. It
+   animates the glow rather than a transform: mermaid positions g.node with a
+   `transform` attribute, and a CSS transform is the same property, so animating
+   one here would move the node to the origin. */
+.dgm-waypoint {
+  animation: dgm-waypoint 0.6s ease-out infinite;
+}
+
+.dgm-waypoint rect,
+.dgm-waypoint circle,
+.dgm-waypoint polygon,
+.dgm-waypoint path {
+  stroke: var(--dgm-color, var(--dgm-accent)) !important;
+  stroke-width: 2.5px !important;
+}
+
+@keyframes dgm-waypoint {
+  0%   { filter: drop-shadow(0 0 1px var(--dgm-color, var(--dgm-accent))); }
+  50%  { filter: drop-shadow(0 0 11px var(--dgm-color, var(--dgm-accent))); }
+  100% { filter: drop-shadow(0 0 1px var(--dgm-color, var(--dgm-accent))); }
 }
 
 .dgm-dim { opacity: 0.28; }

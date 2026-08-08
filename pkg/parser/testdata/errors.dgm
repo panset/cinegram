@@ -35,6 +35,14 @@ scenario "broken"
     flow client -> ing { ease: bouncy }
   }
 
+  step h "unknown status" {
+    flow client -> ing { status: maybe }
+  }
+
+  step i "status on an action that has no outcome" {
+    highlight ing { status: fail }
+  }
+
   step a "duplicate step id" {
     highlight ing
   }

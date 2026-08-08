@@ -314,6 +314,7 @@ func layoutFlow(a ast.Action, at int, table *symbol.Table, bag *diag.Bag) []ir.T
 			Style:   a.Attrs.String("style"),
 			Color:   a.Attrs.String("color"),
 			Ease:    a.Attrs.String("ease"),
+			Status:  a.Attrs.String("status"),
 		})
 	}
 	return tracks

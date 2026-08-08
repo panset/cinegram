@@ -157,4 +157,11 @@ type Track struct {
 	Style string `json:"style,omitempty"`
 	Color string `json:"color,omitempty"`
 	Ease  string `json:"ease,omitempty"`
+
+	// Status is a flow's outcome: empty or "ok" for one that succeeded, "fail"
+	// for one that did not. It is deliberately separate from Style, which is a
+	// free-form CSS hook the renderer passes through: Status is a closed set
+	// with meaning, so a renderer may draw a failure differently — an error
+	// particle, a struck-through arrival — rather than just recolouring it.
+	Status string `json:"status,omitempty"`
 }

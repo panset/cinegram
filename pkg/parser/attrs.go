@@ -48,7 +48,8 @@ var timingAttrs = map[string]string{
 // timingAttrs, so a new action kind is never accidentally attribute-free.
 var actionAttrs = map[ast.ActionKind]map[string]string{
 	ast.ActionFlow: extendAttrs(timingAttrs, map[string]string{
-		"color": "string", "ease": "ease", "repeat": "float", "bidi": "bool",
+		"color": "string", "ease": "ease", "status": "status",
+		"repeat": "float", "bidi": "bool",
 	}),
 	ast.ActionHighlight: extendAttrs(timingAttrs, map[string]string{
 		"color": "string",
@@ -69,6 +70,14 @@ var actionAttrs = map[ast.ActionKind]map[string]string{
 // animate as though it had not been written — worth an error rather than a
 // shrug.
 var easeNames = []string{"linear", "in", "out", "in-out"}
+
+// statusNames are the outcomes a flow may declare.
+//
+// `style` stays open-ended — it is a CSS hook and a renderer may invent names
+// for it. `status` is the opposite: the runtime draws a failure differently
+// rather than merely recolouring it, so the set is closed and an unrecognised
+// value is an error rather than a class nobody styles.
+var statusNames = []string{"ok", "fail"}
 
 // attrsFor returns the vocabulary an action kind accepts.
 func attrsFor(kind ast.ActionKind) map[string]string {
@@ -111,6 +120,11 @@ func checkAttrs(attrs ast.Attrs, allowed map[string]string, what string, b *diag
 			if !oneOf(easeNames, v.Raw) {
 				b.ErrorHintf(v.At, "valid easings are "+strings.Join(easeNames, ", "),
 					"attribute %q: %q is not an easing", k, v.Raw)
+			}
+		case "status":
+			if !oneOf(statusNames, v.Raw) {
+				b.ErrorHintf(v.At, "valid statuses are "+strings.Join(statusNames, ", "),
+					"attribute %q: %q is not a status", k, v.Raw)
 			}
 		}
 		if err != nil {

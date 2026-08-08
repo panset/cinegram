@@ -152,6 +152,7 @@
     this.raf = null;
     this.lastFrame = 0;
     this.nodeState = {};
+    this.edgeState = {};
     this.particles = {};
     this.notes = {};
     // The trail of view ids drilled through, so Back knows where to return.
@@ -448,6 +449,7 @@
     this.particles = {};
     this.notes = {};
     this.nodeState = {};
+    this.edgeState = {};
     this.overlay.innerHTML = '';
 
     // Surface anything that failed to bind. A silently half-animated diagram
@@ -716,13 +718,20 @@
   // Frame application
   // ---------------------------------------------------------------------
 
+  // WAYPOINT_LEAD is the tail of a hop during which its destination node
+  // announces the arrival. A multi-hop flow is one track per hop, so this makes
+  // each intermediate stop legible without the compiler emitting anything extra.
+  var WAYPOINT_LEAD = 0.15;
+
   Player.prototype.apply = function (t) {
     if (!this.svg) return;
     var sc = this.scenario();
 
     var wantNode = {};   // node id -> {cls, color, key}
+    var wantEdge = {};   // edge id -> {cls, color, key}
     var wantFlow = {};   // track key -> {track, progress}
     var wantNote = {};   // note key -> {track, target}
+    var wantWaypoint = {}; // node id -> true
 
     for (var s = 0; s < sc.steps.length; s++) {
       var step = sc.steps[s];
@@ -736,7 +745,10 @@
         var key = s + ':' + k;
 
         if (tr.kind === 'flow') {
-          wantFlow[key] = { track: tr, progress: Math.min(1, Math.max(0, p)) };
+          var progress = Math.min(1, Math.max(0, p));
+          wantFlow[key] = { track: tr, progress: progress };
+          if (tr.edge) wantEdge[tr.edge] = edgeState(tr);
+          if (tr.to && progress >= 1 - WAYPOINT_LEAD) wantWaypoint[tr.to] = true;
         } else if (tr.kind === 'note') {
           wantNote[key] = tr;
           if (!wantNode[tr.target]) wantNode[tr.target] = nodeState('noted', '');
@@ -749,7 +761,19 @@
       }
     }
 
+    // A waypoint rides on top of whatever else the node is doing rather than
+    // replacing it: a node that is both highlighted and a hop destination
+    // should show both. Merging after the loop keeps the result independent of
+    // the order the two tracks happened to appear in.
+    for (var id in wantWaypoint) {
+      var was = wantNode[id];
+      if (was && was.cls.indexOf('hidden') === 0) continue;
+      wantNode[id] = was ? nodeState(was.cls + ' waypoint', was.color)
+                         : nodeState('waypoint', '');
+    }
+
     this.applyNodeStates(wantNode);
+    this.applyEdgeStates(wantEdge);
     this.applyFlows(wantFlow);
     this.applyNotes(wantNote);
   };
@@ -761,31 +785,63 @@
     return { cls: cls, color: color || '', key: cls + '|' + (color || '') };
   }
 
-  Player.prototype.applyNodeStates = function (want) {
-    // Diff against the previous frame so we only touch the DOM on change.
+  // edgeState is what an open flow track wants its edge path to look like.
+  // `flow-active` is the general "something is travelling here" hook; the style
+  // and status names ride alongside it so CSS can distinguish a response from a
+  // failure without the runtime hard-coding either.
+  function edgeState(tr) {
+    var cls = 'flow-active';
+    if (tr.style) cls += ' flow-' + tr.style;
+    if (tr.status === 'fail') cls += ' flow-fail';
+    return nodeState(cls, tr.color);
+  }
+
+  // applyStates diffs a wanted class/colour map against the previous frame and
+  // rewrites only what changed. `lookup` turns an id into the element to paint,
+  // which is all that differs between nodes and edge paths.
+  function applyStates(prev, want, lookup) {
     var id, was;
-    for (id in this.nodeState) {
-      was = this.nodeState[id];
+    for (id in prev) {
+      was = prev[id];
       if (want[id] && want[id].key === was.key) continue;
-      var prev = this.nodes[id];
-      if (prev) {
-        prev.setAttribute('class', baseClass(prev));
-        prev.style.removeProperty('--dgm-color');
+      var stale = lookup(id);
+      if (stale) {
+        stale.setAttribute('class', baseClass(stale));
+        stale.style.removeProperty('--dgm-color');
       }
     }
     for (id in want) {
-      var g = this.nodes[id];
-      if (!g) continue;
-      was = this.nodeState[id];
+      var element = lookup(id);
+      if (!element) continue;
+      was = prev[id];
       if (was && was.key === want[id].key) continue;
-      g.setAttribute('class', baseClass(g) + ' dgm-' + want[id].cls.split(' ').join(' dgm-'));
+      element.setAttribute('class',
+        baseClass(element) + ' dgm-' + want[id].cls.split(' ').join(' dgm-'));
       // The colour rides in as a custom property rather than a direct fill or
-      // stroke: runtime.css decides which parts of a node it tints, and every
-      // rule that reads it falls back to the theme token when it is absent.
-      if (want[id].color) g.style.setProperty('--dgm-color', want[id].color);
-      else g.style.removeProperty('--dgm-color');
+      // stroke: runtime.css decides which parts of an element it tints, and
+      // every rule that reads it falls back to the theme token when absent.
+      if (want[id].color) element.style.setProperty('--dgm-color', want[id].color);
+      else element.style.removeProperty('--dgm-color');
     }
-    this.nodeState = want;
+    return want;
+  }
+
+  Player.prototype.applyNodeStates = function (want) {
+    var self = this;
+    this.nodeState = applyStates(this.nodeState, want, function (id) {
+      return self.nodes[id];
+    });
+  };
+
+  // applyEdgeStates lights the path a flow is travelling along. It goes through
+  // the same diff as node state — and so through baseClass, which means an edge
+  // concealed by a reveal keeps its dgm-collapsed while it animates.
+  Player.prototype.applyEdgeStates = function (want) {
+    var self = this;
+    this.edgeState = applyStates(this.edgeState, want, function (id) {
+      var bind = self.edges[id];
+      return bind ? bind.path : null;
+    });
   };
 
   // EASINGS remap a track's linear progress. Each is a pure function of p over
@@ -806,11 +862,21 @@
     return fn(Math.min(1, Math.max(0, p)));
   }
 
+  // TRAIL_FRACTION and TRAIL_MAX size the comet behind a particle: a share of
+  // the edge, capped so a long path does not turn into a lit-up hose.
+  var TRAIL_FRACTION = 0.3;
+  var TRAIL_MAX = 90;
+
+  // FAIL_LEAD is the tail of a failing flow during which the ✕ is drawn at the
+  // destination. Like the trail it is read off the frame's progress, never
+  // accumulated, so scrubbing backwards takes it away again.
+  var FAIL_LEAD = 0.2;
+
   Player.prototype.applyFlows = function (want) {
     var key;
     for (key in this.particles) {
       if (!want[key]) {
-        this.particles[key].remove();
+        disposeFlow(this.particles[key]);
         delete this.particles[key];
       }
     }
@@ -819,10 +885,10 @@
       var bind = this.edges[tr.edge];
       if (!bind) continue;
 
-      var group = this.particles[key];
-      if (!group) {
-        group = this.makeParticle(tr, this.layer);
-        this.particles[key] = group;
+      var fx = this.particles[key];
+      if (!fx) {
+        fx = this.makeFlow(tr, bind);
+        this.particles[key] = fx;
       }
 
       // Easing remaps progress before anything geometric happens, so it is a
@@ -836,17 +902,136 @@
       var backwards = !!tr.reverse !== !!bind.flip;
       var u = backwards ? 1 - eased : eased;
       var len = bind.path.getTotalLength();
-      var pt = bind.path.getPointAtLength(u * len);
+      var along = u * len;
+      var pt = bind.path.getPointAtLength(along);
       if (bind.matrix && pt.matrixTransform) {
         pt = pt.matrixTransform(bind.matrix);
       }
-      group.setAttribute('transform', 'translate(' + pt.x + ',' + pt.y + ')');
+      fx.group.setAttribute('transform', 'translate(' + pt.x + ',' + pt.y + ')');
+
+      if (fx.trail) this.drawTrail(fx.trail, along, len, backwards);
+      if (tr.status === 'fail') {
+        this.drawFailMark(fx, bind, len, backwards, want[key].progress >= 1 - FAIL_LEAD);
+      }
     }
   };
 
+  // drawTrail slides a dash window along the cloned edge so it ends exactly
+  // where the particle is. The whole state of the effect is the dasharray, and
+  // that is recomputed from `along` every frame — there is nothing to reset on
+  // a seek because nothing carries over from the last one.
+  Player.prototype.drawTrail = function (trail, along, len, backwards) {
+    var span = Math.min(TRAIL_MAX, len * TRAIL_FRACTION);
+    // The comet sits behind the direction of travel, which is the far side of
+    // the particle when the flow is running against how the path was drawn.
+    var lo = backwards ? along : Math.max(0, along - span);
+    var hi = backwards ? Math.min(len, along + span) : along;
+    // dash 0, gap `lo`, dash `hi-lo`, gap `len`: exactly the arc [lo,hi] is
+    // painted and the trailing gap is long enough that the pattern never
+    // repeats within the path.
+    trail.setAttribute('stroke-dasharray', '0 ' + lo + ' ' + (hi - lo) + ' ' + len);
+  };
+
+  // drawFailMark places the ✕ at the end of the path the flow was heading for,
+  // which is length 0 when the flow runs against the drawn direction.
+  Player.prototype.drawFailMark = function (fx, bind, len, backwards, show) {
+    if (!fx.mark) {
+      if (!show) return;
+      fx.mark = makeFailMark(this.layer);
+    }
+    fx.mark.style.display = show ? '' : 'none';
+    if (!show) return;
+
+    var pt = bind.path.getPointAtLength(backwards ? 0 : len);
+    if (bind.matrix && pt.matrixTransform) {
+      pt = pt.matrixTransform(bind.matrix);
+    }
+    fx.mark.setAttribute('transform', 'translate(' + pt.x + ',' + pt.y + ')');
+  };
+
+  // makeFlow builds everything one open flow track draws: the trail underneath,
+  // then the particle over it. The ✕ is added later, only if the flow gets far
+  // enough to need one.
+  Player.prototype.makeFlow = function (tr, bind) {
+    return {
+      trail: makeTrail(tr, bind, this.layer),
+      group: this.makeParticle(tr, this.layer),
+      mark: null
+    };
+  };
+
+  function disposeFlow(fx) {
+    fx.group.remove();
+    if (fx.trail) fx.trail.remove();
+    if (fx.mark) fx.mark.remove();
+  }
+
+  // makeTrail clones the edge path into the overlay layer so a dash window can
+  // slide along it without touching the path mermaid drew — which still has to
+  // render as an ordinary edge underneath.
+  //
+  // The clone is stamped with the path's transform *relative to the layer*,
+  // because its `d` is in the original path's user space and the layer is
+  // somewhere else in the tree.
+  function makeTrail(tr, bind, parent) {
+    var clone = bind.path.cloneNode(false);
+    clone.removeAttribute('id');
+    clone.removeAttribute('style');
+    var cls = 'dgm-trail';
+    // The comet takes the same style and status hooks as the edge under it, so
+    // a response trails green wherever its edge lights green.
+    if (tr.style) cls += ' dgm-trail-' + tr.style;
+    if (tr.status === 'fail') cls += ' dgm-trail-fail';
+    clone.setAttribute('class', cls);
+    clone.setAttribute('fill', 'none');
+    // The original's arrowhead would otherwise be drawn a second time, riding
+    // the end of the dash window.
+    clone.setAttribute('marker-end', 'none');
+    clone.setAttribute('marker-start', 'none');
+    // Start empty: the first frame sets the real window, and without this a
+    // clone would flash the whole edge for one frame.
+    clone.setAttribute('stroke-dasharray', '0 1');
+    if (tr.color) clone.style.setProperty('--dgm-color', tr.color);
+    if (bind.matrix) clone.setAttribute('transform', matrixString(bind.matrix));
+    else clone.removeAttribute('transform');
+    parent.appendChild(clone);
+    return clone;
+  }
+
+  function matrixString(m) {
+    return 'matrix(' + m.a + ',' + m.b + ',' + m.c + ',' + m.d + ',' + m.e + ',' + m.f + ')';
+  }
+
+  // makeFailMark draws the ✕ as two lines over a plate of page background, so
+  // it stays legible on top of whatever node it lands on.
+  function makeFailMark(parent) {
+    var g = document.createElementNS(SVG_NS, 'g');
+    g.setAttribute('class', 'dgm-fail-mark');
+
+    var plate = document.createElementNS(SVG_NS, 'circle');
+    plate.setAttribute('r', '10');
+    g.appendChild(plate);
+
+    var strokes = [[-5, -5, 5, 5], [5, -5, -5, 5]];
+    for (var i = 0; i < strokes.length; i++) {
+      var line = document.createElementNS(SVG_NS, 'line');
+      line.setAttribute('x1', strokes[i][0]);
+      line.setAttribute('y1', strokes[i][1]);
+      line.setAttribute('x2', strokes[i][2]);
+      line.setAttribute('y2', strokes[i][3]);
+      g.appendChild(line);
+    }
+
+    parent.appendChild(g);
+    return g;
+  }
+
   Player.prototype.makeParticle = function (tr, parent) {
     var g = document.createElementNS(SVG_NS, 'g');
-    g.setAttribute('class', 'dgm-particle' + (tr.style ? ' dgm-particle-' + tr.style : ''));
+    var cls = 'dgm-particle';
+    if (tr.style) cls += ' dgm-particle-' + tr.style;
+    if (tr.status === 'fail') cls += ' dgm-particle-fail';
+    g.setAttribute('class', cls);
     // A custom property rather than a fill, so the stylesheet keeps deciding
     // which of the dot, halo and label the colour reaches.
     if (tr.color) g.style.setProperty('--dgm-color', tr.color);
