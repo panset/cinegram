@@ -31,6 +31,7 @@ var scenarioAttrs = map[string]string{
 
 var stepAttrs = map[string]string{
 	"dur": "duration", "delay": "duration", "style": "string", "label": "string",
+	"desc": "string",
 }
 
 var bindingAttrs = map[string]string{

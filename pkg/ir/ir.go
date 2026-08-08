@@ -111,8 +111,14 @@ type Scenario struct {
 // Step is one beat of a scenario. Steps never overlap: each begins where the
 // previous one ended, plus any explicit delay.
 type Step struct {
-	ID     string  `json:"id"`
-	Name   string  `json:"name,omitempty"`
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+
+	// Desc is the prose explaining what this step means, as opposed to Name,
+	// which only labels it. A renderer shows it as narration alongside the
+	// animation; `narrate`-style tooling reads it as the body text.
+	Desc string `json:"desc,omitempty"`
+
 	Start  int     `json:"start"`
 	End    int     `json:"end"`
 	Tracks []Track `json:"tracks"`

@@ -179,6 +179,7 @@ func compileScenario(sc *ast.Scenario, index int, table *symbol.Table, bag *diag
 		step := ir.Step{
 			ID:    st.EffectiveID(i),
 			Name:  st.Name,
+			Desc:  st.Attrs.String("desc"),
 			Start: start,
 			End:   start + span,
 		}

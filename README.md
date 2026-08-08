@@ -96,6 +96,7 @@ suggestion rather than a silent no-op.
 | `status` | `flow` | `ok` (default) or `fail`. Semantic, unlike `style` — see below. |
 | `repeat` | `flow`, `pulse` | Repeat count. Parsed and reserved; the runtime does not read it yet. |
 | `bidi` | `flow` | Travel both ways. Parsed and reserved; the runtime does not read it yet. |
+| `desc` | step | Prose narration for the step. Shown in the caption; `\n` works. |
 | `speed` | scenario | Initial playback rate, e.g. `1.5`. The player starts here; the speed button cycles from it. |
 | `loop` | scenario | Restart at the end. |
 | `autoplay` | scenario | Start playing once the diagram has rendered. Defaults to **true**, and is skipped when the system asks for reduced motion. |
@@ -169,6 +170,35 @@ step attempt "The primary gateway never answers" {
 `examples/payment-checkout.dgm` runs the same checkout twice — one scenario
 where the gateway answers and one where it times out and traffic fails over to
 a backup provider. Failure paths are first-class, not an afterthought in red.
+
+## Narration
+
+An animation shows you *what* moves. It cannot tell you *why*, and a diagram
+whose point is the reasoning — a protocol, a failover, a consensus round —
+is mostly reasoning. `desc` is where that goes:
+
+```
+step exchange "The app trades the code for tokens" {
+  desc: "Now the application speaks to the provider directly, back channel, server to server. It sends the code together with its client secret, and that pairing is what proves the exchange is genuine."
+  flow app -> auth { label: "POST /token + secret", dur: 700ms }
+}
+```
+
+A string lives on one line — use `\n` for a paragraph break rather than
+wrapping the source, which the scanner reads as an unterminated string.
+
+The player shows the active step's name and prose in a caption under the
+stage, and marks each step boundary with a tick on the scrubber — click one to
+jump to that beat. The step list beside the diagram stays the table of
+contents; the caption is the "you are here".
+
+The caption is an `aria-live` region, so a screen reader hears the walkthrough
+rather than only seeing it. It is rewritten when the step changes, not when the
+frame does — otherwise the same sentence would be announced sixty times a
+second for the length of the step.
+
+`examples/oauth-login.dgm` is the worked example: an OAuth 2.0 authorization
+code flow where every step explains what the protocol is buying with it.
 
 ## Interaction
 

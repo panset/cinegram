@@ -1,0 +1,305 @@
+{
+  "version": 2,
+  "root": "main",
+  "views": [
+    {
+      "id": "main",
+      "title": "authorization code flow",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% OAuth 2.0 authorization code flow, told as an explorable explanation.\n%% ---\n%% Every step carries a `desc` that says *why* the protocol does what it does,\n%% not just what moves where. The animation shows the mechanics; the narration\n%% carries the argument.\nflowchart LR\n  browser[User's Browser]\n  app[Your Application]\n  subgraph provider[Identity Provider]\n    auth[Authorization Server]\n    tokens[(Token Store)]\n  end\n  api[Resource API]\n  browser --\u003e app\n  app --\u003e auth\n  auth --\u003e tokens\n  app --\u003e api\n"
+      },
+      "nodes": [
+        {
+          "id": "browser",
+          "label": "User's Browser",
+          "shape": "rect"
+        },
+        {
+          "id": "app",
+          "label": "Your Application",
+          "shape": "rect"
+        },
+        {
+          "id": "auth",
+          "label": "Authorization Server",
+          "shape": "rect",
+          "group": "provider"
+        },
+        {
+          "id": "tokens",
+          "label": "Token Store",
+          "shape": "cylinder",
+          "group": "provider"
+        },
+        {
+          "id": "api",
+          "label": "Resource API",
+          "shape": "rect"
+        }
+      ],
+      "groups": [
+        {
+          "id": "provider",
+          "label": "Identity Provider",
+          "children": [
+            "auth",
+            "tokens"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "browser",
+          "to": "app",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "app",
+          "to": "auth",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "auth",
+          "to": "tokens",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "app",
+          "to": "api",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "authorization code flow",
+          "duration": 6100,
+          "speed": 1,
+          "loop": false,
+          "autoplay": true,
+          "steps": [
+            {
+              "id": "start",
+              "name": "The user asks to sign in",
+              "desc": "The application has no credentials of its own to check, so it does not try. It hands the browser off to the identity provider and steps out of the conversation entirely.",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "browser",
+                  "to": "app",
+                  "label": "GET /login"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 600,
+                  "target": "app",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "redirect",
+              "name": "The app redirects to the authorization server",
+              "desc": "The redirect carries a client id, a redirect URI and a scope — but no secret, because anything in a redirect is visible to the user and to anything watching. What it asks for is permission, not proof.",
+              "start": 600,
+              "end": 1300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "app",
+                  "to": "auth",
+                  "label": "302 → /authorize"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 600,
+                  "end": 1300,
+                  "target": "auth",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "consent",
+              "name": "The user authenticates and consents",
+              "desc": "This is the only moment a password exists, and it exists between the user and the provider alone. The application never sees it, which is why a breach of the application cannot leak it.",
+              "start": 1300,
+              "end": 2100,
+              "tracks": [
+                {
+                  "kind": "note",
+                  "start": 1300,
+                  "end": 2100,
+                  "target": "auth",
+                  "text": "user signs in\nand approves the scopes"
+                },
+                {
+                  "kind": "pulse",
+                  "start": 1300,
+                  "end": 2100,
+                  "target": "auth"
+                }
+              ]
+            },
+            {
+              "id": "code",
+              "name": "The browser comes back carrying a code",
+              "desc": "The provider redirects back with a short-lived authorization code. A code is deliberately useless on its own: intercepting it buys nothing without the client secret that only the application holds.",
+              "start": 2100,
+              "end": 2900,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2100,
+                  "end": 2900,
+                  "edge": "e1",
+                  "from": "auth",
+                  "to": "app",
+                  "reverse": true,
+                  "label": "302 ?code=Ab3x…",
+                  "style": "response"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 2100,
+                  "end": 2900,
+                  "target": "app",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "exchange",
+              "name": "The app trades the code for tokens",
+              "desc": "Now the application speaks to the provider directly, back channel, server to server. It sends the code together with its client secret, and that pairing is what proves the exchange is genuine.",
+              "start": 2900,
+              "end": 3700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2900,
+                  "end": 3600,
+                  "edge": "e1",
+                  "from": "app",
+                  "to": "auth",
+                  "label": "POST /token + secret"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3200,
+                  "end": 3700,
+                  "edge": "e2",
+                  "from": "auth",
+                  "to": "tokens",
+                  "label": "mint \u0026 record"
+                }
+              ]
+            },
+            {
+              "id": "issued",
+              "name": "Tokens come back over the back channel",
+              "desc": "The access token returns on a channel the browser was never part of, so it is never exposed to the address bar, to history, or to a referrer header. The one-time code is burned in the process.",
+              "start": 3700,
+              "end": 4400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3700,
+                  "end": 4400,
+                  "edge": "e1",
+                  "from": "auth",
+                  "to": "app",
+                  "reverse": true,
+                  "label": "access + refresh token",
+                  "style": "response"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 3700,
+                  "end": 4400,
+                  "target": "app",
+                  "color": "#16a34a"
+                }
+              ]
+            },
+            {
+              "id": "call",
+              "name": "The app calls the API on the user's behalf",
+              "desc": "The API trusts the token, not the caller: it validates the signature and the scopes and never contacts the application. That is what lets the same token work across services that have never heard of each other.",
+              "start": 4400,
+              "end": 5100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 4400,
+                  "end": 5100,
+                  "edge": "e3",
+                  "from": "app",
+                  "to": "api",
+                  "label": "Authorization: Bearer …"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 4400,
+                  "end": 5100,
+                  "target": "api",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "done",
+              "name": "The user is signed in",
+              "desc": "The application ends up able to act for the user without ever having held the user's password. Every step above exists to make that sentence true.",
+              "start": 5100,
+              "end": 6100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 5100,
+                  "end": 5600,
+                  "edge": "e3",
+                  "from": "api",
+                  "to": "app",
+                  "reverse": true,
+                  "label": "200 OK",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5600,
+                  "end": 6100,
+                  "edge": "e0",
+                  "from": "app",
+                  "to": "browser",
+                  "reverse": true,
+                  "label": "200 OK",
+                  "style": "response"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

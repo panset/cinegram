@@ -242,7 +242,18 @@
     body.appendChild(this.steps);
     this.root.appendChild(body);
 
+    // The caption is the "you are here" narration; the step list beside the
+    // stage stays the table of contents. It is a live region, so a screen
+    // reader hears the walkthrough rather than only seeing it.
+    this.caption = el('div', 'dgm-caption');
+    this.caption.setAttribute('role', 'status');
+    this.caption.setAttribute('aria-live', 'polite');
+    this.captionKey = null;
+    this.root.appendChild(this.caption);
+
     var foot = el('div', 'dgm-foot');
+
+    var track = el('div', 'dgm-scrub-wrap');
     this.scrub = document.createElement('input');
     this.scrub.type = 'range';
     this.scrub.min = '0';
@@ -252,7 +263,10 @@
       self.pause();
       self.seek(parseInt(self.scrub.value, 10));
     });
-    foot.appendChild(this.scrub);
+    track.appendChild(this.scrub);
+    this.marks = el('div', 'dgm-scrub-marks');
+    track.appendChild(this.marks);
+    foot.appendChild(track);
     this.clock = el('div', 'dgm-clock');
     foot.appendChild(this.clock);
     this.root.appendChild(foot);
@@ -576,11 +590,49 @@
       var li = el('li', 'dgm-step');
       li.appendChild(elText('span', 'dgm-step-name', st.name || st.id));
       li.appendChild(elText('span', 'dgm-step-time', fmt(st.start) + ' – ' + fmt(st.end)));
+      // The list stays a compact index; the first line of the prose is enough
+      // to tell two similarly named steps apart on hover.
+      if (st.desc) li.title = firstLine(st.desc);
       li.addEventListener('click', function () { self.seek(st.start); });
       self.steps.appendChild(li);
     });
+
     this.scrub.max = String(sc.duration || 0);
+    this.buildScrubMarks(sc);
+
+    // The caption belongs to whichever scenario is showing, so a switch has to
+    // let it redraw even if the new step happens to carry the same id.
+    this.captionKey = null;
   };
+
+  // buildScrubMarks lays a tick over the scrubber at each step boundary. They
+  // are real buttons: the scrubber tells you where you are, and the ticks tell
+  // you where the beats are and take you to one.
+  Player.prototype.buildScrubMarks = function (sc) {
+    var self = this;
+    this.marks.innerHTML = '';
+    var duration = sc.duration || 0;
+    if (!duration) return;
+
+    sc.steps.forEach(function (st) {
+      var label = st.name || st.id;
+      var tick = el('button', 'dgm-scrub-mark');
+      tick.type = 'button';
+      tick.style.left = (100 * st.start / duration) + '%';
+      tick.title = label;
+      tick.setAttribute('aria-label', 'Jump to ' + label);
+      tick.addEventListener('click', function () {
+        self.pause();
+        self.seek(st.start);
+      });
+      self.marks.appendChild(tick);
+    });
+  };
+
+  function firstLine(s) {
+    var i = s.indexOf('\n');
+    return i < 0 ? s : s.slice(0, i);
+  }
 
   // ---------------------------------------------------------------------
   // Playback
@@ -704,14 +756,37 @@
     this.scrub.value = String(Math.round(this.time));
     this.clock.textContent = fmt(this.time) + ' / ' + fmt(sc.duration);
 
+    var current = null;
     var kids = this.steps.children;
     for (var i = 0; i < kids.length; i++) {
       var st = sc.steps[i];
       var active = st && this.time >= st.start && this.time < st.end;
       var done = st && this.time >= st.end;
+      if (active) current = st;
       kids[i].classList.toggle('is-active', !!active);
       kids[i].classList.toggle('is-done', !!done);
     }
+    this.syncCaption(current);
+  };
+
+  // syncCaption narrates the step the clock is inside, and blanks between
+  // steps or before the start.
+  //
+  // It diffs on the step rather than rewriting every frame. That is not a
+  // rendering optimisation: the caption is an aria-live region, and rewriting
+  // it sixty times a second would have a screen reader announce the same
+  // sentence continuously for the length of the step.
+  Player.prototype.syncCaption = function (step) {
+    var key = step ? step.id + ' ' + (step.name || '') + ' ' + (step.desc || '') : '';
+    if (key === this.captionKey) return;
+    this.captionKey = key;
+
+    this.caption.innerHTML = '';
+    this.caption.classList.toggle('is-on', !!step);
+    if (!step) return;
+
+    this.caption.appendChild(elText('span', 'dgm-caption-name', step.name || step.id));
+    if (step.desc) this.caption.appendChild(elText('span', 'dgm-caption-desc', step.desc));
   };
 
   // ---------------------------------------------------------------------

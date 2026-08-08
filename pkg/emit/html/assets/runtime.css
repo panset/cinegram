@@ -251,6 +251,38 @@ body {
 .dgm-step-name { font-size: 13px; }
 .dgm-step-time { font-size: 11px; color: var(--dgm-muted); font-variant-numeric: tabular-nums; }
 
+/* --- caption ------------------------------------------------------------ */
+
+/* The narration for the step the clock is inside. It keeps its height when
+   empty so the stage does not jump as the caption comes and goes between
+   steps. */
+.dgm-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 9px 14px;
+  border: 1px solid var(--dgm-border);
+  border-radius: 10px;
+  background: var(--dgm-panel);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.dgm-caption.is-on { opacity: 1; }
+
+.dgm-caption-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.dgm-caption-desc {
+  font-size: 13px;
+  color: var(--dgm-muted);
+  white-space: pre-line;
+}
+
 /* --- transport ---------------------------------------------------------- */
 
 .dgm-foot {
@@ -259,9 +291,49 @@ body {
   gap: 12px;
 }
 
+.dgm-scrub-wrap {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
 .dgm-scrub {
   flex: 1;
   accent-color: var(--dgm-accent);
+}
+
+/* Step boundaries, laid over the scrubber. The container ignores the pointer
+   so dragging the range still works everywhere between the ticks; each tick
+   takes it back for itself. */
+.dgm-scrub-marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.dgm-scrub-mark {
+  position: absolute;
+  top: 50%;
+  width: 3px;
+  height: 12px;
+  margin-left: -1.5px;
+  transform: translateY(-50%);
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: var(--dgm-muted);
+  opacity: 0.5;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: opacity 0.15s, background 0.15s, height 0.15s;
+}
+
+.dgm-scrub-mark:hover,
+.dgm-scrub-mark:focus-visible {
+  background: var(--dgm-accent);
+  opacity: 1;
+  height: 17px;
 }
 
 .dgm-clock {
