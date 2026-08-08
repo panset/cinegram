@@ -65,7 +65,11 @@ func compileView(doc *ast.Document, table *symbol.Table, id, title string, alias
 			v.Diagram.Direction = fc.Direction
 		}
 	}
-	if v.Title == "" && len(doc.Scenarios) > 0 {
+	// A single scenario's name is a fair title for the view — there is nothing
+	// else it could mean. With several, borrowing the first one's name labels
+	// the whole page after one of its alternatives, so the header ends up
+	// contradicting the scenario picker sitting next to it.
+	if v.Title == "" && len(doc.Scenarios) == 1 {
 		v.Title = doc.Scenarios[0].Name
 	}
 

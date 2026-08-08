@@ -2,7 +2,11 @@ load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
 
 go_library(
     name = "diagramator_lib",
-    srcs = ["main.go"],
+    srcs = [
+        "capture.go",
+        "main.go",
+        "serve.go",
+    ],
     importpath = "github.com/tejaspanse/diagramator/cmd/diagramator",
     visibility = ["//visibility:private"],
     deps = [
@@ -14,6 +18,7 @@ go_library(
         "//pkg/ir",
         "//pkg/loader",
         "//pkg/parser",
+        "//pkg/units",
     ],
 )
 
@@ -25,7 +30,10 @@ go_binary(
 
 go_test(
     name = "diagramator_test",
-    srcs = ["main_test.go"],
+    srcs = [
+        "main_test.go",
+        "serve_test.go",
+    ],
     embed = [":diagramator_lib"],
     deps = [
         "//pkg/diag",

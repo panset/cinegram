@@ -27,6 +27,7 @@ import (
 	"github.com/tejaspanse/diagramator/pkg/ir"
 	"github.com/tejaspanse/diagramator/pkg/loader"
 	"github.com/tejaspanse/diagramator/pkg/parser"
+	"github.com/tejaspanse/diagramator/pkg/units"
 )
 
 const version = "0.1.0"
@@ -56,6 +57,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return cmdLint(rest, stdout, stderr)
 	case "narrate":
 		return cmdNarrate(rest, stdout, stderr)
+	case "frame":
+		return cmdFrame(rest, stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintln(stdout, "diagramator", version)
 		return nil
@@ -75,6 +78,11 @@ Usage:
   diagramator compile <file.dgm> [-o out.json]   compile to an animation timeline
   diagramator mermaid <file.dgm> [-o out.mmd]    emit the diagram as plain Mermaid
   diagramator preview <file.dgm> [-o out.html]   build a self-contained animated page
+  diagramator preview <file.dgm> --serve [--watch] [--addr host:port]
+                                                 serve it, rebuilding as you edit
+  diagramator frame   <file.dgm> --at 2400ms -o out.png
+                                                 screenshot one exact moment
+                                                 (--frames N -o dir/ for a sequence)
   diagramator narrate <file.dgm> [-o out.md] [--format=md|json]
                                                  the animation as a walkthrough
   diagramator lint    <file.dgm> [--format=text|json]
@@ -186,6 +194,13 @@ func resolvePath(p string) string {
 var valueFlags = map[string]bool{
 	"-o": true, "--o": true,
 	"-format": true, "--format": true,
+	"-addr": true, "--addr": true,
+	"-at": true, "--at": true,
+	"-frames": true, "--frames": true,
+	"-scenario": true, "--scenario": true,
+	"-view": true, "--view": true,
+	"-width": true, "--width": true,
+	"-height": true, "--height": true,
 }
 
 func hoistFlags(args []string) []string {
@@ -250,10 +265,23 @@ func cmdMermaid(args []string, stdout, stderr io.Writer) error {
 }
 
 func cmdPreview(args []string, stdout, stderr io.Writer) error {
-	input, output, err := parseArgs("preview", args)
+	var addr string
+	var serve, watch bool
+	input, output, err := parseArgsWith("preview", args, func(fs *flag.FlagSet) {
+		fs.BoolVar(&serve, "serve", false, "serve the page over HTTP instead of writing a file")
+		fs.StringVar(&addr, "addr", defaultAddr, "address to serve on")
+		fs.BoolVar(&watch, "watch", false, "rebuild and reload when the source changes")
+	})
 	if err != nil {
 		return err
 	}
+
+	// --watch on its own plainly means "serve and watch": there is nothing to
+	// watch for when the output is a file written once.
+	if serve || watch {
+		return runServe(input, addr, watch, stderr)
+	}
+
 	if output == "" {
 		output = defaultOutputPath(input)
 	}
@@ -293,8 +321,14 @@ func title(t *ir.Timeline) string {
 		if v.Title != "" {
 			return v.Title
 		}
-		if len(v.Scenarios) > 0 && v.Scenarios[0].Name != "" {
+		// Only fall back to a scenario name when it is the only one; with
+		// several, naming the page after one of them is a claim the page does
+		// not keep once the reader picks another.
+		if len(v.Scenarios) == 1 && v.Scenarios[0].Name != "" {
 			return v.Scenarios[0].Name
+		}
+		if v.ID != "" {
+			return v.ID
 		}
 	}
 	return "Diagramator"
@@ -393,6 +427,32 @@ func lintJSON(bags []*diag.Bag, stdout io.Writer) error {
 		return fmt.Errorf("%s", plural(errs, "error"))
 	}
 	return nil
+}
+
+func cmdFrame(args []string, stdout, stderr io.Writer) error {
+	var at, scenario, view string
+	var frames, width, height int
+	input, output, err := parseArgsWith("frame", args, func(fs *flag.FlagSet) {
+		fs.StringVar(&at, "at", "0", "the moment to capture, e.g. 2400ms or 2.4s")
+		fs.IntVar(&frames, "frames", 1, "capture N evenly spaced moments into -o as a directory")
+		fs.StringVar(&scenario, "scenario", "", "scenario id or name (default: the first)")
+		fs.StringVar(&view, "view", "", "view id (default: the one the document opens on)")
+		fs.IntVar(&width, "width", 1400, "viewport width")
+		fs.IntVar(&height, "height", 900, "viewport height")
+	})
+	if err != nil {
+		return err
+	}
+
+	ms, err := units.ParseMillis(at)
+	if err != nil {
+		return fmt.Errorf("--at %q: %w", at, err)
+	}
+
+	return runCapture(captureOptions{
+		input: input, output: output, at: ms, frames: frames,
+		scenario: scenario, view: view, width: width, height: height,
+	}, stderr)
 }
 
 func cmdNarrate(args []string, stdout, stderr io.Writer) error {

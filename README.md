@@ -362,6 +362,46 @@ diagramator narrate <file.dgm> [--format=md|json]   # the animation, written out
 diagramator lint    <file.dgm> [--format=text|json] # diagnostics only
 ```
 
+### Authoring
+
+```
+diagramator preview examples/k8s-request.dgm --serve --watch
+```
+
+Serves the page at `http://127.0.0.1:8731/`, compiled from source on every
+request, and reloads the browser within about a second of a save. The watched
+set is the bundle's own file list, so adding a `view` starts watching its
+target without a restart.
+
+The reload script is injected by the server, never by the renderer — the file
+`preview -o` writes stays byte-identical to what it always was. A document that
+stops parsing shows the error in the page rather than going blank, which with
+the reload loop is the fastest way to read it.
+
+For a still of one exact moment:
+
+```
+diagramator frame examples/payment-checkout.dgm --at 1620ms --scenario s1 -o fail.png
+```
+
+That is `examples/payment-checkout.fail.png` — the gateway timing out, ✕ and
+all. It works by opening the Phase-6 deep link in a headless Chrome, and
+because a deep link lands *paused*, the screenshot is deterministic rather than
+a race against the animation. The browser is found on `PATH`
+(`google-chrome`, `chromium`, …) or named by `$DIAGRAMATOR_CHROME`; shelling
+out to one the machine already has is what keeps the no-dependencies rule.
+
+`--frames N -o dir/` captures N evenly spaced moments. Turning those into an
+animation is a job for tools that already do it well:
+
+```
+ffmpeg -framerate 12 -i dir/frame-%04d.png -vf palettegen palette.png
+ffmpeg -framerate 12 -i dir/frame-%04d.png -i palette.png -lavfi paletteuse out.gif
+
+# or, with ImageMagick
+magick -delay 8 -loop 0 dir/frame-*.png out.gif
+```
+
 ### What an agent sees
 
 An animation is legible to something with eyes. A timeline is precise but it is

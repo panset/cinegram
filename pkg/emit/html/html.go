@@ -88,8 +88,11 @@ func defaultTitle(t *ir.Timeline) string {
 		if v.Title != "" {
 			return v.Title
 		}
-		if len(v.Scenarios) > 0 && v.Scenarios[0].Name != "" {
+		if len(v.Scenarios) == 1 && v.Scenarios[0].Name != "" {
 			return v.Scenarios[0].Name
+		}
+		if v.ID != "" {
+			return v.ID
 		}
 	}
 	return "Diagramator"

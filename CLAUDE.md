@@ -176,14 +176,39 @@ same path and the Back button cannot disagree with the browser's own.
 ## Verifying animation changes
 
 Bazel tests cover the parser, compiler and emitters, but not the browser
-runtime. To check a runtime change actually renders, serve the page (the Chrome
-extension blocks `file://`) and drive the player, which is exposed as
+runtime. To check a runtime change actually renders, serve the page — the
+Chrome extension blocks `file://` — and drive the player, which is exposed as
 `window.DIAGRAMATOR_PLAYER`:
 
 ```sh
-bazel run //cmd/diagramator -- preview examples/k8s-request.dgm -o /tmp/dgm/k8s.html
-(cd /tmp/dgm && python3 -m http.server 8731)   # http://127.0.0.1:8731/k8s.html
+bazel run //cmd/diagramator -- preview examples/k8s-request.dgm --serve --watch
+# http://127.0.0.1:8731/ — edit the .dgm and the page reloads itself
 ```
 
 `DIAGRAMATOR_PLAYER.seek(ms)` jumps to a moment deterministically, which is far
-more reliable for verification than watching playback.
+more reliable for verification than watching playback. Two traps to know about:
+
+- A CSS `transition` means `getComputedStyle` right after a class change
+  returns the *starting* value. Wait ~250ms before asserting on a colour or a
+  width, or you will measure the frame before the change.
+- Never put a CSS `transform` on a `g.node`. Mermaid positions nodes with a
+  `transform` **attribute**, and the CSS property replaces it rather than
+  composing — the node jumps to the origin. Animate the shape inside the node
+  with `transform-box: fill-box`, or animate something else entirely.
+
+For a still, `frame` captures one exact millisecond with no race against the
+animation, because the deep link it opens lands paused:
+
+```sh
+bazel run //cmd/diagramator -- frame examples/payment-checkout.dgm \
+  --at 1620ms --scenario s1 -o /tmp/fail.png
+```
+
+It shells out to a headless Chrome found on `PATH` or named by
+`$DIAGRAMATOR_CHROME`. The opt-in end-to-end test for it must run **outside**
+the Bazel sandbox, which denies the browser what it needs to start:
+
+```sh
+DIAGRAMATOR_CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  bazel-bin/cmd/diagramator/diagramator_test_/diagramator_test -test.run TestFrameEndToEnd
+```

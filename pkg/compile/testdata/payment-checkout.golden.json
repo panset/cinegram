@@ -4,7 +4,6 @@
   "views": [
     {
       "id": "main",
-      "title": "happy path",
       "diagram": {
         "type": "flowchart",
         "direction": "LR",
