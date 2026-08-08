@@ -72,6 +72,7 @@ actions inside one step to chain instead.
 | `note` | `note a "text"` | A callout anchored to a node. `\n` works. |
 | `dim` | `dim a` | Fade a node back. |
 | `pulse` | `pulse a` | Repeating pulse. |
+| `focus` | `focus domain` | Hold attention here; everything else recedes. |
 | `show` / `hide` | `show a` | Reveal or conceal. |
 | `set` | `set n1 { badge: "leader" }` | Standing state. Outlives its step — see below. |
 | `gauge` | `gauge n1 { label: "term", value: 2 }` | A named reading that persists and updates. |
@@ -99,6 +100,7 @@ suggestion rather than a silent no-op.
 | `status` | `flow` | `ok` (default) or `fail`. Semantic, unlike `style` — see below. |
 | `repeat` | `flow`, `pulse` | Repeat count. Parsed and reserved; the runtime does not read it yet. |
 | `bidi` | `flow` | Travel both ways. Parsed and reserved; the runtime does not read it yet. |
+| `side` | `note` | `above` (default), `below`, `left`, `right`. |
 | `badge`, `state` | `set` | Pill text, and a standing `dgm-state-<name>` class. |
 | `label`, `value` | `gauge` | What the reading is called and what it currently says. Both required. |
 | `desc` | step | Prose narration for the step. Shown in the caption; `\n` works. |
@@ -244,6 +246,41 @@ together on that one frame.
 
 `examples/raft-election.dgm` is the worked example: a leader dies, an election
 runs, and the badges and gauges say what is true at whatever moment you stop.
+
+## Attention
+
+A diagram big enough to be worth animating is usually too big to read all at
+once. `focus` narrows it to one thing per step:
+
+```
+step decide "The domain layer decides" {
+  focus domain
+  flow pricing -> rules { label: "apply discounts", dur: 500ms }
+  note rules "pure functions of the basket" { side: left }
+}
+```
+
+Naming a subgraph focuses everything inside it, and the frames around it stay
+lit — dimming the box drawn around the very thing you asked to look at would
+undo the effect. An edge with one end still in focus stays lit too, because
+that is how the focused thing connects to the rest; only edges wholly outside
+recede. The timeline still carries nothing but IDs: the track lists what to
+look at, and the renderer expands it against the containment tree it already
+has.
+
+Notes take a `side` — `above` (the default), `below`, `left` or `right` — and
+the runtime treats it as a preference rather than a coordinate. It clamps every
+note inside the stage and shoves one clear of another if they would overlap. A
+note that had to move drops its arrow instead of pointing at whatever it landed
+beside.
+
+Clickable elements advertise themselves. A `reveal` source carries a chip
+saying how much is folded away (`+3`), which flips to `–` once it is open; a
+`view` source carries a `⤢`. Both are clickable, and both do exactly what
+clicking the element does. A reveal nobody can see is a reveal nobody finds.
+
+`examples/layered-arch.dgm` walks a request down four layers, focusing one at a
+time, with the cross-cutting concerns folded away behind a chip.
 
 ## Interaction
 

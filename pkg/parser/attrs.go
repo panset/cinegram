@@ -58,12 +58,15 @@ var actionAttrs = map[ast.ActionKind]map[string]string{
 	ast.ActionPulse: extendAttrs(timingAttrs, map[string]string{
 		"color": "string", "repeat": "float",
 	}),
-	ast.ActionDim:  timingAttrs,
-	ast.ActionShow: timingAttrs,
-	ast.ActionHide: timingAttrs,
-	ast.ActionNote: timingAttrs,
-	ast.ActionWait: timingAttrs,
-	ast.ActionSeq:  timingAttrs,
+	ast.ActionNote: extendAttrs(timingAttrs, map[string]string{
+		"side": "side",
+	}),
+	ast.ActionDim:   timingAttrs,
+	ast.ActionShow:  timingAttrs,
+	ast.ActionHide:  timingAttrs,
+	ast.ActionFocus: timingAttrs,
+	ast.ActionWait:  timingAttrs,
+	ast.ActionSeq:   timingAttrs,
 
 	ast.ActionSet: extendAttrs(persistAttrs, map[string]string{
 		"badge": "string", "state": "string",
@@ -96,6 +99,12 @@ var easeNames = []string{"linear", "in", "out", "in-out"}
 // rather than merely recolouring it, so the set is closed and an unrecognised
 // value is an error rather than a class nobody styles.
 var statusNames = []string{"ok", "fail"}
+
+// sideNames are the placements a note may ask for. It is a preference rather
+// than a coordinate — the renderer still clamps the note into the stage and
+// shoves it clear of its neighbours — but an unrecognised name would silently
+// fall back to `above`, so the set is closed.
+var sideNames = []string{"above", "below", "left", "right"}
 
 // attrsFor returns the vocabulary an action kind accepts.
 func attrsFor(kind ast.ActionKind) map[string]string {
@@ -143,6 +152,11 @@ func checkAttrs(attrs ast.Attrs, allowed map[string]string, what string, b *diag
 			if !oneOf(statusNames, v.Raw) {
 				b.ErrorHintf(v.At, "valid statuses are "+strings.Join(statusNames, ", "),
 					"attribute %q: %q is not a status", k, v.Raw)
+			}
+		case "side":
+			if !oneOf(sideNames, v.Raw) {
+				b.ErrorHintf(v.At, "valid sides are "+strings.Join(sideNames, ", "),
+					"attribute %q: %q is not a side", k, v.Raw)
 			}
 		}
 		if err != nil {

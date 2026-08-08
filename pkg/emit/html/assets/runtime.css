@@ -473,23 +473,36 @@ body {
   filter: drop-shadow(0 0 10px var(--dgm-color, var(--dgm-busy)));
 }
 
-.dgm-pulse {
-  animation: dgm-node-pulse 0.9s ease-in-out infinite;
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
+/* The pulse scales the shape inside the node, never the g.node itself.
+   Mermaid positions g.node with a `transform` attribute, and CSS `transform` is
+   the same property rather than an addition to it — animating the group throws
+   the node to the origin. `transform-box: fill-box` then makes the shape scale
+   about its own centre instead of the SVG's. */
 .dgm-pulse rect,
 .dgm-pulse circle,
 .dgm-pulse polygon,
 .dgm-pulse path {
   stroke: var(--dgm-color, var(--dgm-accent)) !important;
   stroke-width: 2.5px !important;
+  animation: dgm-node-pulse 0.9s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 @keyframes dgm-node-pulse {
   0%, 100% { transform: scale(1); }
   50%      { transform: scale(1.05); }
+}
+
+/* --- focus -------------------------------------------------------------- */
+
+/* Focus is drawn as what recedes. Desaturating as well as fading is what makes
+   it read as "not this" rather than "faint": colour is most of what pulls the
+   eye across a diagram. */
+.dgm-unfocused {
+  opacity: 0.18;
+  filter: saturate(0.15);
+  transition: opacity 0.25s ease, filter 0.25s ease;
 }
 
 /* A hop's destination, in the last moments before the particle lands. It
@@ -535,11 +548,59 @@ body {
 
 /* Collapsed is reveal state, not timeline state: an element waiting to be
    clicked into view. Unlike .dgm-hidden it also stops taking pointer events,
-   so an invisible node is not accidentally clickable. */
+   so an invisible node is not accidentally clickable.
+
+   The unfold is opacity and a blur rather than a scale, for the same reason the
+   pulse avoids one: these classes land on g.node, whose `transform` attribute
+   is doing the positioning. `display` stays out of it too — a display change
+   cannot transition, and would pop. */
 .dgm-collapsed {
   opacity: 0;
+  filter: blur(3px);
   pointer-events: none;
-  transition: opacity 0.25s ease;
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+/* --- affordance chips --------------------------------------------------- */
+
+/* A reveal nobody can see is a reveal nobody finds: the diagram looks complete
+   and the detail behind it is discovered by accident. The chip says how much is
+   folded away before the click and what is being undone after. */
+.dgm-chip {
+  position: absolute;
+  transform: translate(-45%, -55%);
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border: 1px solid var(--dgm-accent);
+  border-radius: 999px;
+  background: var(--dgm-accent);
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 2px 6px var(--dgm-shadow);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.dgm-chip:hover {
+  transform: translate(-45%, -55%) scale(1.12);
+}
+
+.dgm-chip.is-open {
+  background: var(--dgm-bg);
+  color: var(--dgm-accent);
+}
+
+.dgm-chip-view {
+  background: var(--dgm-bg);
+  color: var(--dgm-accent);
+  font-weight: 600;
 }
 
 .dgm-noted rect,
@@ -612,9 +673,11 @@ body {
 
 /* --- notes -------------------------------------------------------------- */
 
+/* The runtime positions notes by their top-left corner rather than through a
+   translate, because it has to clamp them into the stage and push them clear of
+   each other — arithmetic that needs the real box, not an offset from one. */
 .dgm-note {
   position: absolute;
-  transform: translate(-50%, -100%);
   background: var(--dgm-fg);
   color: var(--dgm-bg);
   border-radius: 8px;
@@ -630,11 +693,17 @@ body {
 .dgm-note::after {
   content: '';
   position: absolute;
-  left: 50%;
-  bottom: -5px;
   width: 10px;
   height: 10px;
   background: inherit;
-  transform: translateX(-50%) rotate(45deg);
   border-radius: 1px;
 }
+
+.dgm-note-above::after { left: 50%; bottom: -5px; transform: translateX(-50%) rotate(45deg); }
+.dgm-note-below::after { left: 50%; top: -5px;    transform: translateX(-50%) rotate(45deg); }
+.dgm-note-left::after  { top: 50%;  right: -5px;  transform: translateY(-50%) rotate(45deg); }
+.dgm-note-right::after { top: 50%;  left: -5px;   transform: translateY(-50%) rotate(45deg); }
+
+/* A note that had to be moved to avoid another one is no longer pointing at
+   its target, so it stops pretending to. */
+.dgm-note.is-adrift::after { display: none; }

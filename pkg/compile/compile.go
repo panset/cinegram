@@ -489,6 +489,7 @@ func layoutState(a ast.Action, at, end int, bag *diag.Bag) []ir.Track {
 			Style:  a.Attrs.String("style"),
 			Color:  a.Attrs.String("color"),
 			Ease:   a.Attrs.String("ease"),
+			Side:   a.Attrs.String("side"),
 		})
 	}
 	return tracks

@@ -148,6 +148,12 @@ const (
 	TrackShow      TrackKind = "show"
 	TrackHide      TrackKind = "hide"
 
+	// TrackFocus names what should hold attention. The track lists only what is
+	// focused; working out that everything else recedes — and that a group
+	// means its contents — is the renderer's job, because it is the side that
+	// knows the containment tree it already has in View.Groups.
+	TrackFocus TrackKind = "focus"
+
 	// Persistent kinds, found in Scenario.Persistent rather than Step.Tracks.
 	//
 	// TrackSet carries a badge in Label and a state name in Value; either may
@@ -185,6 +191,11 @@ type Track struct {
 	Style string `json:"style,omitempty"`
 	Color string `json:"color,omitempty"`
 	Ease  string `json:"ease,omitempty"`
+
+	// Side is which way a note is placed relative to its target: above (the
+	// default), below, left or right. A preference, not a position — the
+	// renderer still has to keep the note inside the stage.
+	Side string `json:"side,omitempty"`
 
 	// Status is a flow's outcome: empty or "ok" for one that succeeded, "fail"
 	// for one that did not. It is deliberately separate from Style, which is a

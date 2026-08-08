@@ -225,6 +225,7 @@ const (
 	ActionPulse     ActionKind = "pulse"
 	ActionShow      ActionKind = "show"
 	ActionHide      ActionKind = "hide"
+	ActionFocus     ActionKind = "focus"
 	ActionWait      ActionKind = "wait"
 	ActionSeq       ActionKind = "seq"
 

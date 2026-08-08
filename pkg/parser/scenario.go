@@ -33,6 +33,7 @@ var actionKinds = map[string]struct {
 	"pulse":     {ast.ActionPulse, arityTarget},
 	"show":      {ast.ActionShow, arityTarget},
 	"hide":      {ast.ActionHide, arityTarget},
+	"focus":     {ast.ActionFocus, arityTarget},
 	"note":      {ast.ActionNote, arityNote},
 	"wait":      {ast.ActionWait, arityBare},
 	"seq":       {ast.ActionSeq, arityBlock},
@@ -43,7 +44,7 @@ var actionKinds = map[string]struct {
 
 // knownActions lists the vocabulary for the unknown-action hint, in the order
 // a reader would want to meet them rather than the map's.
-const knownActions = "flow, highlight, note, dim, pulse, show, hide, " +
+const knownActions = "flow, highlight, note, dim, pulse, focus, show, hide, " +
 	"set, gauge, unset, wait, seq"
 
 // parseScenario reads one `scenario` block. The block is not brace-delimited:

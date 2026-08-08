@@ -499,6 +499,7 @@
       });
     });
 
+    this.buildChips();
     this.applyHidden();
     this.warn(problems);
   };
@@ -542,23 +543,83 @@
     var self = this;
     var v = this.view();
     var hidden = v.hidden || [];
-    if (!hidden.length) return;
 
-    // A group's children are listed in `hidden` individually, so testing
-    // membership here is enough to decide an element's own state.
-    var conceal = {};
-    hidden.forEach(function (id) {
-      if (!self.revealed[id]) conceal[id] = true;
+    if (hidden.length) {
+      // A group's children are listed in `hidden` individually, so testing
+      // membership here is enough to decide an element's own state.
+      var conceal = {};
+      hidden.forEach(function (id) {
+        if (!self.revealed[id]) conceal[id] = true;
+      });
+
+      hidden.forEach(function (id) {
+        var element = self.elementFor(id);
+        if (element) setCollapsed(element, !!conceal[id]);
+      });
+
+      v.edges.forEach(function (e) {
+        var bind = self.edges[e.id];
+        if (bind) setCollapsed(bind.path, !!(conceal[e.from] || conceal[e.to]));
+      });
+    }
+
+    // The chips advertise what is still folded away, so they move with it.
+    this.syncChips();
+  };
+
+  // buildChips gives clickable elements a visible affordance.
+  //
+  // A reveal is worth nothing if nobody knows it is there: the diagram looks
+  // finished, and the detail behind it is only found by chance. The chip says
+  // how much is hidden before you click, and what you are undoing after.
+  Player.prototype.buildChips = function () {
+    var self = this;
+    this.chips = [];
+
+    (this.view().bindings || []).forEach(function (b) {
+      if (b.kind !== 'reveal' && b.kind !== 'view') return;
+      var host = self.elementFor(b.source);
+      if (!host) return; // already reported by the binding pass in index()
+
+      var chip = el('button', 'dgm-chip dgm-chip-' + b.kind);
+      chip.type = 'button';
+      chip.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        self.activate(b);
+      });
+      self.overlay.appendChild(chip);
+      self.chips.push({ binding: b, el: chip, host: host });
     });
 
-    hidden.forEach(function (id) {
-      var element = self.elementFor(id);
-      if (element) setCollapsed(element, !!conceal[id]);
-    });
+    this.syncChips();
+  };
 
-    v.edges.forEach(function (e) {
-      var bind = self.edges[e.id];
-      if (bind) setCollapsed(bind.path, !!(conceal[e.from] || conceal[e.to]));
+  Player.prototype.syncChips = function () {
+    var self = this;
+    if (!this.chips || !this.chips.length) return;
+    var stageRect = this.stage.getBoundingClientRect();
+
+    this.chips.forEach(function (c) {
+      var r = c.host.getBoundingClientRect();
+      c.el.style.left = (r.right - stageRect.left) + 'px';
+      c.el.style.top = (r.bottom - stageRect.top) + 'px';
+
+      if (c.binding.kind === 'view') {
+        c.el.textContent = '⤢';
+        c.el.title = c.binding.label || 'Open this view';
+        c.el.setAttribute('aria-label', c.el.title);
+        return;
+      }
+
+      var folded = (c.binding.targets || []).filter(function (id) {
+        return !self.revealed[id];
+      }).length;
+      c.el.textContent = folded ? '+' + folded : '–';
+      c.el.title = folded ? 'Reveal ' + folded + ' hidden element' + (folded === 1 ? '' : 's')
+                          : 'Fold this detail away again';
+      c.el.setAttribute('aria-label', c.el.title);
+      c.el.classList.toggle('is-open', !folded);
     });
   };
 
@@ -811,6 +872,7 @@
     var wantFlow = {};   // track key -> {track, progress}
     var wantNote = {};   // note key -> {track, target}
     var wantWaypoint = {}; // node id -> true
+    var focusRoots = null; // null while no focus track is open this frame
 
     for (var s = 0; s < sc.steps.length; s++) {
       var step = sc.steps[s];
@@ -833,6 +895,9 @@
           if (!wantNode[tr.target]) wantNode[tr.target] = nodeState('noted', '');
         } else if (tr.kind === 'hide') {
           wantNode[tr.target] = nodeState('hidden', '');
+        } else if (tr.kind === 'focus') {
+          if (!focusRoots) focusRoots = {};
+          focusRoots[tr.target] = true;
         } else {
           wantNode[tr.target] = nodeState(
             tr.style ? tr.kind + ' ' + tr.style : tr.kind, tr.color);
@@ -866,11 +931,81 @@
                             : nodeState(cls, color);
     }
 
+    // Focus is expressed as what recedes, and that is computed last so it
+    // applies to whatever the rest of the frame decided — a highlighted node
+    // outside the focus set still dims.
+    if (focusRoots) this.applyFocus(focusRoots, wantNode, wantEdge);
+
     this.applyNodeStates(wantNode);
     this.applyEdgeStates(wantEdge);
     this.applyFlows(wantFlow);
     this.applyNotes(wantNote);
     this.applyPills(standing.pills);
+  };
+
+  // applyFocus marks everything outside the focus set. The track names only
+  // what to look at; the containment tree lives in the view, so expanding a
+  // group to its contents is the renderer's job and the timeline stays ID-only.
+  Player.prototype.applyFocus = function (roots, wantNode, wantEdge) {
+    var inFocus = this.focusSet(roots);
+    var v = this.view();
+
+    v.nodes.forEach(function (n) {
+      if (inFocus[n.id]) return;
+      var prior = wantNode[n.id];
+      wantNode[n.id] = prior ? nodeState(prior.cls + ' unfocused', prior.color)
+                             : nodeState('unfocused', '');
+    });
+    (v.groups || []).forEach(function (g) {
+      if (inFocus[g.id]) return;
+      var prior = wantNode[g.id];
+      wantNode[g.id] = prior ? nodeState(prior.cls + ' unfocused', prior.color)
+                             : nodeState('unfocused', '');
+    });
+
+    // An edge with one end still in focus is part of the story — it is how the
+    // focused thing connects to the rest. Only edges wholly outside recede.
+    v.edges.forEach(function (e) {
+      if (inFocus[e.from] || inFocus[e.to]) return;
+      var prior = wantEdge[e.id];
+      wantEdge[e.id] = prior ? nodeState(prior.cls + ' unfocused', prior.color)
+                             : nodeState('unfocused', '');
+    });
+  };
+
+  // focusSet expands the named roots downwards into group contents and upwards
+  // into containing groups.
+  //
+  // Downwards because focusing a subgraph plainly means its members. Upwards
+  // because dimming the frame drawn around the very thing you asked to look at
+  // would undo the effect.
+  Player.prototype.focusSet = function (roots) {
+    var v = this.view();
+    var groups = {};
+    (v.groups || []).forEach(function (g) { groups[g.id] = g; });
+    var nodes = {};
+    v.nodes.forEach(function (n) { nodes[n.id] = n; });
+
+    var out = {};
+    var stack = Object.keys(roots);
+    while (stack.length) {
+      var id = stack.pop();
+      if (out[id]) continue;
+      out[id] = true;
+      var g = groups[id];
+      if (g) {
+        (g.children || []).forEach(function (child) { stack.push(child); });
+      }
+    }
+
+    Object.keys(out).forEach(function (id) {
+      var parent = (nodes[id] && nodes[id].group) || (groups[id] && groups[id].parent);
+      while (parent && !out[parent]) {
+        out[parent] = true;
+        parent = groups[parent] && groups[parent].parent;
+      }
+    });
+    return out;
   };
 
   // collectPersistent gathers the badges, gauges and state classes whose window
@@ -1020,10 +1155,13 @@
     return want;
   }
 
+  // applyNodeStates paints element state. It resolves through elementFor rather
+  // than the node map alone, so a subgraph is as animatable as a node — which
+  // `focus` relies on, and which `highlight <group>` gets for free.
   Player.prototype.applyNodeStates = function (want) {
     var self = this;
     this.nodeState = applyStates(this.nodeState, want, function (id) {
-      return self.nodes[id];
+      return self.elementFor(id);
     });
   };
 
@@ -1253,6 +1391,11 @@
     return g;
   };
 
+  // NOTE_GAP is the breathing room between a note and the element it points at;
+  // NOTE_SHOVE is how far a note is pushed clear of one already placed.
+  var NOTE_GAP = 10;
+  var NOTE_SHOVE = 6;
+
   Player.prototype.applyNotes = function (want) {
     var key;
     for (key in this.notes) {
@@ -1261,11 +1404,14 @@
         delete this.notes[key];
       }
     }
+
     var stageRect = this.stage.getBoundingClientRect();
+    var placed = [];
+
     for (key in want) {
       var tr = want[key];
-      var node = this.nodes[tr.target];
-      if (!node) continue;
+      var host = this.elementFor(tr.target);
+      if (!host) continue;
 
       var div = this.notes[key];
       if (!div) {
@@ -1274,11 +1420,75 @@
         this.overlay.appendChild(div);
         this.notes[key] = div;
       }
-      var r = node.getBoundingClientRect();
-      div.style.left = (r.left - stageRect.left + r.width / 2) + 'px';
-      div.style.top = (r.top - stageRect.top - 12) + 'px';
+
+      var side = sideOf(tr.side);
+      div.className = 'dgm-note dgm-note-' + side;
+
+      // Measured after the class is set, because the side decides the arrow and
+      // an arrow is part of the box the layout has to fit.
+      var box = div.getBoundingClientRect();
+      var anchor = rectIn(host.getBoundingClientRect(), stageRect);
+      var spot = place(side, anchor, box.width, box.height);
+
+      var shoved = settle(spot, box.width, box.height, placed,
+        this.stage.clientWidth, this.stage.clientHeight);
+      placed.push({
+        left: shoved.left, top: shoved.top,
+        right: shoved.left + box.width, bottom: shoved.top + box.height
+      });
+
+      // A shoved note no longer points at anything, so it drops its arrow
+      // rather than aiming it at whatever it landed next to.
+      div.classList.toggle('is-adrift', shoved.moved);
+      div.style.left = shoved.left + 'px';
+      div.style.top = shoved.top + 'px';
     }
   };
+
+  function sideOf(s) {
+    return (s === 'below' || s === 'left' || s === 'right') ? s : 'above';
+  }
+
+  // rectIn re-expresses a client rect in the stage's coordinates.
+  function rectIn(r, stage) {
+    return {
+      left: r.left - stage.left, top: r.top - stage.top,
+      right: r.right - stage.left, bottom: r.bottom - stage.top,
+      cx: r.left - stage.left + r.width / 2,
+      cy: r.top - stage.top + r.height / 2
+    };
+  }
+
+  function place(side, a, w, h) {
+    if (side === 'below') return { left: a.cx - w / 2, top: a.bottom + NOTE_GAP };
+    if (side === 'left') return { left: a.left - w - NOTE_GAP, top: a.cy - h / 2 };
+    if (side === 'right') return { left: a.right + NOTE_GAP, top: a.cy - h / 2 };
+    return { left: a.cx - w / 2, top: a.top - h - NOTE_GAP };
+  }
+
+  // settle clamps a note into the stage and pushes it clear of anything already
+  // placed. One pass downwards, deliberately: this is a tidy-up, not a layout
+  // solver, and a note that ends up somewhere odd is better than a frame spent
+  // iterating to an optimum nobody asked for.
+  function settle(spot, w, h, placed, stageW, stageH) {
+    var left = clamp(spot.left, 0, Math.max(0, stageW - w));
+    var top = clamp(spot.top, 0, Math.max(0, stageH - h));
+    var moved = false;
+
+    for (var i = 0; i < placed.length; i++) {
+      var p = placed[i];
+      var overlaps = left < p.right && left + w > p.left &&
+                     top < p.bottom && top + h > p.top;
+      if (!overlaps) continue;
+      top = clamp(p.bottom + NOTE_SHOVE, 0, Math.max(0, stageH - h));
+      moved = true;
+    }
+    return { left: left, top: top, moved: moved };
+  }
+
+  function clamp(v, lo, hi) {
+    return v < lo ? lo : (v > hi ? hi : v);
+  }
 
   // ---------------------------------------------------------------------
   // Helpers
