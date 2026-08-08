@@ -1,0 +1,32 @@
+%% Everything here resolves. Every name exists, every edge is real, and the
+%% document compiles — which is the point: these are the mistakes that survive
+%% a resolving pass and produce a diagram that animates less than its author
+%% thought it would.
+%%
+flowchart LR
+  a[Entry]
+  b[Middle]
+  orphan[Declared And Then Forgotten]
+
+  subgraph aside[Grouping Nobody Uses]
+    inner[Also Unmentioned]
+  end
+
+  a --> b
+
+interact {
+  %% `later` is a real step, but not in the scenario the reader starts on.
+  click a -> step later
+}
+
+scenario "same name"
+
+  step first "in the first scenario" {
+    flow a -> b
+  }
+
+scenario "same name"
+
+  step later "only in the second scenario" {
+    highlight b
+  }

@@ -358,8 +358,38 @@ illustration.
 diagramator compile <file.dgm> [-o out.json]   # animation timeline JSON
 diagramator mermaid <file.dgm> [-o out.mmd]    # the diagram as plain Mermaid
 diagramator preview <file.dgm> [-o out.html]   # self-contained animated page
-diagramator lint    <file.dgm>                 # diagnostics only
+diagramator narrate <file.dgm> [--format=md|json]   # the animation, written out
+diagramator lint    <file.dgm> [--format=text|json] # diagnostics only
 ```
+
+### What an agent sees
+
+An animation is legible to something with eyes. A timeline is precise but it is
+a list of intervals. `narrate` is the third form — the same facts in the order a
+reader meets them, with each track stated as a sentence:
+
+```
+#### 5. The app trades the code for tokens
+
+2.9s–3.7s
+
+Now the application speaks to the provider directly, back channel, server to
+server. It sends the code together with its client secret, and that pairing is
+what proves the exchange is genuine.
+
+- **app → auth** carries "POST /token + secret" (2.9s–3.6s)
+- **auth → tokens** carries "mint & record" (3.2s–3.7s)
+```
+
+`examples/oauth-login.narrate.md` is that output, committed. `--format=json`
+emits the same walkthrough as data — each event carries both the sentence and
+the fields it was built from, so filtering for "every failing flow" does not
+mean parsing the prose back apart.
+
+`lint --format=json` emits
+`[{"file","line","col","severity","message","hint"}]` on stdout. Exit codes are
+unchanged — warnings 0, errors 1 — so a caller can branch on the status *and*
+read the detail instead of choosing between them.
 
 The preview page plays itself: after a view renders, a scenario with
 `autoplay` (the default) starts, unless the reader's system asks for reduced
@@ -404,6 +434,17 @@ Relative paths are resolved against the directory you ran the command from,
 including under `bazel run` — the binary executes from its runfiles tree, so
 Diagramator honours Bazel's `BUILD_WORKING_DIRECTORY` to get this right.
 `preview` with no `-o` writes beside its input.
+
+Some warnings are about omission rather than error — the mistakes that leave a
+document compiling perfectly and animating less than its author meant:
+
+- an element declared and then never referenced by an edge, a scenario or a
+  click;
+- a `click … -> step` whose target only exists in a later scenario, so it
+  resolves and then does nothing until that scenario is chosen;
+- two scenarios sharing a name, which the picker shows nothing else of;
+- an empty `%%` comment line, which breaks Mermaid's own comment stripping and
+  takes the whole diagram down with it.
 
 Warnings never fail a build; errors do. Diagnostics carry a line, a column, and
 usually a suggestion:

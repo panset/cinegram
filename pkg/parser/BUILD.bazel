@@ -4,6 +4,8 @@ go_library(
     name = "parser",
     srcs = [
         "attrs.go",
+        "comments.go",
+        "coverage.go",
         "flowchart.go",
         "interact.go",
         "link.go",

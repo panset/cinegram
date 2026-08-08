@@ -36,7 +36,7 @@ func Parse(filename, content string) (*Result, *diag.Bag) {
 	doc := &ast.Document{}
 	doc.Frontmatter = parseFrontmatter(cur)
 
-	doc.Preamble = skipToHeader(cur)
+	doc.Preamble = skipToHeader(cur, bag)
 
 	line, ok := cur.Peek()
 	if !ok {
@@ -63,8 +63,10 @@ func Parse(filename, content string) (*Result, *diag.Bag) {
 	doc.Views = top.Views
 	doc.Interactions = top.Interactions
 
+	checkComments(doc.Diagram, bag)
 	validateScenarios(doc.Scenarios, table, bag)
 	validateInteract(doc, table, bag)
+	validateCoverage(doc, table, bag)
 
 	return &Result{Document: doc, Symbols: table, File: file}, bag
 }
@@ -72,7 +74,7 @@ func Parse(filename, content string) (*Result, *diag.Bag) {
 // skipToHeader advances past blank lines and the comments or `%%{init}%%`
 // directives that commonly sit above a Mermaid header, returning those lines so
 // emitters can put them back.
-func skipToHeader(c *source.Cursor) []string {
+func skipToHeader(c *source.Cursor, b *diag.Bag) []string {
 	var preamble []string
 	for {
 		line, ok := c.Peek()
@@ -84,6 +86,7 @@ func skipToHeader(c *source.Cursor) []string {
 			c.Next()
 		case strings.HasPrefix(line.Text, "%%"):
 			c.Next()
+			checkCommentLine(line.Text, line.Start(), b)
 			preamble = append(preamble, line.Text)
 		default:
 			return preamble
