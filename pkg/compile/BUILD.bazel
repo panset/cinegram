@@ -10,6 +10,7 @@ go_library(
         "//pkg/diag",
         "//pkg/emit/mermaid",
         "//pkg/ir",
+        "//pkg/loader",
         "//pkg/symbol",
         "//pkg/units",
     ],

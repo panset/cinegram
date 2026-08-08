@@ -7,6 +7,11 @@ flowchart LR
   subgraph cluster[Kubernetes Cluster]
     ing[Ingress Controller]
 
+    subgraph cp[control plane]
+      api[kube-apiserver]
+      etcd[(etcd)]
+    end
+
     subgraph ns[namespace: prod]
       svc[ClusterIP Service]
       pod1[Pod A]
@@ -19,6 +24,21 @@ flowchart LR
   ing --> svc
   svc --> pod1
   svc --> pod2
+  api --> etcd
+
+view podA "Inside Pod A" from "pod-a.dgm"
+
+interact {
+  %% Pod A is a door: clicking it opens the diagram of what happens inside.
+  click pod1 -> view podA { label: "Zoom into Pod A" }
+
+  %% The control plane is not on the request path, so it stays out of the
+  %% way until someone asks for it.
+  click cluster -> reveal cp
+
+  %% Pod B is the endpoint that was not chosen — jump to the step that says why.
+  click pod2 -> step balance
+}
 
 scenario "GET /api/orders" { speed: 1.0, loop: true }
 

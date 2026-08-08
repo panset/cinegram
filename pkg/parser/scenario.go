@@ -1,10 +1,6 @@
 package parser
 
-import (
-	"github.com/tejaspanse/diagramator/pkg/ast"
-	"github.com/tejaspanse/diagramator/pkg/diag"
-	"github.com/tejaspanse/diagramator/pkg/source"
-)
+import "github.com/tejaspanse/diagramator/pkg/ast"
 
 // The scenario grammar is deliberately free of diagram vocabulary: it produces
 // nothing but named references, durations and styles. That is what lets the
@@ -42,30 +38,9 @@ var actionKinds = map[string]struct {
 	"seq":       {ast.ActionSeq, arityBlock},
 }
 
-// parseScenarios reads every scenario block from the cursor to end of input.
-func parseScenarios(c *source.Cursor, b *diag.Bag) []*ast.Scenario {
-	s := newScanner(c, b)
-	var out []*ast.Scenario
-
-	for {
-		s.skipNewlines()
-		t := s.peek()
-		if t.kind == tokEOF {
-			return out
-		}
-		if !s.atKeyword("scenario") {
-			b.ErrorHintf(t.at, "scenario blocks must start with the `scenario` keyword",
-				"expected `scenario` but found %s", describe(t))
-			s.skipToLineEnd()
-			s.skipNewlines()
-			continue
-		}
-		if sc := parseScenario(s); sc != nil {
-			out = append(out, sc)
-		}
-	}
-}
-
+// parseScenario reads one `scenario` block. The block is not brace-delimited:
+// it ends at the first token that is not a `step`, which is what lets a `view`
+// or `interact` block follow it without a terminator.
 func parseScenario(s *scanner) *ast.Scenario {
 	kw := s.next() // "scenario"
 	sc := &ast.Scenario{StartPos: kw.at}

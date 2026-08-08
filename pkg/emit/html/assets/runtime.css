@@ -82,10 +82,32 @@ body {
   flex-wrap: wrap;
 }
 
+.dgm-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
 .dgm-title {
   font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
+}
+
+/* The trail of views drilled through. Muted, because it is orientation
+   rather than content. */
+.dgm-crumb {
+  font-size: 12px;
+  color: var(--dgm-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dgm-back {
+  padding: 4px 10px;
+  font-size: 12px;
 }
 
 .dgm-controls {
@@ -253,12 +275,19 @@ body {
   pointer-events: none;
 }
 
+/* --dgm-color is the per-track override. The runtime sets it inline on the
+   particle group or the node group when a `color:` attribute was compiled in,
+   and every rule below reads it through var(--dgm-color, <theme token>) so an
+   absent colour falls back to exactly what the theme did before. Because it is
+   a custom property it inherits to the shape elements mermaid drew, which is
+   where the stroke and fill actually have to land. */
+
 .dgm-particle-dot {
-  fill: var(--dgm-accent);
+  fill: var(--dgm-color, var(--dgm-accent));
 }
 
 .dgm-particle-halo {
-  fill: var(--dgm-accent);
+  fill: var(--dgm-color, var(--dgm-accent));
   opacity: 0.25;
   animation: dgm-pulse 1.1s ease-out infinite;
 }
@@ -275,7 +304,7 @@ body {
 
 .dgm-particle-response .dgm-particle-dot,
 .dgm-particle-response .dgm-particle-halo {
-  fill: var(--dgm-response);
+  fill: var(--dgm-color, var(--dgm-response));
 }
 
 @keyframes dgm-pulse {
@@ -291,24 +320,32 @@ body {
 .dgm-highlight circle,
 .dgm-highlight polygon,
 .dgm-highlight path {
-  stroke: var(--dgm-accent) !important;
+  stroke: var(--dgm-color, var(--dgm-accent)) !important;
   stroke-width: 3px !important;
-  filter: drop-shadow(0 0 8px var(--dgm-accent));
+  filter: drop-shadow(0 0 8px var(--dgm-color, var(--dgm-accent)));
 }
 
 .dgm-busy rect,
 .dgm-busy circle,
 .dgm-busy polygon,
 .dgm-busy path {
-  stroke: var(--dgm-busy) !important;
+  stroke: var(--dgm-color, var(--dgm-busy)) !important;
   stroke-width: 3px !important;
-  filter: drop-shadow(0 0 10px var(--dgm-busy));
+  filter: drop-shadow(0 0 10px var(--dgm-color, var(--dgm-busy)));
 }
 
 .dgm-pulse {
   animation: dgm-node-pulse 0.9s ease-in-out infinite;
   transform-box: fill-box;
   transform-origin: center;
+}
+
+.dgm-pulse rect,
+.dgm-pulse circle,
+.dgm-pulse polygon,
+.dgm-pulse path {
+  stroke: var(--dgm-color, var(--dgm-accent)) !important;
+  stroke-width: 2.5px !important;
 }
 
 @keyframes dgm-node-pulse {
@@ -319,6 +356,30 @@ body {
 .dgm-dim { opacity: 0.28; }
 .dgm-hidden { opacity: 0; }
 .dgm-show { opacity: 1; }
+
+/* --- interaction -------------------------------------------------------- */
+
+/* A clickable element advertises itself on hover rather than permanently, so
+   the diagram still reads as a diagram at rest. */
+.dgm-clickable { cursor: pointer; }
+
+.dgm-clickable:hover rect,
+.dgm-clickable:hover circle,
+.dgm-clickable:hover polygon,
+.dgm-clickable:hover path {
+  stroke: var(--dgm-accent) !important;
+  stroke-width: 2.5px !important;
+  filter: drop-shadow(0 0 6px var(--dgm-accent));
+}
+
+/* Collapsed is reveal state, not timeline state: an element waiting to be
+   clicked into view. Unlike .dgm-hidden it also stops taking pointer events,
+   so an invisible node is not accidentally clickable. */
+.dgm-collapsed {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
 
 .dgm-noted rect,
 .dgm-noted circle,

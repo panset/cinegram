@@ -1,10 +1,11 @@
 // Package ast defines the syntax tree for Diagramator documents.
 //
-// A document is a Mermaid diagram body followed by zero or more scenario
-// blocks. The two halves are deliberately decoupled: Diagram is an interface so
-// new Mermaid diagram types can be added, and the Scenario tree never mentions
-// flowchart concepts. Scenarios refer to the diagram only through plain string
-// references, which a later validation pass resolves against a symbol table.
+// A document is a Mermaid diagram body followed by zero or more scenario,
+// view and interact blocks. The two halves are deliberately decoupled: Diagram
+// is an interface so new Mermaid diagram types can be added, and neither the
+// Scenario tree nor the interaction bindings ever mention flowchart concepts.
+// Both refer to the diagram only through plain string references, which a later
+// validation pass resolves against a symbol table.
 //
 // Every statement retains its Raw source text. Emitting Mermaid therefore
 // reprints the original lines rather than regenerating them, which keeps the
@@ -12,14 +13,20 @@
 // for syntax the parser does not model semantically.
 package ast
 
-import "github.com/tejaspanse/diagramator/pkg/source"
+import (
+	"strconv"
+
+	"github.com/tejaspanse/diagramator/pkg/source"
+)
 
 // Document is a complete parsed source file.
 type Document struct {
-	Frontmatter string   // raw YAML frontmatter including its --- fences, or ""
-	Preamble    []string // comment and directive lines above the diagram header
-	Diagram     Diagram
-	Scenarios   []*Scenario
+	Frontmatter  string   // raw YAML frontmatter including its --- fences, or ""
+	Preamble     []string // comment and directive lines above the diagram header
+	Diagram      Diagram
+	Scenarios    []*Scenario
+	Views        []*ViewDecl // documents a click can drill into
+	Interactions []*Binding  // what each clickable element does
 }
 
 // Diagram is a diagram body of some Mermaid type.
@@ -196,6 +203,17 @@ type Step struct {
 	StartPos source.Pos
 }
 
+// EffectiveID is the identifier a step is addressable by, given its position in
+// the scenario. Steps need not be named, so an unnamed one falls back to its
+// index. Compilation and the `click … -> step` binding must agree on this, so
+// both go through here rather than repeating the convention.
+func (s *Step) EffectiveID(index int) string {
+	if s.ID != "" {
+		return s.ID
+	}
+	return "step" + strconv.Itoa(index)
+}
+
 // ActionKind names an animation primitive.
 type ActionKind string
 
@@ -236,6 +254,44 @@ type Action struct {
 type Target struct {
 	Name string
 	At   source.Pos
+}
+
+// ViewDecl names another document that a click can drill into.
+//
+// Only the path as written is recorded. Resolving it against the filesystem is
+// the loader's job, which keeps this package and the parser free of I/O.
+type ViewDecl struct {
+	ID     string // local alias used by `click … -> view <ID>`
+	Title  string // display title, or "" to fall back to the target's own
+	Path   string // path as written, relative to the declaring file
+	At     source.Pos
+	PathAt source.Pos // reported against when the path cannot be resolved
+}
+
+// BindingKind names what clicking an element does.
+type BindingKind string
+
+const (
+	BindView   BindingKind = "view"
+	BindReveal BindingKind = "reveal"
+	BindStep   BindingKind = "step"
+)
+
+// Binding makes one diagram element clickable.
+//
+// Like Action it names things and never models them, so the interaction half
+// stays as diagram-agnostic as the scenario half: Source and Targets are plain
+// references that the validation pass resolves against the symbol table.
+type Binding struct {
+	Source Target // node or group that becomes clickable
+	Kind   BindingKind
+
+	// Targets is the view alias for BindView, the step id for BindStep, and
+	// the set of elements to conceal for BindReveal.
+	Targets []Target
+
+	Attrs Attrs
+	At    source.Pos
 }
 
 // Attrs is an ordered attribute map from a `{ key: value }` block.

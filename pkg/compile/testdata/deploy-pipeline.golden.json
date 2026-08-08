@@ -1,0 +1,304 @@
+{
+  "version": 2,
+  "root": "main",
+  "views": [
+    {
+      "id": "main",
+      "title": "ship a release",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% A commit's journey from a laptop to production, and back again when the\n%% error budget says otherwise. It exercises the attributes the compiler emits\n%% and the runtime honours: scenario `speed` and `autoplay`, per-action\n%% `color`, and `ease` on the promotion hops.\nflowchart LR\n  dev[Developer Laptop]\n  git[(Git Repository)]\n  ci[CI Pipeline]\n  reg[(Container Registry)]\n  subgraph envs[Kubernetes Environments]\n    staging[Staging Cluster]\n    prod[Production Cluster]\n  end\n  dev --\u003e git\n  git --\u003e ci\n  ci --\u003e reg\n  reg --\u003e staging\n  staging --\u003e prod\n  prod -. rollback .-\u003e reg\n"
+      },
+      "nodes": [
+        {
+          "id": "dev",
+          "label": "Developer Laptop",
+          "shape": "rect"
+        },
+        {
+          "id": "git",
+          "label": "Git Repository",
+          "shape": "cylinder"
+        },
+        {
+          "id": "ci",
+          "label": "CI Pipeline",
+          "shape": "rect"
+        },
+        {
+          "id": "reg",
+          "label": "Container Registry",
+          "shape": "cylinder"
+        },
+        {
+          "id": "staging",
+          "label": "Staging Cluster",
+          "shape": "rect",
+          "group": "envs"
+        },
+        {
+          "id": "prod",
+          "label": "Production Cluster",
+          "shape": "rect",
+          "group": "envs"
+        }
+      ],
+      "groups": [
+        {
+          "id": "envs",
+          "label": "Kubernetes Environments",
+          "children": [
+            "staging",
+            "prod"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "dev",
+          "to": "git",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "git",
+          "to": "ci",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "ci",
+          "to": "reg",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "reg",
+          "to": "staging",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "staging",
+          "to": "prod",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "prod",
+          "to": "reg",
+          "label": "rollback",
+          "style": "dotted",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "ship a release",
+          "duration": 4900,
+          "speed": 1.5,
+          "loop": false,
+          "autoplay": true,
+          "steps": [
+            {
+              "id": "commit",
+              "name": "Developer pushes a commit",
+              "start": 0,
+              "end": 500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 500,
+                  "edge": "e0",
+                  "from": "dev",
+                  "to": "git",
+                  "label": "git push",
+                  "color": "#22c55e"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 500,
+                  "target": "git",
+                  "color": "#22c55e"
+                }
+              ]
+            },
+            {
+              "id": "build",
+              "name": "CI builds and tests the change",
+              "start": 500,
+              "end": 900,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 500,
+                  "end": 900,
+                  "edge": "e1",
+                  "from": "git",
+                  "to": "ci",
+                  "label": "webhook",
+                  "color": "#22c55e"
+                },
+                {
+                  "kind": "pulse",
+                  "start": 500,
+                  "end": 900,
+                  "target": "ci",
+                  "color": "#22c55e"
+                },
+                {
+                  "kind": "note",
+                  "start": 500,
+                  "end": 900,
+                  "target": "ci",
+                  "text": "unit + integration\n4m 12s"
+                }
+              ]
+            },
+            {
+              "id": "publish",
+              "name": "The image lands in the registry",
+              "start": 900,
+              "end": 1500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 900,
+                  "end": 1500,
+                  "edge": "e2",
+                  "from": "ci",
+                  "to": "reg",
+                  "label": "sha-9f2c1a",
+                  "color": "#22c55e"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 900,
+                  "end": 1500,
+                  "target": "reg",
+                  "color": "#22c55e"
+                }
+              ]
+            },
+            {
+              "id": "stage",
+              "name": "Promote to staging",
+              "start": 1500,
+              "end": 2200,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1500,
+                  "end": 2200,
+                  "edge": "e3",
+                  "from": "reg",
+                  "to": "staging",
+                  "label": "helm upgrade",
+                  "color": "#22c55e",
+                  "ease": "in-out"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1500,
+                  "end": 2200,
+                  "target": "staging",
+                  "color": "#22c55e"
+                }
+              ]
+            },
+            {
+              "id": "promote",
+              "name": "Promote to production, slowly at first",
+              "start": 2200,
+              "end": 3300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2200,
+                  "end": 3300,
+                  "edge": "e4",
+                  "from": "staging",
+                  "to": "prod",
+                  "label": "canary 10% then 100%",
+                  "color": "#22c55e",
+                  "ease": "in-out"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 2200,
+                  "end": 3300,
+                  "target": "prod",
+                  "color": "#22c55e"
+                }
+              ]
+            },
+            {
+              "id": "observe",
+              "name": "Error rate climbs past the budget",
+              "start": 3300,
+              "end": 4000,
+              "tracks": [
+                {
+                  "kind": "highlight",
+                  "start": 3300,
+                  "end": 4000,
+                  "target": "prod",
+                  "color": "#ef4444"
+                },
+                {
+                  "kind": "note",
+                  "start": 3300,
+                  "end": 4000,
+                  "target": "prod",
+                  "text": "5xx at 4.2%\nSLO burn rate 14x"
+                }
+              ]
+            },
+            {
+              "id": "rollback",
+              "name": "Roll back to the last good image",
+              "start": 4000,
+              "end": 4900,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 4000,
+                  "end": 4900,
+                  "edge": "e5",
+                  "from": "prod",
+                  "to": "reg",
+                  "label": "rollback to sha-3d81b7",
+                  "color": "#ef4444",
+                  "ease": "out"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 4000,
+                  "end": 4900,
+                  "target": "reg",
+                  "color": "#ef4444"
+                },
+                {
+                  "kind": "dim",
+                  "start": 4000,
+                  "end": 4900,
+                  "target": "staging"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,208 +1,215 @@
 {
-  "version": 1,
-  "diagram": {
-    "type": "flowchart",
-    "direction": "TD",
-    "mermaid": "---\ntitle: Syntax corners\n---\n%% Exercises the shapes, link forms and raw statements the emitter must\n%% round-trip untouched.\ngraph TD\n  a[Rect] --\u003e b(Round)\n  b ==\u003e c{{Hexagon}}\n  c -. retry .-\u003e d[(Database)]\n  d -- carries --\u003e e([Stadium])\n  e --o f[[Subroutine]]\n  f --x g((Circle))\n  g \u003c--\u003e h\u003eAsymmetric]\n  h --\u003e|piped label| i[\"bracket ] and --\u003e arrow inside\"]\n  subgraph outer[Outer Group]\n    direction LR\n    j[Nested]\n    subgraph inner[Inner Group]\n      k[Deep]\n    end\n  end\n  i --\u003e j\n  j --\u003e k\n  classDef busy fill:#f96,stroke:#333\n  class k busy\n  linkStyle 0 stroke:#0af\n  click a \"https://example.com\" \"tooltip\"\n"
-  },
-  "nodes": [
+  "version": 2,
+  "root": "main",
+  "views": [
     {
-      "id": "a",
-      "label": "Rect",
-      "shape": "rect"
-    },
-    {
-      "id": "b",
-      "label": "Round",
-      "shape": "round"
-    },
-    {
-      "id": "c",
-      "label": "Hexagon",
-      "shape": "hexagon"
-    },
-    {
-      "id": "d",
-      "label": "Database",
-      "shape": "cylinder"
-    },
-    {
-      "id": "e",
-      "label": "Stadium",
-      "shape": "stadium"
-    },
-    {
-      "id": "f",
-      "label": "Subroutine",
-      "shape": "subroutine"
-    },
-    {
-      "id": "g",
-      "label": "Circle",
-      "shape": "circle"
-    },
-    {
-      "id": "h",
-      "label": "Asymmetric",
-      "shape": "asymmetric"
-    },
-    {
-      "id": "i",
-      "label": "bracket ] and --\u003e arrow inside",
-      "shape": "rect"
-    },
-    {
-      "id": "j",
-      "label": "Nested",
-      "shape": "rect",
-      "group": "outer"
-    },
-    {
-      "id": "k",
-      "label": "Deep",
-      "shape": "rect",
-      "group": "inner"
-    }
-  ],
-  "groups": [
-    {
-      "id": "outer",
-      "label": "Outer Group",
-      "children": [
-        "j",
-        "inner"
-      ]
-    },
-    {
-      "id": "inner",
-      "label": "Inner Group",
-      "parent": "outer",
-      "children": [
-        "k"
-      ]
-    }
-  ],
-  "edges": [
-    {
-      "id": "e0",
-      "from": "a",
-      "to": "b",
-      "style": "normal",
-      "head": "arrow"
-    },
-    {
-      "id": "e1",
-      "from": "b",
-      "to": "c",
-      "style": "thick",
-      "head": "arrow"
-    },
-    {
-      "id": "e2",
-      "from": "c",
-      "to": "d",
-      "label": "retry",
-      "style": "dotted",
-      "head": "arrow"
-    },
-    {
-      "id": "e3",
-      "from": "d",
-      "to": "e",
-      "label": "carries",
-      "style": "normal",
-      "head": "arrow"
-    },
-    {
-      "id": "e4",
-      "from": "e",
-      "to": "f",
-      "style": "normal",
-      "head": "circle"
-    },
-    {
-      "id": "e5",
-      "from": "f",
-      "to": "g",
-      "style": "normal",
-      "head": "cross"
-    },
-    {
-      "id": "e6",
-      "from": "g",
-      "to": "h",
-      "style": "normal",
-      "head": "arrow",
-      "bidir": true
-    },
-    {
-      "id": "e7",
-      "from": "h",
-      "to": "i",
-      "label": "piped label",
-      "style": "normal",
-      "head": "arrow"
-    },
-    {
-      "id": "e8",
-      "from": "i",
-      "to": "j",
-      "style": "normal",
-      "head": "arrow"
-    },
-    {
-      "id": "e9",
-      "from": "j",
-      "to": "k",
-      "style": "normal",
-      "head": "arrow"
-    }
-  ],
-  "scenarios": [
-    {
-      "id": "s0",
-      "name": "corners",
-      "duration": 2000,
-      "speed": 1,
-      "loop": false,
-      "autoplay": true,
-      "steps": [
+      "id": "main",
+      "title": "corners",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "TD",
+        "mermaid": "---\ntitle: Syntax corners\n---\n%% Exercises the shapes, link forms and raw statements the emitter must\n%% round-trip untouched.\ngraph TD\n  a[Rect] --\u003e b(Round)\n  b ==\u003e c{{Hexagon}}\n  c -. retry .-\u003e d[(Database)]\n  d -- carries --\u003e e([Stadium])\n  e --o f[[Subroutine]]\n  f --x g((Circle))\n  g \u003c--\u003e h\u003eAsymmetric]\n  h --\u003e|piped label| i[\"bracket ] and --\u003e arrow inside\"]\n  subgraph outer[Outer Group]\n    direction LR\n    j[Nested]\n    subgraph inner[Inner Group]\n      k[Deep]\n    end\n  end\n  i --\u003e j\n  j --\u003e k\n  classDef busy fill:#f96,stroke:#333\n  class k busy\n  linkStyle 0 stroke:#0af\n  click a \"https://example.com\" \"tooltip\"\n"
+      },
+      "nodes": [
         {
-          "id": "only",
-          "name": "walk the chain",
-          "start": 0,
-          "end": 2000,
-          "tracks": [
+          "id": "a",
+          "label": "Rect",
+          "shape": "rect"
+        },
+        {
+          "id": "b",
+          "label": "Round",
+          "shape": "round"
+        },
+        {
+          "id": "c",
+          "label": "Hexagon",
+          "shape": "hexagon"
+        },
+        {
+          "id": "d",
+          "label": "Database",
+          "shape": "cylinder"
+        },
+        {
+          "id": "e",
+          "label": "Stadium",
+          "shape": "stadium"
+        },
+        {
+          "id": "f",
+          "label": "Subroutine",
+          "shape": "subroutine"
+        },
+        {
+          "id": "g",
+          "label": "Circle",
+          "shape": "circle"
+        },
+        {
+          "id": "h",
+          "label": "Asymmetric",
+          "shape": "asymmetric"
+        },
+        {
+          "id": "i",
+          "label": "bracket ] and --\u003e arrow inside",
+          "shape": "rect"
+        },
+        {
+          "id": "j",
+          "label": "Nested",
+          "shape": "rect",
+          "group": "outer"
+        },
+        {
+          "id": "k",
+          "label": "Deep",
+          "shape": "rect",
+          "group": "inner"
+        }
+      ],
+      "groups": [
+        {
+          "id": "outer",
+          "label": "Outer Group",
+          "children": [
+            "j",
+            "inner"
+          ]
+        },
+        {
+          "id": "inner",
+          "label": "Inner Group",
+          "parent": "outer",
+          "children": [
+            "k"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "a",
+          "to": "b",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "b",
+          "to": "c",
+          "style": "thick",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "c",
+          "to": "d",
+          "label": "retry",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "d",
+          "to": "e",
+          "label": "carries",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "e",
+          "to": "f",
+          "style": "normal",
+          "head": "circle"
+        },
+        {
+          "id": "e5",
+          "from": "f",
+          "to": "g",
+          "style": "normal",
+          "head": "cross"
+        },
+        {
+          "id": "e6",
+          "from": "g",
+          "to": "h",
+          "style": "normal",
+          "head": "arrow",
+          "bidir": true
+        },
+        {
+          "id": "e7",
+          "from": "h",
+          "to": "i",
+          "label": "piped label",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e8",
+          "from": "i",
+          "to": "j",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e9",
+          "from": "j",
+          "to": "k",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "corners",
+          "duration": 2000,
+          "speed": 1,
+          "loop": false,
+          "autoplay": true,
+          "steps": [
             {
-              "kind": "flow",
+              "id": "only",
+              "name": "walk the chain",
               "start": 0,
-              "end": 600,
-              "edge": "e0",
-              "from": "a",
-              "to": "b",
-              "label": "packet"
-            },
-            {
-              "kind": "flow",
-              "start": 600,
-              "end": 1200,
-              "edge": "e1",
-              "from": "b",
-              "to": "c",
-              "label": "packet"
-            },
-            {
-              "kind": "highlight",
-              "start": 0,
-              "end": 800,
-              "target": "j"
-            },
-            {
-              "kind": "note",
-              "start": 800,
-              "end": 1600,
-              "target": "k",
-              "text": "deep note"
+              "end": 2000,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "a",
+                  "to": "b",
+                  "label": "packet"
+                },
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1200,
+                  "edge": "e1",
+                  "from": "b",
+                  "to": "c",
+                  "label": "packet"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 800,
+                  "target": "j"
+                },
+                {
+                  "kind": "note",
+                  "start": 800,
+                  "end": 1600,
+                  "target": "k",
+                  "text": "deep note"
+                }
+              ]
             }
           ]
         }

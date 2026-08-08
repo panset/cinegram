@@ -9,6 +9,22 @@ nodes:
 edges:
   e0   client -> ing style=normal head=arrow
 
+views:
+  real       title="Fine"               from="other.dgm"
+  dupe       title=""                   from="/etc/passwd"
+  dupe       title=""                   from="again.dgm"
+  orphan     title=""                   from="nobody-clicks-me.dgm"
+
+interact:
+  click client     -> view real
+  click client     -> reveal svc
+  click nosuchnode -> reveal svc
+  click ing        -> view missing
+  click svc        -> reveal notanode
+  click ing        -> step nosuchstep
+  click ing        -> reveal ing
+  click ing        -> view real {wobble="3"}
+
 scenario "broken"
   step a "unknown node"
     highlight ingres
@@ -17,6 +33,12 @@ scenario "broken"
   step c "bad duration and unknown attribute"
     highlight ing {dur="soon" wobble="3"}
   step d "unknown action"
+  step e "misspelt attributes"
+    flow client -> ing {colour="red" durr="300ms"}
+  step f "attribute that belongs to another action"
+    highlight ing {ease="in-out"}
+  step g "unknown easing"
+    flow client -> ing {ease="bouncy"}
   step a "duplicate step id"
     highlight ing
 
@@ -29,6 +51,43 @@ diagnostics:
     hint: add `client --> svc` to the diagram, or route the flow through nodes that are connected
   19:26: error: attribute "dur": "soon" is not a duration
   19:40: warning: unknown highlight attribute "wobble"
+    hint: known here: at, color, delay, dur, label, style
   23:5: error: unknown action "teleport"
     hint: known actions: flow, highlight, note, dim, pulse, show, hide, wait, seq
-  26:3: error: duplicate step id "a"
+  27:34: warning: unknown flow attribute "colour"
+    hint: did you mean color?
+  27:45: warning: unknown flow attribute "durr"
+    hint: did you mean dur?
+  31:27: warning: unknown highlight attribute "ease"
+    hint: known here: at, color, delay, dur, label, style
+  35:32: error: attribute "ease": "bouncy" is not an easing
+    hint: valid easings are linear, in, out, in-out
+  38:3: error: duplicate step id "a"
+  43:16: error: view "dupe" has an absolute path
+    hint: use a path relative to this file so the document stays portable
+  44:1: error: duplicate view id "dupe"
+  45:1: warning: view "orphan" is declared but nothing clicks through to it
+  49:9: error: "client" already has a click binding
+    hint: give each clickable element a single behaviour
+  50:9: error: "nosuchnode" is not a node in this diagram
+    hint: known nodes: client, ing, svc
+  51:21: error: no view named "missing" is declared
+    hint: known views: real, dupe, orphan
+  52:23: error: "notanode" is not a node in this diagram
+    hint: known nodes: client, ing, svc
+  53:9: error: "ing" already has a click binding
+    hint: give each clickable element a single behaviour
+  53:21: error: no step named "nosuchstep" in this document
+    hint: known steps: a, b, c, d, e, f, g
+  54:16: error: expected a click target but found "teleport"
+    hint: known click targets: view, reveal, step
+  55:27: error: `view` takes one name, got 2
+    hint: only `reveal` accepts several targets
+  56:9: error: "ing" already has a click binding
+    hint: give each clickable element a single behaviour
+  56:23: error: "ing" reveals itself
+    hint: a hidden element cannot be clicked to reveal itself
+  57:9: error: "ing" already has a click binding
+    hint: give each clickable element a single behaviour
+  57:36: warning: unknown click attribute "wobble"
+    hint: known here: label, style

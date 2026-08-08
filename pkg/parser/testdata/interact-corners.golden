@@ -1,0 +1,30 @@
+diagram: flowchart (flowchart LR)
+direction: LR
+
+nodes:
+  a          label="Entry"                  shape=rect      
+  b          label="Middle"                 shape=rect      
+  c          label="Deep One"               shape=rect       group=detail
+  d          label="Deep Two"               shape=rect       group=detail
+
+groups:
+  detail     label="Hidden Detail"          parent=-          children=[c d]
+
+edges:
+  e0   a -> b style=normal head=arrow
+  e1   b -> c style=normal head=arrow
+  e2   c -> d style=normal head=arrow
+
+views:
+  titled     title="Has A Title"        from="sub/titled.dgm"
+  bare       title=""                   from="bare.dgm"
+
+interact:
+  click a          -> view titled {label="drill in" style="door"}
+  click b          -> reveal c, d, detail
+  click detail     -> view bare
+  click c          -> step only
+
+scenario "corners"
+  step only "walk"
+    flow a -> b {label="packet"}

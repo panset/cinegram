@@ -80,32 +80,33 @@ func TestTimingInvariants(t *testing.T) {
 		res, bag := parser.Parse(filepath.Base(src), string(content))
 		tl := Compile(res.Document, res.Symbols, bag)
 
-		for _, sc := range tl.Scenarios {
-			prevEnd := 0
-			for i, st := range sc.Steps {
-				if st.Start < prevEnd {
-					t.Errorf("%s: step %q starts at %d, before the previous step ended at %d",
-						src, st.ID, st.Start, prevEnd)
-				}
-				if st.End < st.Start {
-					t.Errorf("%s: step %q ends before it starts", src, st.ID)
-				}
-				prevEnd = st.End
+		for _, v := range tl.Views {
+			for _, sc := range v.Scenarios {
+				prevEnd := 0
+				for _, st := range sc.Steps {
+					if st.Start < prevEnd {
+						t.Errorf("%s: step %q starts at %d, before the previous step ended at %d",
+							src, st.ID, st.Start, prevEnd)
+					}
+					if st.End < st.Start {
+						t.Errorf("%s: step %q ends before it starts", src, st.ID)
+					}
+					prevEnd = st.End
 
-				for _, tr := range st.Tracks {
-					if tr.End < tr.Start {
-						t.Errorf("%s: track in step %q ends before it starts", src, st.ID)
-					}
-					if tr.Start < st.Start || tr.End > st.End {
-						t.Errorf("%s: track [%d,%d] in step %q escapes the step span [%d,%d]",
-							src, tr.Start, tr.End, st.ID, st.Start, st.End)
+					for _, tr := range st.Tracks {
+						if tr.End < tr.Start {
+							t.Errorf("%s: track in step %q ends before it starts", src, st.ID)
+						}
+						if tr.Start < st.Start || tr.End > st.End {
+							t.Errorf("%s: track [%d,%d] in step %q escapes the step span [%d,%d]",
+								src, tr.Start, tr.End, st.ID, st.Start, st.End)
+						}
 					}
 				}
-				_ = i
-			}
-			if len(sc.Steps) > 0 && sc.Duration != sc.Steps[len(sc.Steps)-1].End {
-				t.Errorf("%s: scenario duration %d does not match final step end %d",
-					src, sc.Duration, sc.Steps[len(sc.Steps)-1].End)
+				if len(sc.Steps) > 0 && sc.Duration != sc.Steps[len(sc.Steps)-1].End {
+					t.Errorf("%s: scenario duration %d does not match final step end %d",
+						src, sc.Duration, sc.Steps[len(sc.Steps)-1].End)
+				}
 			}
 		}
 	}
@@ -131,7 +132,7 @@ scenario "x"
 	}
 	tl := Compile(res.Document, res.Symbols, bag)
 
-	tracks := tl.Scenarios[0].Steps[0].Tracks
+	tracks := tl.Views[0].Scenarios[0].Steps[0].Tracks
 	if len(tracks) != 3 {
 		t.Fatalf("got %d tracks, want 3", len(tracks))
 	}
@@ -167,7 +168,7 @@ scenario "x"
 	}
 	tl := Compile(res.Document, res.Symbols, bag)
 
-	tracks := tl.Scenarios[0].Steps[0].Tracks
+	tracks := tl.Views[0].Scenarios[0].Steps[0].Tracks
 	if len(tracks) != 1 {
 		t.Fatalf("got %d tracks, want 1", len(tracks))
 	}
@@ -198,7 +199,7 @@ scenario "x"
 	}
 	tl := Compile(res.Document, res.Symbols, bag)
 
-	step := tl.Scenarios[0].Steps[0]
+	step := tl.Views[0].Scenarios[0].Steps[0]
 	if step.End != 900 {
 		t.Fatalf("step span = %d, want 900 from the flow", step.End)
 	}
@@ -236,7 +237,7 @@ scenario "x"
 	}
 	tl := Compile(res.Document, res.Symbols, bag)
 
-	step := tl.Scenarios[0].Steps[0]
+	step := tl.Views[0].Scenarios[0].Steps[0]
 	if step.End != 700 {
 		t.Errorf("step span = %d, want 300+400", step.End)
 	}
@@ -248,5 +249,103 @@ scenario "x"
 	}
 	if step.Tracks[1].Start != 300 || step.Tracks[1].End != 700 {
 		t.Errorf("second seq child = [%d,%d], want [300,700]", step.Tracks[1].Start, step.Tracks[1].End)
+	}
+}
+
+// TestRevealHidesGroupsTransitively pins the rule that revealing a subgraph
+// conceals everything inside it. Hiding the frame while its members stayed
+// drawn would look broken, and the renderer must not have to work that out.
+func TestRevealHidesGroupsTransitively(t *testing.T) {
+	const src = `flowchart LR
+  a[A]
+
+  subgraph outer[Outer]
+    b[B]
+    subgraph inner[Inner]
+      c[C]
+    end
+  end
+
+  a --> b
+  b --> c
+
+interact {
+  click a -> reveal outer
+}
+
+scenario "x"
+  step s "walk" {
+    flow a -> b
+  }
+`
+	res, bag := parser.Parse("inline.dgm", src)
+	if bag.HasErrors() {
+		t.Fatalf("unexpected diagnostics:\n%s", bag)
+	}
+	tl := Compile(res.Document, res.Symbols, bag)
+	v := tl.Views[0]
+
+	want := map[string]bool{"outer": true, "b": true, "inner": true, "c": true}
+	if len(v.Hidden) != len(want) {
+		t.Fatalf("hidden = %v, want %d elements", v.Hidden, len(want))
+	}
+	for _, id := range v.Hidden {
+		if !want[id] {
+			t.Errorf("hidden contains %q, which is not inside outer", id)
+		}
+	}
+
+	// The binding's own targets are expanded the same way, so the renderer
+	// toggles exactly the set it conceals.
+	if len(v.Bindings) != 1 {
+		t.Fatalf("got %d bindings, want 1", len(v.Bindings))
+	}
+	if len(v.Bindings[0].Targets) != len(v.Hidden) {
+		t.Errorf("binding targets = %v, want the same set as hidden %v",
+			v.Bindings[0].Targets, v.Hidden)
+	}
+}
+
+// TestBindingsLowerTheirKinds checks each verb reaches the IR in the shape the
+// runtime reads.
+func TestBindingsLowerTheirKinds(t *testing.T) {
+	const src = `flowchart LR
+  a[A]
+  b[B]
+  c[C]
+  a --> b
+  b --> c
+
+view sub "Sub" from "sub.dgm"
+
+interact {
+  click a -> view sub { label: "drill" }
+  click b -> step only
+  click c -> reveal b
+}
+
+scenario "x"
+  step only "walk" {
+    flow a -> b
+  }
+`
+	res, bag := parser.Parse("inline.dgm", src)
+	if bag.HasErrors() {
+		t.Fatalf("unexpected diagnostics:\n%s", bag)
+	}
+	tl := Compile(res.Document, res.Symbols, bag)
+	got := tl.Views[0].Bindings
+
+	if len(got) != 3 {
+		t.Fatalf("got %d bindings, want 3", len(got))
+	}
+	if got[0].Kind != "view" || got[0].View != "sub" || got[0].Label != "drill" {
+		t.Errorf("view binding = %+v", got[0])
+	}
+	if got[1].Kind != "step" || got[1].Step != "only" {
+		t.Errorf("step binding = %+v", got[1])
+	}
+	if got[2].Kind != "reveal" || len(got[2].Targets) != 1 || got[2].Targets[0] != "b" {
+		t.Errorf("reveal binding = %+v", got[2])
 	}
 }

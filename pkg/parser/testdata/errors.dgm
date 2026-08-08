@@ -23,6 +23,36 @@ scenario "broken"
     teleport client
   }
 
+  step e "misspelt attributes" {
+    flow client -> ing { colour: red, durr: 300ms }
+  }
+
+  step f "attribute that belongs to another action" {
+    highlight ing { ease: in-out }
+  }
+
+  step g "unknown easing" {
+    flow client -> ing { ease: bouncy }
+  }
+
   step a "duplicate step id" {
     highlight ing
   }
+
+view real "Fine" from "other.dgm"
+view dupe from "/etc/passwd"
+view dupe from "again.dgm"
+view orphan from "nobody-clicks-me.dgm"
+
+interact {
+  click client -> view real
+  click client -> reveal svc
+  click nosuchnode -> reveal svc
+  click ing -> view missing
+  click svc -> reveal notanode
+  click ing -> step nosuchstep
+  click ing -> teleport svc
+  click ing -> view real, extra
+  click ing -> reveal ing
+  click ing -> view real { wobble: 3 }
+}

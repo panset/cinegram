@@ -23,6 +23,7 @@ import (
 	"github.com/tejaspanse/diagramator/pkg/emit/html"
 	"github.com/tejaspanse/diagramator/pkg/emit/mermaid"
 	"github.com/tejaspanse/diagramator/pkg/ir"
+	"github.com/tejaspanse/diagramator/pkg/loader"
 	"github.com/tejaspanse/diagramator/pkg/parser"
 )
 
@@ -89,11 +90,22 @@ func load(path string, stderr io.Writer) (*parser.Result, *diag.Bag, error) {
 }
 
 func report(bag *diag.Bag, stderr io.Writer) error {
-	if bag.Len() > 0 {
-		fmt.Fprintln(stderr, bag)
+	return reportAll([]*diag.Bag{bag}, stderr)
+}
+
+// reportAll prints the diagnostics of every file in a bundle. Each bag is
+// labelled with its own filename, so a problem in a drilled-into diagram is
+// attributable to the file that actually contains it.
+func reportAll(bags []*diag.Bag, stderr io.Writer) error {
+	errs := 0
+	for _, bag := range bags {
+		if bag.Len() > 0 {
+			fmt.Fprintln(stderr, bag)
+		}
+		errs += countErrors(bag)
 	}
-	if bag.HasErrors() {
-		return fmt.Errorf("%s", plural(countErrors(bag), "error"))
+	if errs > 0 {
+		return fmt.Errorf("%s", plural(errs, "error"))
 	}
 	return nil
 }
@@ -187,12 +199,12 @@ func cmdCompile(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	res, bag, err := load(input, stderr)
+	bundle, err := loader.Load(input, os.ReadFile)
 	if err != nil {
 		return err
 	}
-	timeline := compile.Compile(res.Document, res.Symbols, bag)
-	if err := report(bag, stderr); err != nil {
+	timeline := compile.CompileBundle(bundle)
+	if err := reportAll(bundle.Bags(), stderr); err != nil {
 		return err
 	}
 
@@ -227,15 +239,15 @@ func cmdPreview(args []string, stdout, stderr io.Writer) error {
 		output = defaultOutputPath(input)
 	}
 
-	res, bag, err := load(input, stderr)
+	bundle, err := loader.Load(input, os.ReadFile)
 	if err != nil {
 		return err
 	}
-	timeline := compile.Compile(res.Document, res.Symbols, bag)
-	if err := report(bag, stderr); err != nil {
+	timeline := compile.CompileBundle(bundle)
+	if err := reportAll(bundle.Bags(), stderr); err != nil {
 		return err
 	}
-	if len(timeline.Scenarios) == 0 {
+	if rootHasNoScenarios(timeline) {
 		fmt.Fprintln(stderr, "diagramator: warning: no scenarios, the page will render a static diagram")
 	}
 
@@ -256,11 +268,31 @@ func defaultOutputPath(input string) string {
 	return strings.TrimSuffix(input, filepath.Ext(input)) + ".html"
 }
 
+// title names the page after the root view, falling back to its first scenario.
 func title(t *ir.Timeline) string {
-	if len(t.Scenarios) > 0 && t.Scenarios[0].Name != "" {
-		return t.Scenarios[0].Name
+	if v := rootView(t); v != nil {
+		if v.Title != "" {
+			return v.Title
+		}
+		if len(v.Scenarios) > 0 && v.Scenarios[0].Name != "" {
+			return v.Scenarios[0].Name
+		}
 	}
 	return "Diagramator"
+}
+
+func rootView(t *ir.Timeline) *ir.View {
+	for i := range t.Views {
+		if t.Views[i].ID == t.Root {
+			return &t.Views[i]
+		}
+	}
+	return nil
+}
+
+func rootHasNoScenarios(t *ir.Timeline) bool {
+	v := rootView(t)
+	return v == nil || len(v.Scenarios) == 0
 }
 
 func cmdLint(args []string, stdout, stderr io.Writer) error {
@@ -268,14 +300,16 @@ func cmdLint(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	res, bag, err := load(input, stderr)
+	// Lint follows view references too, so a `from` path that points at
+	// nothing is caught here rather than at preview time.
+	bundle, err := loader.Load(input, os.ReadFile)
 	if err != nil {
 		return err
 	}
 	// Compile as well: some problems (a bad duration on an action that
 	// validation skipped) only surface during the timing pass.
-	compile.Compile(res.Document, res.Symbols, bag)
-	if err := report(bag, stderr); err != nil {
+	compile.CompileBundle(bundle)
+	if err := reportAll(bundle.Bags(), stderr); err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "%s: ok\n", input)

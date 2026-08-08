@@ -1,11 +1,11 @@
 // Package parser turns Diagramator source into an ast.Document.
 //
 // A document is parsed in two independent halves. The diagram body is handed to
-// whichever registry.DiagramParser claims its opening keyword; the scenario
-// blocks that follow are parsed by this package's shared, diagram-agnostic
-// scenario parser. Neither half knows about the other — they meet only in the
-// validation pass, which resolves scenario references against the symbol table
-// the diagram parser produced.
+// whichever registry.DiagramParser claims its opening keyword; the `scenario`,
+// `view` and `interact` blocks that follow are parsed by this package's shared,
+// diagram-agnostic parser. Neither half knows about the other — they meet only
+// in the validation pass, which resolves the names those blocks mention against
+// the symbol table the diagram parser produced.
 package parser
 
 import (
@@ -58,8 +58,13 @@ func Parse(filename, content string) (*Result, *diag.Bag) {
 	diagram, table := dp.Parse(cur, bag)
 	doc.Diagram = diagram
 
-	doc.Scenarios = parseScenarios(cur, bag)
+	top := parseTopLevel(cur, bag)
+	doc.Scenarios = top.Scenarios
+	doc.Views = top.Views
+	doc.Interactions = top.Interactions
+
 	validateScenarios(doc.Scenarios, table, bag)
+	validateInteract(doc, table, bag)
 
 	return &Result{Document: doc, Symbols: table, File: file}, bag
 }

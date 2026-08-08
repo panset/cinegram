@@ -24,10 +24,11 @@ type DiagramParser interface {
 	// "flowchart" and "graph".
 	Keywords() []string
 
-	// Parse consumes the diagram header and body from c, stopping at the
-	// first top-level `scenario` block or at end of input. Problems are
-	// reported into b; Parse should recover and keep going where it can so
-	// that one bad line does not mask the rest of the file.
+	// Parse consumes the diagram header and body from c, stopping at end of
+	// input or at the first top-level block that belongs to the scenario
+	// half — `scenario`, `view` or `interact`. Problems are reported into b;
+	// Parse should recover and keep going where it can so that one bad line
+	// does not mask the rest of the file.
 	Parse(c *source.Cursor, b *diag.Bag) (ast.Diagram, *symbol.Table)
 }
 

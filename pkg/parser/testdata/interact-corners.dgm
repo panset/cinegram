@@ -1,0 +1,30 @@
+%% Exercises every form the interaction grammar accepts, so the parser has a
+%% fixture that is not the example.
+flowchart LR
+  a[Entry]
+  b[Middle]
+
+  subgraph detail[Hidden Detail]
+    c[Deep One]
+    d[Deep Two]
+  end
+
+  a --> b
+  b --> c
+  c --> d
+
+%% A view with a title, and one without.
+view titled "Has A Title" from "sub/titled.dgm"
+view bare from "bare.dgm"
+
+interact {
+  click a -> view titled { label: "drill in", style: door }
+  click b -> reveal c, d, detail
+  click detail -> view bare
+  click c -> step only
+}
+
+scenario "corners"
+  step only "walk" {
+    flow a -> b { label: "packet" }
+  }

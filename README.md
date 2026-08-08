@@ -14,7 +14,8 @@ open /tmp/k8s.html
 
 ## The language
 
-A `.dgm` file is a Mermaid diagram followed by one or more `scenario` blocks.
+A `.dgm` file is a Mermaid diagram followed by one or more `scenario` blocks,
+plus optional `view` and `interact` blocks that make elements clickable.
 
 ```
 flowchart LR
@@ -80,12 +81,49 @@ actions inside one step to chain instead.
 Written as `{ key: value, … }` after an action, or as bare `key: value` lines
 inside a step or scenario body. Blocks may span lines.
 
-- `label` — text carried by a flow
-- `dur` — `600ms`, `1.2s`, or a bare number of milliseconds
-- `delay`, `at` — offset the start
-- `style` — a name the renderer maps to CSS (`response` and `busy` ship styled)
-- `color`, `ease`, `repeat`, `bidi`
-- scenario only: `speed`, `loop`, `autoplay`
+Every action understands `label`, `dur`, `delay`, `at` and `style`; the rest are
+per action, and an attribute an action does not understand is a warning with a
+suggestion rather than a silent no-op.
+
+| Attribute | Where | Meaning |
+| --- | --- | --- |
+| `label` | any action | Text carried by a flow, or a caption. |
+| `dur` | any action | `600ms`, `1.2s`, or a bare number of milliseconds. |
+| `delay`, `at` | any action | Offset the start within the step. |
+| `style` | any action | A name the renderer maps to CSS (`response` and `busy` ship styled). |
+| `color` | `flow`, `highlight`, `pulse` | Any CSS colour, e.g. `"#22c55e"` or `green`. Quote anything starting with `#`. |
+| `ease` | `flow` | `linear` (default), `in`, `out`, `in-out`. |
+| `repeat` | `flow`, `pulse` | Repeat count. Parsed and reserved; the runtime does not read it yet. |
+| `bidi` | `flow` | Travel both ways. Parsed and reserved; the runtime does not read it yet. |
+| `speed` | scenario | Initial playback rate, e.g. `1.5`. The player starts here; the speed button cycles from it. |
+| `loop` | scenario | Restart at the end. |
+| `autoplay` | scenario | Start playing once the diagram has rendered. Defaults to **true**, and is skipped when the system asks for reduced motion. |
+
+`color` reaches the page as a `--dgm-color` custom property on the particle or
+the node, which `runtime.css` reads with the theme colour as its fallback — so a
+colour tints the same parts the default would have, in both light and dark.
+
+`ease` is a remap of the flow's progress, not a CSS transition: the runtime
+evaluates it at the current time rather than integrating between frames, so
+scrubbing to a moment shows exactly what playing to it would.
+
+`examples/deploy-pipeline.dgm` puts them together — a green deploy easing into
+production, a red rollback coming back out:
+
+```
+scenario "ship a release" { speed: 1.5, autoplay: true }
+
+  step promote "Promote to production, slowly at first" {
+    flow staging -> prod {
+      label: "canary 10% then 100%", dur: 1100ms, color: "#22c55e", ease: in-out
+    }
+    highlight prod { color: "#22c55e" }
+  }
+
+  step rollback "Roll back to the last good image" {
+    flow prod -> reg { label: "rollback", dur: 900ms, color: "#ef4444", ease: out }
+  }
+```
 
 Durations behave predictably:
 
@@ -100,6 +138,42 @@ A flow may travel **against** the direction an edge was drawn. Response paths
 are the normal case, so `flow pod1 -> svc` reuses the `svc --> pod1` edge and
 marks the track reversed rather than demanding you draw a second arrow.
 
+## Interaction
+
+One diagram can only say so much. A cluster-level view has to either omit what
+happens inside a pod or clutter the main picture with it. An `interact` block
+makes elements clickable so the detail has somewhere to live:
+
+```
+view podA "Inside Pod A" from "pod-a.dgm"
+
+interact {
+  click pod1    -> view podA { label: "Zoom into Pod A" }
+  click cluster -> reveal cp
+  click pod2    -> step balance
+}
+```
+
+| Click target | Form | Notes |
+| --- | --- | --- |
+| `view` | `click pod1 -> view podA` | Drill into another diagram, declared by a `view` line. |
+| `reveal` | `click cluster -> reveal cp` | Toggle elements that start hidden. A subgraph brings its contents. |
+| `step` | `click pod2 -> step balance` | Seek the current scenario to that step. |
+
+Bindings take `label` (a hover tooltip) and `style`. Nodes and subgraphs are
+both clickable, and each element may carry one binding.
+
+**Sub-diagrams are ordinary `.dgm` files.** `pod-a.dgm` previews and lints on
+its own; `from` paths resolve relative to the file that declares them. `preview`
+follows every reference and bundles the whole set into one self-contained page,
+so drilling in swaps the stage rather than loading anything. The current view is
+in `location.hash`, which makes browser back and forward work as expected.
+
+**`reveal` is not `show`/`hide`.** Those are timeline state: the clock owns them
+and a seek resets them. Reveal is interaction state that persists until the
+viewer leaves the view. Being the target of a reveal is what makes an element
+start hidden — there is no separate declaration.
+
 ## Commands
 
 ```
@@ -108,6 +182,14 @@ diagramator mermaid <file.dgm> [-o out.mmd]    # the diagram as plain Mermaid
 diagramator preview <file.dgm> [-o out.html]   # self-contained animated page
 diagramator lint    <file.dgm>                 # diagnostics only
 ```
+
+The preview page plays itself: after a view renders, a scenario with
+`autoplay` (the default) starts, unless the reader's system asks for reduced
+motion. Space toggles play, the arrow keys step, and the speed button cycles
+`0.25 → 0.5 → 1 → 1.5 → 2` starting from whatever the scenario's `speed` set —
+its label always shows the rate actually in effect. `window.DIAGRAMATOR_PLAYER`
+is the same player, so `DIAGRAMATOR_PLAYER.seek(2400)` lands on a moment
+deterministically.
 
 Relative paths are resolved against the directory you ran the command from,
 including under `bazel run` — the binary executes from its runfiles tree, so
@@ -129,12 +211,15 @@ errors.dgm:15:20: error: no edge between "client" and "svc" to animate along
 ```
 source.dgm
    │
-   ├─ parser ──────────────► ast.Document + symbol.Table
+   ├─ loader ──────────────► the file and every `view` it references
+   │
+   ├─ parser ──────────────► ast.Document + symbol.Table   (per file, no I/O)
    │    ├── flowchart.go        the diagram half (pluggable per diagram type)
-   │    └── scenario.go         the animation half (diagram-agnostic)
+   │    ├── scenario.go         the animation half (diagram-agnostic)
+   │    └── interact.go         the interaction half (diagram-agnostic)
    │
-   ├─ compile ────────────► ir.Timeline      absolute-millisecond tracks
-   │
+   ├─ compile ────────────► ir.Timeline      one View per diagram,
+   │                                         absolute-millisecond tracks
    └─ emit
         ├── mermaid ───────► plain Mermaid source
         └── html ─────────► self-contained animated page
@@ -151,10 +236,15 @@ Two design decisions are load-bearing and worth preserving:
   timeline could drive a Go-native SVG backend later without recompilation.
 
 - **The animation layer never mentions flowcharts.** A diagram parser's only
-  obligation is to produce a `symbol.Table`; scenario parsing, validation, and
-  compilation work against that alone. Adding `sequenceDiagram` or
-  `architecture-beta` costs one parser in `pkg/parser` registered via
-  `pkg/registry`, and zero changes anywhere else.
+  obligation is to produce a `symbol.Table`; scenario parsing, interaction
+  bindings, validation, and compilation work against that alone. Adding
+  `sequenceDiagram` or `architecture-beta` costs one parser in `pkg/parser`
+  registered via `pkg/registry`, and zero changes anywhere else.
+
+- **Parsing does no I/O.** `parser.Parse` takes content and returns a tree, so
+  it stays usable from a webview or a WASM build with no filesystem. Resolving
+  the paths in `view` declarations is `pkg/loader`'s job, and it takes its read
+  function as an argument.
 
 The runtime binds to the rendered SVG defensively: nodes by mermaid's
 `flowchart-<id>-<n>` id, and edges by matching path endpoints against node
@@ -195,7 +285,7 @@ module, because module scripts are blocked on `file://` and awkward in webviews.
 
 Working today: flowcharts (`flowchart` / `graph`) with every Mermaid node shape
 and link form, nested subgraphs, frontmatter, scenarios, the timeline compiler,
-and the animated HTML preview.
+clickable drill-down between diagrams, and the animated HTML preview.
 
 Not built yet: sequence diagrams and `architecture-beta` (the registry seam
 exists for them), the VS Code plugin, WASM builds, and animated SVG/GIF export.

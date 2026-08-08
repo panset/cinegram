@@ -1,0 +1,75 @@
+%% A commit's journey from a laptop to production, and back again when the
+%% error budget says otherwise. It exercises the attributes the compiler emits
+%% and the runtime honours: scenario `speed` and `autoplay`, per-action
+%% `color`, and `ease` on the promotion hops.
+flowchart LR
+  dev[Developer Laptop]
+  git[(Git Repository)]
+  ci[CI Pipeline]
+  reg[(Container Registry)]
+
+  subgraph envs[Kubernetes Environments]
+    staging[Staging Cluster]
+    prod[Production Cluster]
+  end
+
+  dev --> git
+  git --> ci
+  ci --> reg
+  reg --> staging
+  staging --> prod
+  prod -. rollback .-> reg
+
+scenario "ship a release" { speed: 1.5, autoplay: true }
+
+  step commit "Developer pushes a commit" {
+    flow dev -> git { label: "git push", dur: 500ms, color: "#22c55e" }
+    highlight git { color: "#22c55e" }
+  }
+
+  step build "CI builds and tests the change" {
+    flow git -> ci { label: "webhook", dur: 400ms, color: "#22c55e" }
+    pulse ci { color: "#22c55e" }
+    note ci "unit + integration\n4m 12s"
+  }
+
+  step publish "The image lands in the registry" {
+    flow ci -> reg { label: "sha-9f2c1a", dur: 600ms, color: "#22c55e" }
+    highlight reg { color: "#22c55e" }
+  }
+
+  step stage "Promote to staging" {
+    flow reg -> staging {
+      label: "helm upgrade",
+      dur: 700ms,
+      color: "#22c55e",
+      ease: in-out
+    }
+    highlight staging { color: "#22c55e" }
+  }
+
+  step promote "Promote to production, slowly at first" {
+    flow staging -> prod {
+      label: "canary 10% then 100%",
+      dur: 1100ms,
+      color: "#22c55e",
+      ease: in-out
+    }
+    highlight prod { color: "#22c55e" }
+  }
+
+  step observe "Error rate climbs past the budget" {
+    highlight prod { color: "#ef4444", dur: 700ms }
+    note prod "5xx at 4.2%\nSLO burn rate 14x"
+  }
+
+  step rollback "Roll back to the last good image" {
+    flow prod -> reg {
+      label: "rollback to sha-3d81b7",
+      dur: 900ms,
+      color: "#ef4444",
+      ease: out
+    }
+    highlight reg { color: "#ef4444" }
+    dim staging
+  }

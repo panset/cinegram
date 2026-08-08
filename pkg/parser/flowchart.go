@@ -87,8 +87,9 @@ func (p flowchartParser) parseBody(c *source.Cursor, b *diag.Bag, t *symbol.Tabl
 			}
 			return stmts
 
-		case word == "scenario" && !inSubgraph:
-			// Hand control back for scenario parsing.
+		case isTopLevelKeyword(word) && !inSubgraph:
+			// Hand control back: the rest of the file belongs to the
+			// scenario half.
 			return stmts
 
 		case word == "subgraph":

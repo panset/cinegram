@@ -1,0 +1,18 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "loader",
+    srcs = ["loader.go"],
+    importpath = "github.com/tejaspanse/diagramator/pkg/loader",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/diag",
+        "//pkg/parser",
+    ],
+)
+
+go_test(
+    name = "loader_test",
+    srcs = ["loader_test.go"],
+    embed = [":loader"],
+)

@@ -117,6 +117,25 @@ func renderParse(res *Result, bag *diag.Bag) string {
 		b.WriteByte('\n')
 	}
 
+	if views := res.Document.Views; len(views) > 0 {
+		b.WriteString("\nviews:\n")
+		for _, v := range views {
+			fmt.Fprintf(&b, "  %-10s title=%-20q from=%q\n", v.ID, v.Title, v.Path)
+		}
+	}
+
+	if bindings := res.Document.Interactions; len(bindings) > 0 {
+		b.WriteString("\ninteract:\n")
+		for _, bd := range bindings {
+			names := make([]string, 0, len(bd.Targets))
+			for _, t := range bd.Targets {
+				names = append(names, t.Name)
+			}
+			fmt.Fprintf(&b, "  click %-10s -> %s %s%s\n",
+				bd.Source.Name, bd.Kind, strings.Join(names, ", "), renderAttrs(bd.Attrs))
+		}
+	}
+
 	for _, sc := range res.Document.Scenarios {
 		fmt.Fprintf(&b, "\nscenario %q%s\n", sc.Name, renderAttrs(sc.Attrs))
 		for _, st := range sc.Steps {

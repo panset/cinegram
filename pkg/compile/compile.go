@@ -14,6 +14,7 @@ import (
 	"github.com/tejaspanse/diagramator/pkg/diag"
 	"github.com/tejaspanse/diagramator/pkg/emit/mermaid"
 	"github.com/tejaspanse/diagramator/pkg/ir"
+	"github.com/tejaspanse/diagramator/pkg/loader"
 	"github.com/tejaspanse/diagramator/pkg/symbol"
 	"github.com/tejaspanse/diagramator/pkg/units"
 )
@@ -27,42 +28,138 @@ const (
 	defaultStepMillis = 800
 )
 
-// Compile lowers doc into a timeline. Problems are reported into bag; the
-// returned timeline is still well-formed so that callers can render a partial
-// result alongside the diagnostics.
+// Compile lowers a single document into a one-view timeline. Problems are
+// reported into bag; the returned timeline is still well-formed so that callers
+// can render a partial result alongside the diagnostics.
+//
+// A document that declares views compiles here with those bindings unresolved —
+// use CompileBundle to follow them.
 func Compile(doc *ast.Document, table *symbol.Table, bag *diag.Bag) *ir.Timeline {
-	t := &ir.Timeline{
-		Version: ir.Version,
+	v := compileView(doc, table, "main", "", nil, bag)
+	return &ir.Timeline{Version: ir.Version, Root: v.ID, Views: []ir.View{v}}
+}
+
+// CompileBundle lowers every document a loader reached into one timeline, so a
+// single page can host the whole set and clicks can navigate between them.
+func CompileBundle(b *loader.Bundle) *ir.Timeline {
+	t := &ir.Timeline{Version: ir.Version, Root: b.Root}
+	for _, u := range b.Units {
+		t.Views = append(t.Views, compileView(
+			u.Result.Document, u.Result.Symbols, u.ViewID, u.Title, u.Views, u.Bag))
+	}
+	return t
+}
+
+// compileView lowers one document. aliases maps the local `view` names the
+// document used onto canonical view ids; it is nil when compiling standalone.
+func compileView(doc *ast.Document, table *symbol.Table, id, title string, aliases map[string]string, bag *diag.Bag) ir.View {
+	v := ir.View{
+		ID:      id,
+		Title:   title,
 		Diagram: ir.Diagram{Mermaid: mermaid.Emit(doc)},
 	}
 	if doc.Diagram != nil {
-		t.Diagram.Type = doc.Diagram.Kind()
+		v.Diagram.Type = doc.Diagram.Kind()
 		if fc, ok := doc.Diagram.(*ast.Flowchart); ok {
-			t.Diagram.Direction = fc.Direction
+			v.Diagram.Direction = fc.Direction
 		}
+	}
+	if v.Title == "" && len(doc.Scenarios) > 0 {
+		v.Title = doc.Scenarios[0].Name
 	}
 
 	for _, n := range table.Nodes() {
-		t.Nodes = append(t.Nodes, ir.Node{
+		v.Nodes = append(v.Nodes, ir.Node{
 			ID: n.ID, Label: n.Label, Shape: n.Shape, Group: n.Group, Class: n.Class,
 		})
 	}
 	for _, g := range table.Groups() {
-		t.Groups = append(t.Groups, ir.Group{
+		v.Groups = append(v.Groups, ir.Group{
 			ID: g.ID, Label: g.Label, Parent: g.Parent, Children: g.Children,
 		})
 	}
 	for _, e := range table.Edges() {
-		t.Edges = append(t.Edges, ir.Edge{
+		v.Edges = append(v.Edges, ir.Edge{
 			ID: e.ID, From: e.From, To: e.To, Label: e.Label,
 			Style: e.Style, Head: e.Head, Bidir: e.Bidir,
 		})
 	}
 
 	for i, sc := range doc.Scenarios {
-		t.Scenarios = append(t.Scenarios, compileScenario(sc, i, table, bag))
+		v.Scenarios = append(v.Scenarios, compileScenario(sc, i, table, bag))
 	}
-	return t
+
+	v.Bindings, v.Hidden = compileBindings(doc.Interactions, table, aliases)
+	return v
+}
+
+// compileBindings lowers click bindings and derives the set of elements that
+// start hidden.
+func compileBindings(bindings []*ast.Binding, table *symbol.Table, aliases map[string]string) ([]ir.Binding, []string) {
+	var out []ir.Binding
+	var hidden []string
+	seen := map[string]bool{}
+
+	for _, bd := range bindings {
+		b := ir.Binding{
+			Source: bd.Source.Name,
+			Kind:   string(bd.Kind),
+			Label:  bd.Attrs.String("label"),
+			Style:  bd.Attrs.String("style"),
+		}
+
+		switch bd.Kind {
+		case ast.BindView:
+			if len(bd.Targets) == 0 {
+				continue // reported during validation
+			}
+			alias := bd.Targets[0].Name
+			b.View = alias
+			if canonical, ok := aliases[alias]; ok {
+				b.View = canonical
+			}
+
+		case ast.BindStep:
+			if len(bd.Targets) == 0 {
+				continue
+			}
+			b.Step = bd.Targets[0].Name
+
+		case ast.BindReveal:
+			// Targets are expanded the same way Hidden is, so the renderer
+			// toggles exactly the set it conceals and never has to know that
+			// a group implies its contents.
+			for _, tgt := range bd.Targets {
+				for _, id := range expand(tgt.Name, table) {
+					b.Targets = append(b.Targets, id)
+					if !seen[id] {
+						seen[id] = true
+						hidden = append(hidden, id)
+					}
+				}
+			}
+		}
+
+		out = append(out, b)
+	}
+	return out, hidden
+}
+
+// expand returns name plus, when it is a group, everything inside it.
+//
+// Concealing a subgraph frame while its members stayed drawn would look broken,
+// so a group reveal hides the whole cluster. Group children mix node and nested
+// group ids with no discriminator, so this recurses on whichever it finds.
+func expand(name string, table *symbol.Table) []string {
+	g, ok := table.Group(name)
+	if !ok {
+		return []string{name}
+	}
+	out := []string{name}
+	for _, child := range g.Children {
+		out = append(out, expand(child, table)...)
+	}
+	return out
 }
 
 func compileScenario(sc *ast.Scenario, index int, table *symbol.Table, bag *diag.Bag) ir.Scenario {
@@ -80,7 +177,7 @@ func compileScenario(sc *ast.Scenario, index int, table *symbol.Table, bag *diag
 		span := stepSpan(st, bag)
 
 		step := ir.Step{
-			ID:    stepID(st, i),
+			ID:    st.EffectiveID(i),
 			Name:  st.Name,
 			Start: start,
 			End:   start + span,
@@ -91,13 +188,6 @@ func compileScenario(sc *ast.Scenario, index int, table *symbol.Table, bag *diag
 	}
 	out.Duration = cursor
 	return out
-}
-
-func stepID(st *ast.Step, i int) string {
-	if st.ID != "" {
-		return st.ID
-	}
-	return "step" + strconv.Itoa(i)
 }
 
 // stepSpan decides how long a step lasts: an explicit `dur` if given, otherwise

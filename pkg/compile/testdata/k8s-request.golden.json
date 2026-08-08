@@ -1,280 +1,343 @@
 {
-  "version": 1,
-  "diagram": {
-    "type": "flowchart",
-    "direction": "LR",
-    "mermaid": "%% API request path through a Kubernetes cluster.\n%% Strip the scenario block and this is ordinary Mermaid.\nflowchart LR\n  client[External Client]\n  lb[(Cloud Load Balancer)]\n  subgraph cluster[Kubernetes Cluster]\n    ing[Ingress Controller]\n    subgraph ns[namespace: prod]\n      svc[ClusterIP Service]\n      pod1[Pod A]\n      pod2[Pod B]\n    end\n  end\n  client --\u003e lb\n  lb --\u003e ing\n  ing --\u003e svc\n  svc --\u003e pod1\n  svc --\u003e pod2\n"
-  },
-  "nodes": [
+  "version": 2,
+  "root": "main",
+  "views": [
     {
-      "id": "client",
-      "label": "External Client",
-      "shape": "rect"
-    },
-    {
-      "id": "lb",
-      "label": "Cloud Load Balancer",
-      "shape": "cylinder"
-    },
-    {
-      "id": "ing",
-      "label": "Ingress Controller",
-      "shape": "rect",
-      "group": "cluster"
-    },
-    {
-      "id": "svc",
-      "label": "ClusterIP Service",
-      "shape": "rect",
-      "group": "ns"
-    },
-    {
-      "id": "pod1",
-      "label": "Pod A",
-      "shape": "rect",
-      "group": "ns"
-    },
-    {
-      "id": "pod2",
-      "label": "Pod B",
-      "shape": "rect",
-      "group": "ns"
-    }
-  ],
-  "groups": [
-    {
-      "id": "cluster",
-      "label": "Kubernetes Cluster",
-      "children": [
-        "ing",
-        "ns"
-      ]
-    },
-    {
-      "id": "ns",
-      "label": "namespace: prod",
-      "parent": "cluster",
-      "children": [
-        "svc",
-        "pod1",
-        "pod2"
-      ]
-    }
-  ],
-  "edges": [
-    {
-      "id": "e0",
-      "from": "client",
-      "to": "lb",
-      "style": "normal",
-      "head": "arrow"
-    },
-    {
-      "id": "e1",
-      "from": "lb",
-      "to": "ing",
-      "style": "normal",
-      "head": "arrow"
-    },
-    {
-      "id": "e2",
-      "from": "ing",
-      "to": "svc",
-      "style": "normal",
-      "head": "arrow"
-    },
-    {
-      "id": "e3",
-      "from": "svc",
-      "to": "pod1",
-      "style": "normal",
-      "head": "arrow"
-    },
-    {
-      "id": "e4",
-      "from": "svc",
-      "to": "pod2",
-      "style": "normal",
-      "head": "arrow"
-    }
-  ],
-  "scenarios": [
-    {
-      "id": "s0",
-      "name": "GET /api/orders",
-      "duration": 4700,
-      "speed": 1,
-      "loop": true,
-      "autoplay": true,
-      "steps": [
+      "id": "main",
+      "title": "GET /api/orders",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% API request path through a Kubernetes cluster.\n%% Strip the scenario block and this is ordinary Mermaid.\nflowchart LR\n  client[External Client]\n  lb[(Cloud Load Balancer)]\n  subgraph cluster[Kubernetes Cluster]\n    ing[Ingress Controller]\n    subgraph cp[control plane]\n      api[kube-apiserver]\n      etcd[(etcd)]\n    end\n    subgraph ns[namespace: prod]\n      svc[ClusterIP Service]\n      pod1[Pod A]\n      pod2[Pod B]\n    end\n  end\n  client --\u003e lb\n  lb --\u003e ing\n  ing --\u003e svc\n  svc --\u003e pod1\n  svc --\u003e pod2\n  api --\u003e etcd\n"
+      },
+      "nodes": [
         {
-          "id": "edge",
-          "name": "Request reaches the load balancer",
-          "start": 0,
-          "end": 700,
-          "tracks": [
+          "id": "client",
+          "label": "External Client",
+          "shape": "rect"
+        },
+        {
+          "id": "lb",
+          "label": "Cloud Load Balancer",
+          "shape": "cylinder"
+        },
+        {
+          "id": "ing",
+          "label": "Ingress Controller",
+          "shape": "rect",
+          "group": "cluster"
+        },
+        {
+          "id": "api",
+          "label": "kube-apiserver",
+          "shape": "rect",
+          "group": "cp"
+        },
+        {
+          "id": "etcd",
+          "label": "etcd",
+          "shape": "cylinder",
+          "group": "cp"
+        },
+        {
+          "id": "svc",
+          "label": "ClusterIP Service",
+          "shape": "rect",
+          "group": "ns"
+        },
+        {
+          "id": "pod1",
+          "label": "Pod A",
+          "shape": "rect",
+          "group": "ns"
+        },
+        {
+          "id": "pod2",
+          "label": "Pod B",
+          "shape": "rect",
+          "group": "ns"
+        }
+      ],
+      "groups": [
+        {
+          "id": "cluster",
+          "label": "Kubernetes Cluster",
+          "children": [
+            "ing",
+            "cp",
+            "ns"
+          ]
+        },
+        {
+          "id": "cp",
+          "label": "control plane",
+          "parent": "cluster",
+          "children": [
+            "api",
+            "etcd"
+          ]
+        },
+        {
+          "id": "ns",
+          "label": "namespace: prod",
+          "parent": "cluster",
+          "children": [
+            "svc",
+            "pod1",
+            "pod2"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "client",
+          "to": "lb",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "lb",
+          "to": "ing",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "ing",
+          "to": "svc",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "svc",
+          "to": "pod1",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "svc",
+          "to": "pod2",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "api",
+          "to": "etcd",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "GET /api/orders",
+          "duration": 4700,
+          "speed": 1,
+          "loop": true,
+          "autoplay": true,
+          "steps": [
             {
-              "kind": "flow",
+              "id": "edge",
+              "name": "Request reaches the load balancer",
               "start": 0,
               "end": 700,
-              "edge": "e0",
-              "from": "client",
-              "to": "lb",
-              "label": "GET /api/orders"
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 700,
+                  "edge": "e0",
+                  "from": "client",
+                  "to": "lb",
+                  "label": "GET /api/orders"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 700,
+                  "target": "lb",
+                  "style": "active"
+                }
+              ]
             },
             {
-              "kind": "highlight",
-              "start": 0,
-              "end": 700,
-              "target": "lb",
-              "style": "active"
-            }
-          ]
-        },
-        {
-          "id": "terminate",
-          "name": "TLS terminates at the ingress controller",
-          "start": 700,
-          "end": 1300,
-          "tracks": [
-            {
-              "kind": "flow",
+              "id": "terminate",
+              "name": "TLS terminates at the ingress controller",
               "start": 700,
               "end": 1300,
-              "edge": "e1",
-              "from": "lb",
-              "to": "ing",
-              "label": "HTTP/1.1"
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 700,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "lb",
+                  "to": "ing",
+                  "label": "HTTP/1.1"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 700,
+                  "end": 1300,
+                  "target": "ing",
+                  "style": "active"
+                }
+              ]
             },
             {
-              "kind": "highlight",
-              "start": 700,
-              "end": 1300,
-              "target": "ing",
-              "style": "active"
-            }
-          ]
-        },
-        {
-          "id": "route",
-          "name": "Ingress rule matches host and path",
-          "start": 1300,
-          "end": 1800,
-          "tracks": [
-            {
-              "kind": "note",
+              "id": "route",
+              "name": "Ingress rule matches host and path",
               "start": 1300,
               "end": 1800,
-              "target": "ing",
-              "text": "host: api.example.com\npath: /api/*"
+              "tracks": [
+                {
+                  "kind": "note",
+                  "start": 1300,
+                  "end": 1800,
+                  "target": "ing",
+                  "text": "host: api.example.com\npath: /api/*"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1300,
+                  "end": 1800,
+                  "edge": "e2",
+                  "from": "ing",
+                  "to": "svc"
+                }
+              ]
             },
             {
-              "kind": "flow",
-              "start": 1300,
-              "end": 1800,
-              "edge": "e2",
-              "from": "ing",
-              "to": "svc"
-            }
-          ]
-        },
-        {
-          "id": "balance",
-          "name": "kube-proxy picks a healthy endpoint",
-          "start": 1800,
-          "end": 2400,
-          "tracks": [
-            {
-              "kind": "flow",
+              "id": "balance",
+              "name": "kube-proxy picks a healthy endpoint",
               "start": 1800,
               "end": 2400,
-              "edge": "e3",
-              "from": "svc",
-              "to": "pod1",
-              "label": "10.1.2.3:8080"
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1800,
+                  "end": 2400,
+                  "edge": "e3",
+                  "from": "svc",
+                  "to": "pod1",
+                  "label": "10.1.2.3:8080"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1800,
+                  "end": 2400,
+                  "target": "pod2"
+                }
+              ]
             },
             {
-              "kind": "dim",
-              "start": 1800,
-              "end": 2400,
-              "target": "pod2"
-            }
-          ]
-        },
-        {
-          "id": "work",
-          "name": "Pod A handles the request",
-          "start": 2400,
-          "end": 3300,
-          "tracks": [
-            {
-              "kind": "highlight",
+              "id": "work",
+              "name": "Pod A handles the request",
               "start": 2400,
               "end": 3300,
-              "target": "pod1",
-              "style": "busy"
+              "tracks": [
+                {
+                  "kind": "highlight",
+                  "start": 2400,
+                  "end": 3300,
+                  "target": "pod1",
+                  "style": "busy"
+                },
+                {
+                  "kind": "note",
+                  "start": 2400,
+                  "end": 3300,
+                  "target": "pod1",
+                  "text": "200 OK in 14ms"
+                }
+              ]
             },
             {
-              "kind": "note",
-              "start": 2400,
-              "end": 3300,
-              "target": "pod1",
-              "text": "200 OK in 14ms"
-            }
-          ]
-        },
-        {
-          "id": "respond",
-          "name": "Response travels back to the client",
-          "start": 3300,
-          "end": 4700,
-          "tracks": [
-            {
-              "kind": "flow",
+              "id": "respond",
+              "name": "Response travels back to the client",
               "start": 3300,
-              "end": 3650,
-              "edge": "e3",
-              "from": "pod1",
-              "to": "svc",
-              "reverse": true,
-              "label": "200 OK",
-              "style": "response"
-            },
-            {
-              "kind": "flow",
-              "start": 3650,
-              "end": 4000,
-              "edge": "e2",
-              "from": "svc",
-              "to": "ing",
-              "reverse": true,
-              "label": "200 OK",
-              "style": "response"
-            },
-            {
-              "kind": "flow",
-              "start": 4000,
-              "end": 4350,
-              "edge": "e1",
-              "from": "ing",
-              "to": "lb",
-              "reverse": true,
-              "label": "200 OK",
-              "style": "response"
-            },
-            {
-              "kind": "flow",
-              "start": 4350,
               "end": 4700,
-              "edge": "e0",
-              "from": "lb",
-              "to": "client",
-              "reverse": true,
-              "label": "200 OK",
-              "style": "response"
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3300,
+                  "end": 3650,
+                  "edge": "e3",
+                  "from": "pod1",
+                  "to": "svc",
+                  "reverse": true,
+                  "label": "200 OK",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3650,
+                  "end": 4000,
+                  "edge": "e2",
+                  "from": "svc",
+                  "to": "ing",
+                  "reverse": true,
+                  "label": "200 OK",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4000,
+                  "end": 4350,
+                  "edge": "e1",
+                  "from": "ing",
+                  "to": "lb",
+                  "reverse": true,
+                  "label": "200 OK",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4350,
+                  "end": 4700,
+                  "edge": "e0",
+                  "from": "lb",
+                  "to": "client",
+                  "reverse": true,
+                  "label": "200 OK",
+                  "style": "response"
+                }
+              ]
             }
           ]
         }
+      ],
+      "bindings": [
+        {
+          "source": "pod1",
+          "kind": "view",
+          "view": "podA",
+          "label": "Zoom into Pod A"
+        },
+        {
+          "source": "cluster",
+          "kind": "reveal",
+          "targets": [
+            "cp",
+            "api",
+            "etcd"
+          ]
+        },
+        {
+          "source": "pod2",
+          "kind": "step",
+          "step": "balance"
+        }
+      ],
+      "hidden": [
+        "cp",
+        "api",
+        "etcd"
       ]
     }
   ]

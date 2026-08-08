@@ -5,12 +5,15 @@ nodes:
   client     label="External Client"        shape=rect      
   lb         label="Cloud Load Balancer"    shape=cylinder  
   ing        label="Ingress Controller"     shape=rect       group=cluster
+  api        label="kube-apiserver"         shape=rect       group=cp
+  etcd       label="etcd"                   shape=cylinder   group=cp
   svc        label="ClusterIP Service"      shape=rect       group=ns
   pod1       label="Pod A"                  shape=rect       group=ns
   pod2       label="Pod B"                  shape=rect       group=ns
 
 groups:
-  cluster    label="Kubernetes Cluster"     parent=-          children=[ing ns]
+  cluster    label="Kubernetes Cluster"     parent=-          children=[ing cp ns]
+  cp         label="control plane"          parent=cluster    children=[api etcd]
   ns         label="namespace: prod"        parent=cluster    children=[svc pod1 pod2]
 
 edges:
@@ -19,6 +22,15 @@ edges:
   e2   ing -> svc style=normal head=arrow
   e3   svc -> pod1 style=normal head=arrow
   e4   svc -> pod2 style=normal head=arrow
+  e5   api -> etcd style=normal head=arrow
+
+views:
+  podA       title="Inside Pod A"       from="pod-a.dgm"
+
+interact:
+  click pod1       -> view podA {label="Zoom into Pod A"}
+  click cluster    -> reveal cp
+  click pod2       -> step balance
 
 scenario "GET /api/orders" {speed="1.0" loop="true"}
   step edge "Request reaches the load balancer"

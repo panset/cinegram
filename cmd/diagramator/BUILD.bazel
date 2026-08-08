@@ -11,6 +11,7 @@ go_library(
         "//pkg/emit/html",
         "//pkg/emit/mermaid",
         "//pkg/ir",
+        "//pkg/loader",
         "//pkg/parser",
     ],
 )
