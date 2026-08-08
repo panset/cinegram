@@ -1,0 +1,75 @@
+%% A service map for the twenty minutes when it matters.
+%% ---
+%% Every service links out to where you would actually go next — its dashboard
+%% or its runbook — because a diagram consulted during an incident is a
+%% navigation surface, not an illustration. The scenario replays the cascade so
+%% a link to one moment explains itself.
+flowchart LR
+  users[Users]
+  edge[Edge / CDN]
+
+  subgraph core[Core Services]
+    api[API Gateway]
+    orders[Orders]
+    inventory[Inventory]
+  end
+
+  subgraph deps[Dependencies]
+    db[(Orders DB)]
+    queue[Job Queue]
+  end
+
+  pager[On-call Pager]
+
+  users --> edge
+  edge --> api
+  api --> orders
+  api --> inventory
+  orders --> db
+  inventory --> queue
+  orders --> pager
+
+interact {
+  click api       -> url "https://example.com/dashboards/api-gateway" { label: "API Gateway dashboard" }
+  click orders    -> url "https://example.com/runbooks/orders" { label: "Orders runbook" }
+  click inventory -> url "https://example.com/dashboards/inventory" { label: "Inventory dashboard" }
+  click db        -> url "https://example.com/dashboards/orders-db" { label: "Orders DB dashboard" }
+  click pager     -> url "https://example.com/oncall" { label: "Who is on call" }
+}
+
+scenario "the cascade" { speed: 1.0 }
+
+  step normal "Traffic is normal" {
+    desc: "Baseline. Worth a beat at the start so the shape of healthy traffic is on screen before anything goes wrong."
+    flow users -> edge -> api { label: "12k rps", dur: 900ms }
+    flow api -> orders { label: "checkout", dur: 500ms }
+  }
+
+  step slow "The orders database starts timing out" {
+    desc: "The first real signal, and it is not an error rate — it is latency. Nothing has failed yet, which is exactly why it is easy to miss."
+    focus deps
+    flow orders -> db { label: "p99 2.4s", dur: 900ms, color: "#d97706" }
+    gauge db { label: "p99", value: "2.4s" }
+    note db "connection pool\nsaturated" { side: below }
+  }
+
+  step retry "Orders retries, and makes it worse" {
+    desc: "Retries against a saturated dependency add load to the thing that is already the bottleneck. This is the moment the incident stops being about the database."
+    flow orders -> db { label: "retry x3", dur: 800ms, status: fail }
+    gauge db { label: "p99", value: "8.1s" }
+    set orders { state: degraded, color: "#d97706" }
+  }
+
+  step spread "The gateway's thread pool fills" {
+    desc: "Inventory is healthy and still unreachable: it is queued behind Orders in a pool they share. Independent services, one shared resource, one blast radius."
+    focus core
+    set api { badge: "saturated", state: degraded, color: "#dc2626" }
+    flow api -> inventory { label: "queued", dur: 700ms, status: fail }
+    note api "shared thread pool" { side: above }
+  }
+
+  step page "The pager goes off" {
+    desc: "By the time the alert fires the cause is three hops from the symptom. Click any service to open its dashboard from here."
+    flow orders -> pager { label: "SLO burn 14x", dur: 600ms, color: "#dc2626" }
+    set orders { badge: "page raised", state: down, color: "#dc2626" }
+  }

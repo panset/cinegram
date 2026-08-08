@@ -126,6 +126,12 @@ func compileBindings(bindings []*ast.Binding, table *symbol.Table, aliases map[s
 			}
 			b.Step = bd.Targets[0].Name
 
+		case ast.BindURL:
+			if len(bd.Targets) == 0 {
+				continue
+			}
+			b.URL = bd.Targets[0].Name
+
 		case ast.BindReveal:
 			// Targets are expanded the same way Hidden is, so the renderer
 			// toggles exactly the set it conceals and never has to know that

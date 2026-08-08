@@ -283,6 +283,7 @@ const (
 	BindView   BindingKind = "view"
 	BindReveal BindingKind = "reveal"
 	BindStep   BindingKind = "step"
+	BindURL    BindingKind = "url"
 )
 
 // Binding makes one diagram element clickable.
@@ -294,8 +295,9 @@ type Binding struct {
 	Source Target // node or group that becomes clickable
 	Kind   BindingKind
 
-	// Targets is the view alias for BindView, the step id for BindStep, and
-	// the set of elements to conceal for BindReveal.
+	// Targets is the view alias for BindView, the step id for BindStep, the
+	// destination for BindURL, and the set of elements to conceal for
+	// BindReveal.
 	Targets []Target
 
 	Attrs Attrs

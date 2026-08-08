@@ -33,6 +33,7 @@ var bindingVerbs = map[string]ast.BindingKind{
 	"view":   ast.BindView,
 	"reveal": ast.BindReveal,
 	"step":   ast.BindStep,
+	"url":    ast.BindURL,
 }
 
 // topLevel is everything the scenario half of a document contributes.
@@ -173,13 +174,32 @@ func parseBinding(s *scanner) (*ast.Binding, bool) {
 	verb := s.peek()
 	kind, known := bindingVerbs[verb.text]
 	if verb.kind != tokIdent || !known {
-		s.bag.ErrorHintf(verb.at, "known click targets: view, reveal, step",
+		s.bag.ErrorHintf(verb.at, "known click targets: view, reveal, step, url",
 			"expected a click target but found %s", describe(verb))
 		s.skipToLineEnd()
 		return nil, false
 	}
 	s.next()
 	bd.Kind = kind
+
+	// A URL is the one target that is not a name in this document, so it is
+	// quoted text rather than an identifier — `//`, `?` and `&` would not
+	// survive the tokenizer otherwise.
+	if kind == ast.BindURL {
+		dest := s.peek()
+		if dest.kind != tokString {
+			s.bag.ErrorHintf(dest.at, `quote the destination, e.g. click svc -> url "https://example.com/runbook"`,
+				"expected a quoted URL but found %s", describe(dest))
+			s.skipToLineEnd()
+			return nil, false
+		}
+		s.next()
+		bd.Targets = append(bd.Targets, ast.Target{Name: dest.text, At: dest.at})
+		if s.at("{") {
+			bd.Attrs = parseAttrBlock(s)
+		}
+		return bd, true
+	}
 
 	// `reveal` takes a comma-separated set; `view` and `step` take one name.
 	// Parsing the list either way keeps the error for a stray comma at the

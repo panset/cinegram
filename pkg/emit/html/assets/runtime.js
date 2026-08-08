@@ -218,6 +218,11 @@
     this.speedBtn = button(speedLabel(this.speed), 'dgm-btn', function () { self.cycleSpeed(); });
     controls.appendChild(this.speedBtn);
 
+    // "Look at *this* step" is most of why anyone sends a diagram to a
+    // colleague, and reproducing a moment by describing it never works.
+    this.shareBtn = button('Copy link', 'dgm-btn', function () { self.copyLink(); });
+    controls.appendChild(this.shareBtn);
+
     this.themeBtn = button(this.theme === 'dark' ? 'Light' : 'Dark', 'dgm-btn', function () {
       self.theme = self.theme === 'dark' ? 'light' : 'dark';
       self.themeBtn.textContent = self.theme === 'dark' ? 'Light' : 'Dark';
@@ -288,30 +293,155 @@
     // and the browser's own history from ever disagreeing.
     window.addEventListener('hashchange', function () { self.applyHash(); });
 
+    // Embed mode drops the chrome around the diagram but not the diagram's own
+    // controls: an iframe in a doc page wants the stage, the narration and the
+    // scrubber, and has its own heading and navigation already.
+    if (isEmbedded()) this.root.classList.add('dgm-embed');
+
     this.viewIndex = Math.max(0, this.viewIndexOf(this.hashView()));
     this.buildPicker();
     this.adoptScenarioSpeed();
+
+    // Read before the first render so a deep link's scenario is the one that
+    // gets built, rather than being swapped a frame later.
+    var deep = parseHash();
+    if (deep.s) {
+      var i = this.scenarioIndexOf(deep.s);
+      if (i >= 0) {
+        this.scenarioIndex = i;
+        this.picker.value = String(i);
+        this.adoptScenarioSpeed();
+      }
+    }
+    if (deep.t !== undefined) {
+      var ms = parseInt(deep.t, 10);
+      if (!isNaN(ms)) {
+        this.time = Math.max(0, ms);
+        this.pendingAutoplay = false;
+      }
+    }
+
     this.render();
   };
 
+  // isEmbedded reads the query string rather than the hash, so it survives the
+  // hash being rewritten by navigation.
+  function isEmbedded() {
+    return /(^|[?&])embed(=|&|$)/.test(location.search);
+  }
+
+  // copyLink puts the deep link on the clipboard and says so on the button
+  // itself — a toast for a two-word confirmation would be more chrome than the
+  // thing it is confirming.
+  Player.prototype.copyLink = function () {
+    var self = this;
+    var link = this.shareLink();
+    var done = function (ok) {
+      self.shareBtn.textContent = ok ? 'Copied' : 'Press ⌘C';
+      setTimeout(function () { self.shareBtn.textContent = 'Copy link'; }, 1400);
+    };
+
+    // The async clipboard API needs a secure context, which a page opened from
+    // the filesystem is not. Falling back to a selection at least leaves the
+    // link somewhere the reader can copy it from by hand.
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link).then(function () { done(true); }, function () { self.selectLink(link, done); });
+      return;
+    }
+    this.selectLink(link, done);
+  };
+
+  Player.prototype.selectLink = function (link, done) {
+    var box = document.createElement('input');
+    box.className = 'dgm-linkbox';
+    box.value = link;
+    this.root.appendChild(box);
+    box.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    if (ok) box.remove();
+    else setTimeout(function () { box.remove(); }, 8000);
+    done(ok);
+  };
+
+  // parseHash reads the location hash in either form it may take.
+  //
+  // The long form is `#v=<view>&s=<scenario>&t=<ms>`, which is what a shared
+  // link carries. The short form is a bare view id, which is what navigate()
+  // writes for an ordinary drill-in and what older links contain — a hash with
+  // no `=` in it is unambiguously that, so both keep working.
+  function parseHash() {
+    var raw = (location.hash || '').replace(/^#/, '');
+    if (!raw) return {};
+    if (raw.indexOf('=') < 0) return { v: decodeURIComponent(raw) };
+
+    var out = {};
+    raw.split('&').forEach(function (pair) {
+      var eq = pair.indexOf('=');
+      if (eq < 0) return;
+      out[pair.slice(0, eq)] = decodeURIComponent(pair.slice(eq + 1));
+    });
+    return out;
+  }
+
   // hashView is the view id the current URL selects, defaulting to the root.
   Player.prototype.hashView = function () {
-    var id = decodeURIComponent((location.hash || '').replace(/^#/, ''));
+    var id = parseHash().v;
     if (id && this.viewIndexOf(id) >= 0) return id;
     return this.timeline.root;
   };
 
-  // applyHash moves to whatever view the URL now names, keeping the back
-  // stack in step: returning to the view we came from pops it, anything else
-  // pushes the view being left.
+  // applyHash moves to whatever the URL now names, keeping the back stack in
+  // step: returning to the view we came from pops it, anything else pushes the
+  // view being left.
+  //
+  // A link that also names a scenario and a time lands paused at that moment,
+  // which is the whole point of being able to share one.
   Player.prototype.applyHash = function () {
+    var want = parseHash();
     var id = this.hashView();
-    if (id === this.view().id) return;
 
-    if (this.stack[this.stack.length - 1] === id) this.stack.pop();
-    else this.stack.push(this.view().id);
+    if (id !== this.view().id) {
+      if (this.stack[this.stack.length - 1] === id) this.stack.pop();
+      else this.stack.push(this.view().id);
+      this.setView(id);
+    }
+    this.applyDeepLink(want);
+  };
 
-    this.setView(id);
+  // applyDeepLink honours the scenario and time a long-form hash carries.
+  Player.prototype.applyDeepLink = function (want) {
+    if (!want) return;
+    var moved = false;
+
+    if (want.s) {
+      var i = this.scenarioIndexOf(want.s);
+      if (i >= 0 && i !== this.scenarioIndex) {
+        this.picker.value = String(i);
+        this.selectScenario(i);
+        moved = true;
+      }
+    }
+    if (want.t !== undefined) {
+      var ms = parseInt(want.t, 10);
+      if (!isNaN(ms)) {
+        // Arriving at a named moment and then playing straight past it would
+        // defeat the link, so a deep link always lands paused.
+        this.pause();
+        this.pendingAutoplay = false;
+        this.seek(ms);
+        moved = true;
+      }
+    }
+    return moved;
+  };
+
+  Player.prototype.scenarioIndexOf = function (id) {
+    var scenarios = this.view().scenarios;
+    for (var i = 0; i < scenarios.length; i++) {
+      if (scenarios[i].id === id) return i;
+    }
+    return -1;
   };
 
   // navigate drills into another view. It only moves the hash; applyHash does
@@ -319,6 +449,17 @@
   Player.prototype.navigate = function (id) {
     if (this.viewIndexOf(id) < 0 || id === this.view().id) return;
     location.hash = id === this.timeline.root ? '' : '#' + encodeURIComponent(id);
+  };
+
+  // shareLink is the address of exactly what is on screen: this view, this
+  // scenario, this moment.
+  Player.prototype.shareLink = function () {
+    var parts = [
+      'v=' + encodeURIComponent(this.view().id),
+      's=' + encodeURIComponent(this.scenario().id || ''),
+      't=' + Math.round(this.time)
+    ];
+    return location.origin + location.pathname + location.search + '#' + parts.join('&');
   };
 
   // buildPicker fills the scenario selector for the current view, hiding it
@@ -514,6 +655,11 @@
     var self = this;
     if (b.kind === 'view') {
       this.navigate(b.view);
+      return;
+    }
+    if (b.kind === 'url') {
+      // noopener, because the opened page must not get a handle on this one.
+      if (b.url) window.open(b.url, '_blank', 'noopener');
       return;
     }
     if (b.kind === 'step') {

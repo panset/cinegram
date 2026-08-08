@@ -51,10 +51,11 @@ type View struct {
 // persists until the viewer leaves the view.
 type Binding struct {
 	Source string `json:"source"`
-	Kind   string `json:"kind"` // view | reveal | step
+	Kind   string `json:"kind"` // view | reveal | step | url
 
 	View    string   `json:"view,omitempty"` // target view ID, for kind "view"
 	Step    string   `json:"step,omitempty"` // target step ID, for kind "step"
+	URL     string   `json:"url,omitempty"`  // destination, for kind "url"
 	Targets []string `json:"targets,omitempty"`
 
 	Label string `json:"label,omitempty"`

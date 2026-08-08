@@ -147,6 +147,24 @@ body {
   font-weight: 600;
 }
 
+/* Embed mode. The stage, its narration and the transport survive; the page
+   furniture does not, because the embedding page has its own. */
+.dgm-embed { min-height: 0; padding: 8px; }
+.dgm-embed .dgm-bar,
+.dgm-embed .dgm-steps { display: none; }
+.dgm-embed .dgm-body { grid-template-columns: minmax(0, 1fr); }
+
+/* Off-screen holding pen for the share link when the clipboard API is not
+   available — a page opened from the filesystem is not a secure context. It has
+   to be focusable and selectable, so it cannot be display:none. */
+.dgm-linkbox {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
 .dgm-warning {
   background: var(--dgm-warn-bg);
   color: var(--dgm-warn-fg);

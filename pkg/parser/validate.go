@@ -178,6 +178,8 @@ func validateInteract(doc *ast.Document, t *symbol.Table, b *diag.Bag) {
 					b.ErrorHintf(tgt.At, suggestFrom(tgt.Name, sortedKeys(steps), "steps"),
 						"no step named %q in this document", tgt.Name)
 				}
+			case ast.BindURL:
+				validateURL(tgt, b)
 			}
 		}
 	}
@@ -187,6 +189,27 @@ func validateInteract(doc *ast.Document, t *symbol.Table, b *diag.Bag) {
 			b.Warnf(v.At, "view %q is declared but nothing clicks through to it", v.ID)
 		}
 	}
+}
+
+// validateURL checks a click destination.
+//
+// An empty one is an error — nothing can be done with it. Anything other than
+// http(s) is a warning rather than an error: a page opened inside a VS Code
+// webview or an intranet may legitimately want a scheme this parser has never
+// heard of, but a browser will refuse most of them from `window.open`, and
+// silently doing nothing on click is the worst of the outcomes.
+func validateURL(tgt ast.Target, b *diag.Bag) {
+	if strings.TrimSpace(tgt.Name) == "" {
+		b.ErrorHintf(tgt.At, "give a destination, e.g. \"https://example.com/runbook\"",
+			"click url has an empty destination")
+		return
+	}
+	lower := strings.ToLower(tgt.Name)
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		return
+	}
+	b.WarnHintf(tgt.At, "use an absolute http:// or https:// URL",
+		"click url %q is not an http(s) address; the browser may refuse to open it", tgt.Name)
 }
 
 // resolves reports whether name is an element a click or reveal can address.

@@ -24,6 +24,8 @@ interact:
   click ing        -> step nosuchstep
   click ing        -> reveal ing
   click ing        -> view real {wobble="3"}
+  click svc        -> url javascript:alert(1)
+  click svc        -> url 
 
 scenario "broken"
   step a "unknown node"
@@ -98,7 +100,7 @@ diagnostics:
   69:21: error: no step named "nosuchstep" in this document
     hint: known steps: a, b, c, d, e, f, g, h
   70:16: error: expected a click target but found "teleport"
-    hint: known click targets: view, reveal, step
+    hint: known click targets: view, reveal, step, url
   71:27: error: `view` takes one name, got 2
     hint: only `reveal` accepts several targets
   72:9: error: "ing" already has a click binding
@@ -109,3 +111,13 @@ diagnostics:
     hint: give each clickable element a single behaviour
   73:36: warning: unknown click attribute "wobble"
     hint: known here: label, style
+  74:9: error: "svc" already has a click binding
+    hint: give each clickable element a single behaviour
+  74:20: warning: click url "javascript:alert(1)" is not an http(s) address; the browser may refuse to open it
+    hint: use an absolute http:// or https:// URL
+  75:9: error: "svc" already has a click binding
+    hint: give each clickable element a single behaviour
+  75:20: error: click url has an empty destination
+    hint: give a destination, e.g. "https://example.com/runbook"
+  76:20: error: expected a quoted URL but found "notquoted"
+    hint: quote the destination, e.g. click svc -> url "https://example.com/runbook"

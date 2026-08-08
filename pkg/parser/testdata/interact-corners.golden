@@ -24,6 +24,7 @@ interact:
   click b          -> reveal c, d, detail
   click detail     -> view bare
   click c          -> step only
+  click d          -> url https://example.com/runbook?svc=deep&page=2 {label="runbook"}
 
 scenario "corners"
   step only "walk"

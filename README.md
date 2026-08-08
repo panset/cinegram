@@ -303,6 +303,7 @@ interact {
 | `view` | `click pod1 -> view podA` | Drill into another diagram, declared by a `view` line. |
 | `reveal` | `click cluster -> reveal cp` | Toggle elements that start hidden. A subgraph brings its contents. |
 | `step` | `click pod2 -> step balance` | Seek the current scenario to that step. |
+| `url` | `click svc -> url "https://…"` | Open a dashboard or runbook in a new tab. Quoted, unlike the others. |
 
 Bindings take `label` (a hover tooltip) and `style`. Nodes and subgraphs are
 both clickable, and each element may carry one binding.
@@ -317,6 +318,39 @@ in `location.hash`, which makes browser back and forward work as expected.
 and a seek resets them. Reveal is interaction state that persists until the
 viewer leaves the view. Being the target of a reveal is what makes an element
 start hidden — there is no separate declaration.
+
+## Sharing a moment
+
+"Look at *this* step" is most of why anyone sends a diagram to a colleague, and
+describing a moment in prose never reproduces it. The page's address carries
+the whole state:
+
+```
+page.html#v=<view>&s=<scenario>&t=<ms>
+```
+
+Opening one lands on that view and scenario, seeks to that millisecond, and
+stays **paused** — arriving at a named moment and then playing straight past it
+would defeat the point. The **Copy link** button writes the link for whatever
+is on screen right now.
+
+The old short form still works: a hash with no `=` in it is a bare view id, so
+existing links and the hash that ordinary drill-in navigation writes are
+unaffected.
+
+Add `?embed` to the query string for an iframe: the header bar and the step
+list go away, the stage, the caption and the scrubber stay, and the keyboard
+still works when the frame has focus.
+
+```html
+<iframe src="incident-triage.html?embed#v=incident-triage&s=s0&t=2750"
+        width="100%" height="520" style="border:0" title="Incident cascade"></iframe>
+```
+
+`examples/incident-triage.dgm` is the worked example — a service map where
+every service links out to its dashboard or runbook, because a diagram
+consulted during an incident is a navigation surface rather than an
+illustration.
 
 ## Commands
 

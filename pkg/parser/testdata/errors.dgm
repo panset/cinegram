@@ -71,4 +71,7 @@ interact {
   click ing -> view real, extra
   click ing -> reveal ing
   click ing -> view real { wobble: 3 }
+  click svc -> url "javascript:alert(1)"
+  click svc -> url ""
+  click svc -> url notquoted
 }
