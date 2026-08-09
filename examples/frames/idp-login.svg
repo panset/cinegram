@@ -10,7 +10,7 @@
   <rect x="120" y="60" width="240" height="212" rx="12" fill="#ffffff" stroke="#dfe3e8"/>
   <rect x="222" y="80" width="36" height="36" rx="18" fill="#7c3aed"/>
   <text x="240" y="104" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="17" font-weight="700" fill="#ffffff">I</text>
-  <text x="240" y="138" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14" font-weight="600" fill="#1c2024">Sign in</text>
+  <text x="240" y="138" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14" font-weight="600" fill="#1c2024">Authhub - Sign In</text>
 
   <!-- Abstracted credential entry: a lock glyph stands for "email and
        password are typed here" without drawing an actual fillable form. -->
