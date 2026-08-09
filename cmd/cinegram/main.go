@@ -4,6 +4,8 @@
 // Usage:
 //
 //	cinegram compile <file.dgm>   # timeline JSON on stdout
+//	cinegram compile - --as <path> --envelope
+//	                              # the same, from stdin, for an editor host
 //	cinegram mermaid <file.dgm>   # the diagram as plain Mermaid
 //	cinegram preview <file.dgm>   # self-contained animated HTML
 //	cinegram record  <file.dgm>   # a GIF, mp4 or webm of one scenario
@@ -34,13 +36,13 @@ import (
 const version = "0.1.0"
 
 func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
+	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, "cinegram:", err)
 		os.Exit(1)
 	}
 }
 
-func run(args []string, stdout, stderr io.Writer) error {
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		usage(stderr)
 		return fmt.Errorf("no command given")
@@ -49,7 +51,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	cmd, rest := args[0], args[1:]
 	switch cmd {
 	case "compile":
-		return cmdCompile(rest, stdout, stderr)
+		return cmdCompile(rest, stdin, stdout, stderr)
 	case "mermaid":
 		return cmdMermaid(rest, stdout, stderr)
 	case "preview":
@@ -79,6 +81,12 @@ func usage(w io.Writer) {
 
 Usage:
   cinegram compile <file.dgm> [-o out.json]   compile to an animation timeline
+  cinegram compile - --as <path> [--envelope]
+                                                 compile source read from stdin,
+                                                 resolving relative paths as if
+                                                 it lived at <path>; --envelope
+                                                 pairs the timeline with its
+                                                 diagnostics and always exits 0
   cinegram mermaid <file.dgm> [-o out.mmd]    emit the diagram as plain Mermaid
   cinegram preview <file.dgm> [-o out.html]   build a self-contained animated page
   cinegram preview <file.dgm> --serve [--watch] [--addr host:port]
@@ -187,8 +195,11 @@ func parseArgsWith(name string, args []string, extra func(*flag.FlagSet)) (input
 // otherwise resolve against the wrong root. Bazel exports
 // BUILD_WORKING_DIRECTORY for exactly this case; outside Bazel it is unset and
 // the path is left alone.
+//
+// `-` is the conventional name for stdin rather than a file, so it passes
+// through untouched — joining it to a directory would turn it into one.
 func resolvePath(p string) string {
-	if p == "" || filepath.IsAbs(p) {
+	if p == "" || p == "-" || filepath.IsAbs(p) {
 		return p
 	}
 	if wd := os.Getenv("BUILD_WORKING_DIRECTORY"); wd != "" {
@@ -239,21 +250,102 @@ func write(path string, data []byte, stdout io.Writer) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-func cmdCompile(args []string, stdout, stderr io.Writer) error {
-	input, output, err := parseArgs("compile", args)
+func cmdCompile(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	var as string
+	var envelope bool
+	input, output, err := parseArgsWith("compile", args, func(fs *flag.FlagSet) {
+		fs.StringVar(&as, "as", "", "with `-`, resolve relative paths as if the source lived at this path")
+		fs.BoolVar(&envelope, "envelope", false, "pair the timeline with its diagnostics and exit 0 regardless")
+	})
 	if err != nil {
 		return err
 	}
-	bundle, err := loader.Load(input, os.ReadFile)
+
+	entry, read, err := compileSource(input, resolvePath(as), stdin)
 	if err != nil {
+		return err
+	}
+
+	bundle, err := loader.Load(entry, read)
+	if err != nil {
+		// Only the entry file failing to read reaches here; every other
+		// unreadable path is already a diagnostic on the declaration that
+		// named it. An envelope reports it as one so the caller has a single
+		// shape to render rather than a status code to interpret.
+		if envelope {
+			return writeEnvelope(nil, []jsonDiagnostic{{
+				File:     entry,
+				Severity: diag.SeverityError.String(),
+				Message:  err.Error(),
+			}}, output, stdout)
+		}
 		return err
 	}
 	timeline := compile.CompileBundle(bundle)
+
+	if envelope {
+		diags, _ := collectDiagnostics(bundle.Bags())
+		return writeEnvelope(timeline, diags, output, stdout)
+	}
+
 	if err := reportAll(bundle.Bags(), stderr); err != nil {
 		return err
 	}
 
 	encoded, err := json.MarshalIndent(timeline, "", "  ")
+	if err != nil {
+		return err
+	}
+	return write(output, append(encoded, '\n'), stdout)
+}
+
+// compileSource picks the entry path and the read function to load it with.
+//
+// A fenced ```dgm block in a Markdown file has no path of its own, but the
+// `view … from` and storyboard `img` paths it may contain are still relative to
+// the file the block lives in. Reading is already injected at the loader
+// boundary, so telling it where the source *would* live is enough: --as names
+// that path and an overlay serves the entry's bytes from stdin, leaving every
+// other read on the real filesystem.
+func compileSource(input, as string, stdin io.Reader) (string, loader.ReadFileFunc, error) {
+	if input != "-" {
+		if as != "" {
+			return "", nil, fmt.Errorf("--as applies only when reading from stdin: pass `-` as the input file")
+		}
+		return input, os.ReadFile, nil
+	}
+	if as == "" {
+		return "", nil, fmt.Errorf("reading from stdin needs --as <path>, so that relative `view … from` and storyboard paths have somewhere to resolve against")
+	}
+
+	data, err := io.ReadAll(stdin)
+	if err != nil {
+		return "", nil, fmt.Errorf("reading stdin: %w", err)
+	}
+
+	entry := filepath.Clean(as)
+	return entry, func(p string) ([]byte, error) {
+		if filepath.Clean(p) == entry {
+			return data, nil
+		}
+		return os.ReadFile(p)
+	}, nil
+}
+
+// jsonEnvelope pairs a timeline with the diagnostics found producing it.
+//
+// It exists for hosts that render the result in place — a VS Code preview shows
+// the message where the diagram would have been — and so has no failure mode of
+// its own: the timeline is emitted even when errors were found, and the caller
+// decides whether a partial diagram is worth drawing. Like jsonDiagnostic, it
+// is declared here because it is a wire format.
+type jsonEnvelope struct {
+	Timeline    *ir.Timeline     `json:"timeline"`
+	Diagnostics []jsonDiagnostic `json:"diagnostics"`
+}
+
+func writeEnvelope(t *ir.Timeline, diags []jsonDiagnostic, output string, stdout io.Writer) error {
+	encoded, err := json.MarshalIndent(jsonEnvelope{Timeline: t, Diagnostics: diags}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -387,11 +479,11 @@ type jsonDiagnostic struct {
 	Hint     string `json:"hint,omitempty"`
 }
 
-// lintJSON writes every diagnostic in the bundle as one array on stdout.
-//
-// Exit-code semantics are unchanged — warnings 0, errors 1 — so a caller can
-// branch on the status and read the detail, rather than having to choose.
-func lintJSON(bags []*diag.Bag, stdout io.Writer) error {
+// collectDiagnostics flattens every bag into the wire shape, returning the
+// error count alongside so callers that still key off exit status do not have
+// to walk the result again. Always a non-nil slice: `[]` is a valid answer and
+// `null` is not one a caller should have to handle.
+func collectDiagnostics(bags []*diag.Bag) ([]jsonDiagnostic, int) {
 	out := []jsonDiagnostic{}
 	errs := 0
 
@@ -410,6 +502,15 @@ func lintJSON(bags []*diag.Bag, stdout io.Writer) error {
 			})
 		}
 	}
+	return out, errs
+}
+
+// lintJSON writes every diagnostic in the bundle as one array on stdout.
+//
+// Exit-code semantics are unchanged — warnings 0, errors 1 — so a caller can
+// branch on the status and read the detail, rather than having to choose.
+func lintJSON(bags []*diag.Bag, stdout io.Writer) error {
+	out, errs := collectDiagnostics(bags)
 
 	encoded, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
