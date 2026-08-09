@@ -44,12 +44,34 @@ sequenceDiagram
   E-->>A: CallbackResult{RedirectURL, Cookies}
   A-->>U: Set-Cookie + redirect into the app
 
+%% The storyboard is the other half of this diagram's point. Eighteen messages
+%% fly and the person signing in sees five screens; a `scene` says which one is
+%% in front of them while each beat plays. Scenes are sticky, so the six steps
+%% between `callback` and `signedin` — the whole verification back-and-forth —
+%% all sit under one motionless interstitial, which is exactly what they look
+%% like from a chair.
+%% ---
+%% Where a scene sits inside its step matters as much as which step it is in.
+%% A screen changes when an arrow *lands*, not when its step begins, so every
+%% scene below that follows a message is written inside the `seq` after the hop
+%% that causes it — a scene consumes none of the chain, so it means "here" and
+%% keeps meaning it if a duration changes. The steps that end on a new screen
+%% then carry a `dur` long enough to look at it.
+storyboard "What the person signing in sees" {
+  frame app_signin  { img: "frames/app-signin.svg",    caption: "Acme's own sign-in page. One button, no password field." }
+  frame idp_form    { img: "frames/idp-login.svg",     caption: "The provider's domain. The password is typed here and nowhere else." }
+  frame idp_mfa     { img: "frames/idp-mfa.svg",       caption: "A second factor, entirely between the user and their IdP." }
+  frame app_waiting { img: "frames/app-signing-in.svg", caption: "Back on Acme with a code in the address bar — worthless without the secret." }
+  frame app_home    { img: "frames/app-home.svg",      caption: "Signed in, holding an opaque cookie and nothing else." }
+}
+
 scenario "sign in with an external IdP" { speed: 1.0 }
 
   step ask "The browser asks authena to start a login" {
     desc: "The request names a provider and nothing else. Which IdP that is, what it is called, and what secret talks to it are all server-side facts, because anything the browser carries is anything the browser can change."
     flow U -> A { dur: 700ms, msg: 1 }
     highlight A { style: active }
+    scene app_signin
   }
 
   step build "The engine rebuilds its client from stored config" {
@@ -81,11 +103,23 @@ scenario "sign in with an external IdP" { speed: 1.0 }
       flow E -> A { dur: 500ms, style: response, msg: 1 }
       flow A -> U { dur: 500ms, style: response, msg: 1 }
     }
+    %% No scene: the browser is still showing Acme's page while the 302 is in
+    %% flight, and the provider's form is what the next step is about.
   }
 
+  %% Two screens in one step, and the diagram is nearly still for both of them —
+  %% which is the honest picture. One hop covers the entire authentication, so
+  %% the only thing that moves while the user types is the storyboard.
   step authenticate "The user authenticates, and does their MFA" {
     desc: "Whatever the provider demands — password, push, hardware key, a conditional-access policy nobody here has heard of — happens entirely inside this hop. Adding a second factor is a change to the IdP and to nothing in this diagram."
-    flow U -> IdP { dur: 900ms }
+    dur: 2800ms
+    scene idp_form
+    seq {
+      flow U -> IdP { dur: 900ms }
+      %% The password is submitted, and a second factor is asked for.
+      wait 700ms
+      scene idp_mfa
+    }
     note IdP "password + MFA\nnever seen by authena" { side: below }
     highlight IdP { style: active }
   }
@@ -94,6 +128,11 @@ scenario "sign in with an external IdP" { speed: 1.0 }
     desc: "The redirect carries a short-lived authorization code through the address bar, where it lands in browser history and in any proxy log along the way. A code is safe there precisely because it is worthless without the client secret and the PKCE verifier that never left the server."
     seq {
       flow IdP -> U { dur: 700ms, style: response }
+      %% The redirect lands and the address bar carries the code. This frame
+      %% then stands for six steps: everything from here to the cookie happens
+      %% server-side, and a storyboard that kept changing would be lying about
+      %% how much the person can see.
+      scene app_waiting
       flow U -> A { dur: 600ms, msg: 2 }
     }
   }
@@ -149,9 +188,14 @@ scenario "sign in with an external IdP" { speed: 1.0 }
 
   step signedin "A cookie comes back, and nothing else does" {
     desc: "The browser ends up holding an opaque session cookie. It never saw the client secret, the id_token or the refresh token, so a compromised browser costs one session rather than standing access to the IdP."
+    %% The step outlives its last hop on purpose: the cookie arriving is the
+    %% payoff, and a scene on the final instant of the scenario would flash the
+    %% signed-in page for one frame and stop.
+    dur: 2100ms
     seq {
       flow E -> A { dur: 500ms, style: response, msg: 2 }
       flow A -> U { dur: 600ms, style: response, msg: 2 }
+      scene app_home
     }
     highlight U { color: "#16a34a" }
   }

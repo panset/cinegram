@@ -1,0 +1,32 @@
+%% The awkward ordering: the scenario the page opens on is a *variant*, and it
+%% inherits steps declared further down the file. Everything that reasons about
+%% "which steps does the selected scenario have" has to see the merged set, or
+%% it reports the exact opposite of the truth.
+flowchart LR
+  a[A]
+  b[B]
+  a --> b
+
+%% `opening` is inherited, so this click works from the moment the page loads
+%% and must not be warned about. `later` belongs only to the base, which the
+%% reader has to switch to first — that one is worth saying.
+interact {
+  click a -> step opening
+  click b -> step later
+}
+
+scenario "the failure, told first" { variant: "the whole story", until: opening, outcome: fail }
+
+  step broke "and then it did not work" {
+    flow a -> b { dur: 400ms, status: fail }
+  }
+
+scenario "the whole story"
+
+  step opening "how it starts either way" {
+    flow a -> b { dur: 400ms }
+  }
+
+  step later "how it ends when nothing goes wrong" {
+    flow a -> b { dur: 400ms }
+  }

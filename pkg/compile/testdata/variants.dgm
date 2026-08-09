@@ -1,0 +1,44 @@
+%% What a variant costs the compiler: nothing. The splice happens at AST level
+%% before any timing runs, so the golden's job is to show that the inherited
+%% prefix compiles exactly as it does in the base — same spans, same hop
+%% occurrence order, same persistent-state windows starting from scratch — and
+%% that the divergent steps simply follow it.
+%%
+%% `set`/`unset` are here on purpose: persistent state is scenario-scoped and
+%% its windows are reset per scenario inside compileScenario, so an inherited
+%% `set` must open a fresh window in the variant rather than continuing the
+%% base's.
+flowchart LR
+  a[A]
+  b[B]
+  c[C]
+
+  a --> b
+  b --> c
+
+scenario "happy path" { outcome: ok }
+
+  step submit "the shared opening" {
+    flow a -> b { dur: 600ms }
+    set b { badge: "accepted", state: ok }
+  }
+
+  step forward "still shared" {
+    flow b -> c { dur: 400ms }
+  }
+
+  step done "only the happy path gets here" {
+    flow a -> b { dur: 500ms }
+    unset b
+  }
+
+scenario "it fails instead" { variant: "happy path", until: submit, outcome: fail }
+
+  step stall "and then it does not answer" {
+    flow b -> c { dur: 900ms, status: fail }
+  }
+
+  step giveup "so nothing is written" {
+    flow a -> b { dur: 300ms }
+    set b { badge: "rejected", state: fail }
+  }

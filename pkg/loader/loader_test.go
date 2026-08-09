@@ -143,6 +143,82 @@ func TestMissingFileIsReportedNotFatal(t *testing.T) {
 	}
 }
 
+// TestStoryboardImagesAreInlined covers the reason image loading lives here at
+// all: the parser never touches a filesystem, and the emitted page has to work
+// without one.
+func TestStoryboardImagesAreInlined(t *testing.T) {
+	files := map[string]string{
+		"diagrams/top.dgm": doc(
+			"storyboard \"Screens\" {\n" +
+				"  frame one { img: \"frames/one.svg\", caption: \"first\" }\n" +
+				"  frame two { img: \"shared/two.png\" }\n" +
+				"  frame words { caption: \"no picture at all\" }\n" +
+				"}\n\n" +
+				"scenario \"x\"\n  step s \"walk\" {\n    scene one\n  }\n"),
+		// Resolved relative to the declaring file, exactly as a view path is.
+		"diagrams/frames/one.svg": "<svg/>",
+		"diagrams/shared/two.png": "\x89PNG\r\n",
+	}
+
+	b, err := Load("diagrams/top.dgm", fakeFS(files))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.HasErrors() {
+		t.Fatalf("unexpected diagnostics:\n%s", b.Bags()[0])
+	}
+
+	data := b.Units[0].FrameData
+	if got, want := data["frames/one.svg"], "data:image/svg+xml;base64,PHN2Zy8+"; got != want {
+		t.Errorf("svg frame = %q, want %q", got, want)
+	}
+	if !strings.HasPrefix(data["shared/two.png"], "data:image/png;base64,") {
+		t.Errorf("png frame = %q, want a png data URI", data["shared/two.png"])
+	}
+	// A caption-only frame contributes nothing to read, so it contributes
+	// nothing to the map either.
+	if len(data) != 2 {
+		t.Errorf("FrameData = %v, want exactly the two frames that named an image", data)
+	}
+	// base64 cannot produce a `<`, which is what keeps the payload from
+	// breaking out of the <script> element the timeline is embedded in.
+	for path, uri := range data {
+		if strings.ContainsAny(uri, "<>") {
+			t.Errorf("frame %q inlined to a URI containing markup: %q", path, uri)
+		}
+	}
+}
+
+// TestBadFrameImagesAreReportedNotFatal keeps one unreadable picture from
+// hiding the next one, the same way a broken view path does.
+func TestBadFrameImagesAreReportedNotFatal(t *testing.T) {
+	files := map[string]string{
+		"top.dgm": doc(
+			"storyboard {\n" +
+				"  frame gone { img: \"nope.svg\" }\n" +
+				"  frame weird { img: \"notes.txt\" }\n" +
+				"  frame fine { img: \"real.png\" }\n" +
+				"}\n\n" +
+				"scenario \"x\"\n  step s \"walk\" {\n    scene fine\n  }\n"),
+		"real.png": "\x89PNG\r\n",
+	}
+
+	b, err := Load("top.dgm", fakeFS(files))
+	if err != nil {
+		t.Fatalf("Load returned a fatal error for an unreadable frame: %v", err)
+	}
+	got := b.Bags()[0].String()
+	if !strings.Contains(got, `cannot read the image for frame "gone"`) {
+		t.Errorf("missing image not reported:\n%s", got)
+	}
+	if !strings.Contains(got, `frame "weird" has an image type this cannot inline`) {
+		t.Errorf("unsupported extension not reported:\n%s", got)
+	}
+	if _, ok := b.Units[0].FrameData["real.png"]; !ok {
+		t.Error("the good frame did not load; one broken image stopped the rest")
+	}
+}
+
 func TestMissingEntryFileIsFatal(t *testing.T) {
 	if _, err := Load("nope.dgm", fakeFS(nil)); err == nil {
 		t.Fatal("Load succeeded for a missing entry file")

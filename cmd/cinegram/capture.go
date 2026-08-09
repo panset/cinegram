@@ -105,27 +105,19 @@ func runCapture(opt captureOptions, stderr io.Writer) error {
 		return err
 	}
 
-	// An ephemeral port: several captures may be running at once, and the
-	// authoring server may already hold the default.
-	srv := newServer(opt.input, false, stderr)
-	ln, err := srv.listen("127.0.0.1:0")
+	base, stop, err := servePage(opt.input, stderr)
 	if err != nil {
 		return err
 	}
-	defer ln.Close()
+	defer stop()
 
-	httpSrv := &http.Server{Handler: srv.handler()}
-	go httpSrv.Serve(ln)
-	defer httpSrv.Close()
-
-	base := fmt.Sprintf("http://%s/", ln.Addr())
 	shots, err := captureTargets(opt, duration)
 	if err != nil {
 		return err
 	}
 
 	for _, shot := range shots {
-		url := fmt.Sprintf("%s#v=%s&s=%s&t=%d", base, viewID, scenarioID, shot.at)
+		url := frameURL(base, viewID, scenarioID, shot.at, false)
 		if err := shoot(chrome, url, shot.path, opt.width, opt.height); err != nil {
 			return err
 		}
@@ -134,9 +126,51 @@ func runCapture(opt captureOptions, stderr io.Writer) error {
 	return nil
 }
 
+// servePage starts the page on a loopback port and returns its base URL along
+// with a function that shuts it down.
+//
+// An ephemeral port, because several captures may be running at once and the
+// authoring server may already hold the default. Watching is off: the reload
+// script would poll for the length of the capture and its only possible effect
+// is to reload a page mid-screenshot.
+func servePage(input string, stderr io.Writer) (base string, stop func(), err error) {
+	srv := newServer(input, false, stderr)
+	ln, err := srv.listen("127.0.0.1:0")
+	if err != nil {
+		return "", nil, err
+	}
+
+	httpSrv := &http.Server{Handler: srv.handler()}
+	go httpSrv.Serve(ln)
+
+	return fmt.Sprintf("http://%s/", ln.Addr()), func() {
+		httpSrv.Close()
+		ln.Close()
+	}, nil
+}
+
+// frameURL addresses one exact moment of one scenario.
+//
+// The query comes before the fragment, which is not a stylistic choice: the
+// runtime reads `?embed` from location.search and the moment from the hash, and
+// a hash that started before the query would swallow it.
+func frameURL(base, viewID, scenarioID string, at int, embed bool) string {
+	q := ""
+	if embed {
+		q = "?embed"
+	}
+	return fmt.Sprintf("%s%s#v=%s&s=%s&t=%d", base, q, viewID, scenarioID, at)
+}
+
 type shot struct {
 	at   int
 	path string
+}
+
+// framePath names the nth PNG of a sequence. Zero-padded so a lexical sort is
+// a numeric one, which is what ffmpeg's `-i frame-%04d.png` expects.
+func framePath(dir string, n int) string {
+	return filepath.Join(dir, fmt.Sprintf("frame-%04d.png", n))
 }
 
 // captureTargets works out what to shoot and where to put it.
@@ -159,10 +193,9 @@ func captureTargets(opt captureOptions, duration int) ([]shot, error) {
 	// total rather than accumulated so the last frame lands exactly on the end.
 	out := make([]shot, 0, opt.frames)
 	for i := 0; i < opt.frames; i++ {
-		at := duration * i / (opt.frames - 1)
 		out = append(out, shot{
-			at:   at,
-			path: filepath.Join(opt.output, fmt.Sprintf("frame-%04d.png", i+1)),
+			at:   duration * i / (opt.frames - 1),
+			path: framePath(opt.output, i+1),
 		})
 	}
 	return out, nil

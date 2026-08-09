@@ -25,8 +25,9 @@ type Document struct {
 	Preamble     []string // comment and directive lines above the diagram header
 	Diagram      Diagram
 	Scenarios    []*Scenario
-	Views        []*ViewDecl // documents a click can drill into
-	Interactions []*Binding  // what each clickable element does
+	Storyboards  []*Storyboard // what the human sees while the diagram animates
+	Views        []*ViewDecl   // documents a click can drill into
+	Interactions []*Binding    // what each clickable element does
 }
 
 // Diagram is a diagram body of some Mermaid type.
@@ -260,6 +261,30 @@ func (s *Step) EffectiveID(index int) string {
 	return "step" + strconv.Itoa(index)
 }
 
+// Storyboard is the side-stage: what the human sees while the diagram animates.
+//
+// It shares the scenario half's discipline — a frame is an image path and a
+// caption, and a `scene` action names one. Nothing here knows what a node is,
+// and the loader, not this package, turns a path into bytes.
+type Storyboard struct {
+	Title    string
+	Frames   []*Frame
+	StartPos source.Pos
+}
+
+// Frame is one thing the storyboard can show.
+//
+// Frame names live in one flat namespace across every storyboard block in a
+// document, because there is one panel at runtime and qualifying a name would
+// buy nothing.
+type Frame struct {
+	Name    string
+	Img     string     // path as written, relative to the declaring file
+	ImgAt   source.Pos // reported against when the image cannot be read
+	Caption string
+	At      source.Pos
+}
+
 // ActionKind names an animation primitive.
 type ActionKind string
 
@@ -274,6 +299,11 @@ const (
 	ActionFocus     ActionKind = "focus"
 	ActionWait      ActionKind = "wait"
 	ActionSeq       ActionKind = "seq"
+
+	// ActionScene names a storyboard frame rather than a diagram element. It is
+	// the one action whose target is resolved against the frame namespace, and
+	// the reason validation branches before the node lookup.
+	ActionScene ActionKind = "scene"
 
 	// Persistent actions. Unlike the rest, these do not describe a span of the
 	// step they sit in: they fire at a moment and the state they write outlives

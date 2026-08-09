@@ -6,6 +6,7 @@
 //	cinegram compile <file.dgm>   # timeline JSON on stdout
 //	cinegram mermaid <file.dgm>   # the diagram as plain Mermaid
 //	cinegram preview <file.dgm>   # self-contained animated HTML
+//	cinegram record  <file.dgm>   # a GIF, mp4 or webm of one scenario
 //	cinegram narrate <file.dgm>   # the animation as a written walkthrough
 //	cinegram lint    <file.dgm>   # diagnostics only
 package main
@@ -59,6 +60,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return cmdNarrate(rest, stdout, stderr)
 	case "frame":
 		return cmdFrame(rest, stdout, stderr)
+	case "record":
+		return cmdRecord(rest, stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintln(stdout, "cinegram", version)
 		return nil
@@ -83,6 +86,10 @@ Usage:
   cinegram frame   <file.dgm> --at 2400ms -o out.png
                                                  screenshot one exact moment
                                                  (--frames N -o dir/ for a sequence)
+  cinegram record  <file.dgm> -o out.gif [--fps 12] [--format gif|mp4|webm]
+                                                 record a scenario; GIF needs
+                                                 nothing installed, mp4/webm
+                                                 need ffmpeg
   cinegram narrate <file.dgm> [-o out.md] [--format=md|json]
                                                  the animation as a walkthrough
   cinegram lint    <file.dgm> [--format=text|json]

@@ -60,11 +60,13 @@ func Parse(filename, content string) (*Result, *diag.Bag) {
 
 	top := parseTopLevel(cur, bag)
 	doc.Scenarios = top.Scenarios
+	doc.Storyboards = top.Storyboards
 	doc.Views = top.Views
 	doc.Interactions = top.Interactions
 
 	checkComments(doc.Diagram, bag)
-	validateScenarios(doc.Scenarios, table, bag)
+	frames := collectFrames(doc.Storyboards, bag)
+	validateScenarios(doc.Scenarios, table, frames, bag)
 	validateInteract(doc, table, bag)
 	validateCoverage(doc, table, bag)
 

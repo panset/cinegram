@@ -1,0 +1,197 @@
+{
+  "version": 2,
+  "root": "main",
+  "views": [
+    {
+      "id": "main",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% What a variant costs the compiler: nothing. The splice happens at AST level\n%% before any timing runs, so the golden's job is to show that the inherited\n%% prefix compiles exactly as it does in the base — same spans, same hop\n%% occurrence order, same persistent-state windows starting from scratch — and\n%% that the divergent steps simply follow it.\n%%\n%% `set`/`unset` are here on purpose: persistent state is scenario-scoped and\n%% its windows are reset per scenario inside compileScenario, so an inherited\n%% `set` must open a fresh window in the variant rather than continuing the\n%% base's.\nflowchart LR\n  a[A]\n  b[B]\n  c[C]\n  a --\u003e b\n  b --\u003e c\n"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "label": "A",
+          "shape": "rect"
+        },
+        {
+          "id": "b",
+          "label": "B",
+          "shape": "rect"
+        },
+        {
+          "id": "c",
+          "label": "C",
+          "shape": "rect"
+        }
+      ],
+      "groups": null,
+      "edges": [
+        {
+          "id": "e0",
+          "from": "a",
+          "to": "b",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "b",
+          "to": "c",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "happy path",
+          "duration": 1500,
+          "speed": 1,
+          "loop": false,
+          "autoplay": true,
+          "outcome": "ok",
+          "steps": [
+            {
+              "id": "submit",
+              "name": "the shared opening",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "a",
+                  "to": "b"
+                }
+              ]
+            },
+            {
+              "id": "forward",
+              "name": "still shared",
+              "start": 600,
+              "end": 1000,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1000,
+                  "edge": "e1",
+                  "from": "b",
+                  "to": "c"
+                }
+              ]
+            },
+            {
+              "id": "done",
+              "name": "only the happy path gets here",
+              "start": 1000,
+              "end": 1500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1000,
+                  "end": 1500,
+                  "edge": "e0",
+                  "from": "a",
+                  "to": "b"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 0,
+              "end": 1000,
+              "target": "b",
+              "label": "accepted",
+              "value": "ok"
+            }
+          ]
+        },
+        {
+          "id": "s1",
+          "name": "it fails instead",
+          "duration": 1800,
+          "speed": 1,
+          "loop": false,
+          "autoplay": true,
+          "outcome": "fail",
+          "steps": [
+            {
+              "id": "submit",
+              "name": "the shared opening",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "a",
+                  "to": "b"
+                }
+              ]
+            },
+            {
+              "id": "stall",
+              "name": "and then it does not answer",
+              "start": 600,
+              "end": 1500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1500,
+                  "edge": "e1",
+                  "from": "b",
+                  "to": "c",
+                  "status": "fail"
+                }
+              ]
+            },
+            {
+              "id": "giveup",
+              "name": "so nothing is written",
+              "start": 1500,
+              "end": 1800,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1500,
+                  "end": 1800,
+                  "edge": "e0",
+                  "from": "a",
+                  "to": "b"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 0,
+              "end": 1500,
+              "target": "b",
+              "label": "accepted",
+              "value": "ok"
+            },
+            {
+              "kind": "set",
+              "start": 1500,
+              "end": 1800,
+              "target": "b",
+              "label": "rejected",
+              "value": "fail"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

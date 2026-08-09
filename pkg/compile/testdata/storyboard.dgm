@@ -1,0 +1,49 @@
+%% Scene tracks and the panel they draw into.
+%% ---
+%% The frames here are caption-only on purpose: this fixture is compiled through
+%% Compile rather than CompileBundle, so there is no loader to inline an image
+%% and an `img` would only prove that an absent file compiles to an empty
+%% string. What the golden is here to pin is the shape — every declared frame
+%% carried whether a scene names it or not, and one scene track per step that
+%% changes what the reader is looking at.
+flowchart LR
+  user[Reader]
+  app[App]
+  idp[Identity Provider]
+
+  user --> app
+  app --> idp
+  idp --> user
+
+storyboard "What the reader sees" {
+  frame signin { caption: "The app's sign-in page" }
+  frame idp_form { caption: "The provider's credential form" }
+  frame home { caption: "Signed in, back on the app" }
+  frame unused { caption: "Declared but never shown; still carried" }
+}
+
+scenario "sign in"
+
+  step land "The reader opens the app" {
+    flow user -> app { dur: 500ms }
+    scene signin
+  }
+
+  %% Inside the seq, so the screen changes when the arrow lands rather than
+  %% when the step begins — and the scene takes none of the chain, so the step
+  %% is still exactly as long as its one hop.
+  step redirect "The app hands off to the provider" {
+    seq {
+      flow app -> idp { dur: 600ms }
+      scene idp_form
+    }
+  }
+
+  step wait "Nothing on screen changes while the token is verified" {
+    dur: 400ms
+  }
+
+  step back "And land back signed in" {
+    flow idp -> user { dur: 500ms }
+    scene home { dur: 200ms }
+  }

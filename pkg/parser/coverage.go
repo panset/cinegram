@@ -85,6 +85,12 @@ func groupTouched(g *symbol.Group, t *symbol.Table, seen map[string]bool) bool {
 
 func markActions(actions []ast.Action, seen map[string]bool) {
 	for _, a := range actions {
+		// A scene names a storyboard frame, which is a different namespace. A
+		// node that happened to share a frame's name would otherwise escape the
+		// unreferenced warning on the strength of a mention that is not one.
+		if a.Kind == ast.ActionScene {
+			continue
+		}
 		for _, tgt := range a.Targets {
 			seen[tgt.Name] = true
 		}
@@ -104,10 +110,10 @@ func checkStepScope(doc *ast.Document, b *diag.Bag) {
 		return
 	}
 
-	first := map[string]bool{}
-	for i, st := range doc.Scenarios[0].Steps {
-		first[st.EffectiveID(i)] = true
-	}
+	// The ids the *merged* first scenario is addressable by: a variant carries
+	// its base's prefix, and warning that an inherited step "is only in the
+	// other scenario" would be exactly backwards.
+	first := effectiveStepIDs(doc.Scenarios[0], doc.Scenarios)
 
 	for _, bd := range doc.Interactions {
 		if bd.Kind != ast.BindStep {
@@ -128,18 +134,18 @@ func checkStepScope(doc *ast.Document, b *diag.Bag) {
 	}
 }
 
-// stepOwner names the first scenario containing a step id.
+// stepOwner names the first scenario containing a step id, inheritance
+// included — the same view of a scenario the runtime has.
 func stepOwner(doc *ast.Document, id string) (string, bool) {
 	for _, sc := range doc.Scenarios {
-		for i, st := range sc.Steps {
-			if st.EffectiveID(i) == id {
-				name := sc.Name
-				if name == "" {
-					name = "(unnamed)"
-				}
-				return name, true
-			}
+		if !effectiveStepIDs(sc, doc.Scenarios)[id] {
+			continue
 		}
+		name := sc.Name
+		if name == "" {
+			name = "(unnamed)"
+		}
+		return name, true
 	}
 	return "", false
 }

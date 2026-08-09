@@ -1,0 +1,37 @@
+%% Every way a storyboard can be written wrong, in one file, so the hints stay
+%% under review rather than being discovered by whoever hits them.
+flowchart LR
+  a[A]
+  b[B]
+  a --> b
+
+storyboard "Broken" {
+  frame ok { caption: "the one good frame" }
+  frame ok { caption: "declared twice" }
+  frame nothing { }
+  frame typo { image: "frames/x.svg", caption: "img, not image" }
+  frame missing_braces
+  notaframe here
+}
+
+storyboard {
+  frame also_ok { img: "frames/y.svg" }
+}
+
+scenario "broken"
+
+  step one "names a frame that does not exist" {
+    scene okk
+  }
+
+  step two "names nothing recognisable at all" {
+    scene wildly_different_name
+  }
+
+  step three "a scene is not a node, so a node name does not resolve" {
+    scene a
+  }
+
+  step four "a scene cannot expire early any more than a highlight can" {
+    scene ok { colour: red }
+  }

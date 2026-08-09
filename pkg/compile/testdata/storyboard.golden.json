@@ -1,0 +1,162 @@
+{
+  "version": 2,
+  "root": "main",
+  "views": [
+    {
+      "id": "main",
+      "title": "sign in",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% Scene tracks and the panel they draw into.\n%% ---\n%% The frames here are caption-only on purpose: this fixture is compiled through\n%% Compile rather than CompileBundle, so there is no loader to inline an image\n%% and an `img` would only prove that an absent file compiles to an empty\n%% string. What the golden is here to pin is the shape — every declared frame\n%% carried whether a scene names it or not, and one scene track per step that\n%% changes what the reader is looking at.\nflowchart LR\n  user[Reader]\n  app[App]\n  idp[Identity Provider]\n  user --\u003e app\n  app --\u003e idp\n  idp --\u003e user\n"
+      },
+      "nodes": [
+        {
+          "id": "user",
+          "label": "Reader",
+          "shape": "rect"
+        },
+        {
+          "id": "app",
+          "label": "App",
+          "shape": "rect"
+        },
+        {
+          "id": "idp",
+          "label": "Identity Provider",
+          "shape": "rect"
+        }
+      ],
+      "groups": null,
+      "edges": [
+        {
+          "id": "e0",
+          "from": "user",
+          "to": "app",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "app",
+          "to": "idp",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "idp",
+          "to": "user",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "sign in",
+          "duration": 2000,
+          "speed": 1,
+          "loop": false,
+          "autoplay": true,
+          "steps": [
+            {
+              "id": "land",
+              "name": "The reader opens the app",
+              "start": 0,
+              "end": 500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 500,
+                  "edge": "e0",
+                  "from": "user",
+                  "to": "app"
+                },
+                {
+                  "kind": "scene",
+                  "start": 0,
+                  "end": 500,
+                  "target": "signin"
+                }
+              ]
+            },
+            {
+              "id": "redirect",
+              "name": "The app hands off to the provider",
+              "start": 500,
+              "end": 1100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 500,
+                  "end": 1100,
+                  "edge": "e1",
+                  "from": "app",
+                  "to": "idp"
+                },
+                {
+                  "kind": "scene",
+                  "start": 1100,
+                  "end": 1100,
+                  "target": "idp_form"
+                }
+              ]
+            },
+            {
+              "id": "wait",
+              "name": "Nothing on screen changes while the token is verified",
+              "start": 1100,
+              "end": 1500,
+              "tracks": null
+            },
+            {
+              "id": "back",
+              "name": "And land back signed in",
+              "start": 1500,
+              "end": 2000,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1500,
+                  "end": 2000,
+                  "edge": "e2",
+                  "from": "idp",
+                  "to": "user"
+                },
+                {
+                  "kind": "scene",
+                  "start": 1500,
+                  "end": 1700,
+                  "target": "home"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "storyboard": {
+        "title": "What the reader sees",
+        "frames": [
+          {
+            "id": "signin",
+            "caption": "The app's sign-in page"
+          },
+          {
+            "id": "idp_form",
+            "caption": "The provider's credential form"
+          },
+          {
+            "id": "home",
+            "caption": "Signed in, back on the app"
+          },
+          {
+            "id": "unused",
+            "caption": "Declared but never shown; still carried"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -37,12 +37,12 @@ scenario "happy path" { speed: 1.0 }
     flow checkout -> browser { label: "201 Created", dur: 600ms, style: response }
   }
 
-scenario "gateway outage"
-
-  step outage-submit "Shopper submits the same order" {
-    flow browser -> checkout { label: "POST /checkout", dur: 600ms }
-    highlight checkout { style: active }
-  }
+%% The outage is not a second story, it is the same story until the gateway
+%% stops answering. `variant` says so: this scenario replays "happy path"
+%% through the `submit` step — `until` is inclusive — and then diverges. The
+%% shared opening is written once, so a change to how an order is submitted
+%% cannot end up describing one path and not the other.
+scenario "gateway outage" { variant: "happy path", until: submit, outcome: fail }
 
   step attempt "The primary gateway never answers" {
     flow checkout -> gw {

@@ -104,8 +104,18 @@ func Build(t *ir.Timeline, title string) Doc {
 func buildView(v *ir.View) View {
 	out := View{ID: v.ID, Title: v.Title, Diagram: v.Diagram.Type}
 
+	// A scene track names a frame; what a reader wants told is what that frame
+	// shows. The captions live on the view, so they are resolved once here
+	// rather than looked up per event.
+	captions := map[string]string{}
+	if v.Storyboard != nil {
+		for _, f := range v.Storyboard.Frames {
+			captions[f.ID] = f.Caption
+		}
+	}
+
 	for i := range v.Scenarios {
-		out.Scenarios = append(out.Scenarios, buildScenario(&v.Scenarios[i]))
+		out.Scenarios = append(out.Scenarios, buildScenario(&v.Scenarios[i], captions))
 	}
 	for _, b := range v.Bindings {
 		out.Interactions = append(out.Interactions, buildInteraction(b))
@@ -113,13 +123,13 @@ func buildView(v *ir.View) View {
 	return out
 }
 
-func buildScenario(sc *ir.Scenario) Scenario {
+func buildScenario(sc *ir.Scenario, captions map[string]string) Scenario {
 	out := Scenario{ID: sc.ID, Name: sc.Name, Duration: sc.Duration}
 
 	for _, st := range sc.Steps {
 		step := Step{ID: st.ID, Name: st.Name, Desc: st.Desc, Start: st.Start, End: st.End}
 		for _, tr := range st.Tracks {
-			step.Events = append(step.Events, buildEvent(tr))
+			step.Events = append(step.Events, buildEvent(tr, captions))
 		}
 		// Tracks are emitted in source order, which is not always time order
 		// once `delay` and `seq` are involved. A walkthrough is read forwards,
@@ -132,17 +142,23 @@ func buildScenario(sc *ir.Scenario) Scenario {
 	}
 
 	for _, tr := range sc.Persistent {
-		out.Standing = append(out.Standing, buildEvent(tr))
+		out.Standing = append(out.Standing, buildEvent(tr, captions))
 	}
 	return out
 }
 
-func buildEvent(tr ir.Track) Event {
+func buildEvent(tr ir.Track, captions map[string]string) Event {
 	e := Event{
 		Kind: string(tr.Kind), Start: tr.Start, End: tr.End,
 		From: tr.From, To: tr.To, Target: tr.Target,
 		Label: tr.Label, Value: tr.Value, Note: tr.Text,
 		Style: tr.Style, Status: tr.Status,
+	}
+	// A scene's caption is the only field a track cannot carry itself, and it
+	// is the whole content of the sentence. Fold it into Value so the
+	// structured half says what the panel showed too.
+	if tr.Kind == ir.TrackScene && e.Value == "" {
+		e.Value = captions[tr.Target]
 	}
 	e.Text = sentence(e)
 	return e
@@ -178,6 +194,15 @@ func sentence(e Event) string {
 		return "**" + e.Target + "** is concealed " + window(e)
 	case "focus":
 		return "attention narrows to **" + e.Target + "** " + window(e)
+
+	case "scene":
+		// The caption, when there is one: it says what the viewer is looking
+		// at, where the frame id only says which picture it is.
+		what := e.Value
+		if what == "" {
+			what = e.Target
+		}
+		return "the storyboard shows *" + what + "* " + window(e)
 
 	case "set":
 		if e.Label != "" && e.Value != "" {

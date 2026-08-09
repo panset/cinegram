@@ -1,0 +1,35 @@
+%% What the storyboard contributes to a written walkthrough: a sentence saying
+%% what the reader was looking at while each beat played.
+flowchart LR
+  user[Reader]
+  app[App]
+  idp[Identity Provider]
+
+  user --> app
+  app --> idp
+  idp --> user
+
+storyboard "What the reader sees" {
+  frame signin { caption: "The app's sign-in page" }
+  frame idp_form { caption: "The provider's credential form" }
+  %% No caption, so the narration falls back to the frame's own name.
+  frame home { img: "frames/home.svg" }
+}
+
+scenario "sign in"
+
+  step land "The reader opens the app" {
+    desc: "Nothing has happened yet except a page load."
+    flow user -> app { dur: 500ms }
+    scene signin
+  }
+
+  step redirect "The app hands off to the provider" {
+    flow app -> idp { dur: 600ms }
+    scene idp_form
+  }
+
+  step back "And land back signed in" {
+    flow idp -> user { dur: 500ms }
+    scene home
+  }

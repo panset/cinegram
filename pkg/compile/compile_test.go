@@ -3,12 +3,14 @@ package compile
 import (
 	"encoding/json"
 	"flag"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/tejaspanse/cinegram/pkg/ir"
+	"github.com/tejaspanse/cinegram/pkg/loader"
 	"github.com/tejaspanse/cinegram/pkg/parser"
 )
 
@@ -404,6 +406,278 @@ func compileSource(t *testing.T, src string) *ir.Timeline {
 		t.Fatalf("unexpected compile diagnostics:\n%s", bag)
 	}
 	return tl
+}
+
+// TestStoryboardCarriesInlinedImages joins the two halves the compiler owns
+// here: the loader turns a path into a data URI, and this is where the frame
+// picks it up. A frame whose image could not be read still compiles — with an
+// empty Image — because the bag already carries the error and dropping it would
+// leave a `scene` pointing at nothing.
+func TestStoryboardCarriesInlinedImages(t *testing.T) {
+	files := map[string]string{
+		"top.dgm": `flowchart LR
+  a[A]
+  b[B]
+  a --> b
+
+storyboard "Screens" {
+  frame shown { img: "pics/shown.svg", caption: "has a picture" }
+  frame broken { img: "pics/gone.svg", caption: "does not" }
+  frame words { caption: "never had one" }
+}
+
+scenario "x"
+  step s "walk" {
+    flow a -> b
+    scene shown
+  }
+`,
+		"pics/shown.svg": "<svg/>",
+	}
+
+	bundle, err := loader.Load("top.dgm", func(path string) ([]byte, error) {
+		content, ok := files[filepath.Clean(path)]
+		if !ok {
+			return nil, fs.ErrNotExist
+		}
+		return []byte(content), nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sb := CompileBundle(bundle).Views[0].Storyboard
+	if sb == nil || len(sb.Frames) != 3 {
+		t.Fatalf("storyboard = %+v, want all three declared frames", sb)
+	}
+	if sb.Frames[0].Image != "data:image/svg+xml;base64,PHN2Zy8+" {
+		t.Errorf("frame %q image = %q, want the inlined data URI", sb.Frames[0].ID, sb.Frames[0].Image)
+	}
+	if sb.Frames[1].Image != "" || sb.Frames[1].Caption != "does not" {
+		t.Errorf("unreadable frame = %+v, want it carried with an empty image", sb.Frames[1])
+	}
+	if sb.Frames[2].Image != "" {
+		t.Errorf("caption-only frame = %+v, want no image", sb.Frames[2])
+	}
+	if !bundle.HasErrors() {
+		t.Error("the unreadable image was not reported; compile stayed total but silent")
+	}
+}
+
+// TestSceneSpansItsStep pins that `scene` needed no timing code of its own: it
+// is a stateful action, so it inherits the rule that a highlight follows.
+func TestSceneSpansItsStep(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+storyboard {
+  frame one { caption: "one" }
+}
+
+scenario "x"
+  step s "spans" {
+    flow a -> b { dur: 900ms }
+    scene one
+  }
+`
+	tl := compileSource(t, src)
+	tracks := tl.Views[0].Scenarios[0].Steps[0].Tracks
+
+	var scene *ir.Track
+	for i := range tracks {
+		if tracks[i].Kind == ir.TrackScene {
+			scene = &tracks[i]
+		}
+	}
+	if scene == nil {
+		t.Fatalf("no scene track in %+v", tracks)
+	}
+	if scene.Target != "one" || scene.Start != 0 || scene.End != 900 {
+		t.Errorf("scene = %+v, want frame \"one\" over the full step [0,900]", *scene)
+	}
+}
+
+// TestVariantSplicesTheInheritedPrefix pins the shape of inheritance: `until`
+// is inclusive, and the merged scenario is the base's prefix followed by the
+// variant's own steps with the timing recomputed from scratch.
+func TestVariantSplicesTheInheritedPrefix(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "base"
+  step one "first" {
+    flow a -> b { dur: 400ms }
+  }
+  step two "second" {
+    flow a -> b { dur: 500ms }
+  }
+  step three "not inherited" {
+    flow a -> b { dur: 900ms }
+  }
+
+scenario "diverges" { variant: "base", until: two, outcome: fail }
+  step wrong "instead" {
+    flow a -> b { dur: 300ms }
+  }
+`
+	tl := compileSource(t, src)
+	sc := tl.Views[0].Scenarios[1]
+
+	var ids []string
+	for _, st := range sc.Steps {
+		ids = append(ids, st.ID)
+	}
+	if strings.Join(ids, ",") != "one,two,wrong" {
+		t.Errorf("steps = %v, want the base through `two` (inclusive) then the variant's own", ids)
+	}
+	if sc.Duration != 400+500+300 {
+		t.Errorf("duration = %d, want the inherited prefix plus the divergent step", sc.Duration)
+	}
+	if sc.Outcome != "fail" {
+		t.Errorf("outcome = %q, want fail", sc.Outcome)
+	}
+	// The base is untouched: splicing must not mutate what it inherited from.
+	if got := len(tl.Views[0].Scenarios[0].Steps); got != 3 {
+		t.Errorf("base has %d steps after the splice, want 3", got)
+	}
+}
+
+// TestVariantResetsPerScenarioState covers the reason the splice happens at AST
+// level rather than by copying compiled steps: hop occurrence counting and
+// persistent-state windows are reset per scenario, so an inherited prefix has
+// to replay from the start rather than continue the base's bookkeeping.
+func TestVariantResetsPerScenarioState(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+  a --> b
+
+scenario "base"
+  step one "first message" {
+    flow a -> b { dur: 400ms }
+    set a { badge: "trying" }
+  }
+  step two "second message" {
+    flow a -> b { dur: 400ms }
+  }
+
+scenario "variant" { variant: "base", until: one }
+  step other "its own ending" {
+    flow a -> b { dur: 400ms }
+  }
+`
+	tl := compileSource(t, src)
+	base, variant := tl.Views[0].Scenarios[0], tl.Views[0].Scenarios[1]
+
+	// Two parallel edges: each scenario consumes them from the start, so the
+	// inherited first step animates e0 in both.
+	if base.Steps[0].Tracks[0].Edge != variant.Steps[0].Tracks[0].Edge {
+		t.Errorf("inherited step used edge %q, base used %q — the occurrence counter did not reset",
+			variant.Steps[0].Tracks[0].Edge, base.Steps[0].Tracks[0].Edge)
+	}
+	if len(variant.Persistent) != 1 {
+		t.Fatalf("variant persistent = %+v, want the inherited badge", variant.Persistent)
+	}
+	if got := variant.Persistent[0]; got.Start != 0 || got.End != variant.Duration {
+		t.Errorf("inherited badge window = [%d,%d], want [0,%d] — it must close at the variant's own end",
+			got.Start, got.End, variant.Duration)
+	}
+}
+
+// TestUnresolvableVariantStillCompiles keeps compilation total: validation has
+// already bagged the error, and refusing to lower the scenario would take the
+// rest of the page down with it.
+func TestUnresolvableVariantStillCompiles(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "orphan" { variant: "nothing named this" }
+  step only "on its own" {
+    flow a -> b { dur: 400ms }
+  }
+`
+	res, bag := parser.Parse("inline.dgm", src)
+	if !bag.HasErrors() {
+		t.Fatal("expected the unresolvable variant to be reported")
+	}
+	sc := Compile(res.Document, res.Symbols, bag).Views[0].Scenarios[0]
+	if len(sc.Steps) != 1 || sc.Steps[0].ID != "only" || sc.Duration != 400 {
+		t.Errorf("scenario = %+v, want its own steps alone", sc)
+	}
+}
+
+// TestSceneInASeqCostsNoTime is what makes "the screen changes when the arrow
+// lands" expressible without arithmetic: a scene inside a seq fires where the
+// chain has reached and consumes none of it, so the hops around it keep their
+// durations and adding a scene never inserts a silent pause.
+func TestSceneInASeqCostsNoTime(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+  b --> c
+
+storyboard {
+  frame one { caption: "one" }
+  frame two { caption: "two" }
+}
+
+scenario "x"
+  step s "chained" {
+    seq {
+      flow a -> b { dur: 300ms }
+      scene one
+      flow b -> c { dur: 400ms }
+      scene two
+    }
+  }
+`
+	tl := compileSource(t, src)
+	sc := tl.Views[0].Scenarios[0]
+
+	if sc.Duration != 700 {
+		t.Errorf("duration = %d, want 300+400 with the scenes costing nothing", sc.Duration)
+	}
+
+	scenes := map[string]int{}
+	for _, tr := range sc.Steps[0].Tracks {
+		if tr.Kind == ir.TrackScene {
+			scenes[tr.Target] = tr.Start
+		}
+	}
+	if scenes["one"] != 300 {
+		t.Errorf("scene one starts at %d, want 300 — where the first hop lands", scenes["one"])
+	}
+	if scenes["two"] != 700 {
+		t.Errorf("scene two starts at %d, want 700 — where the second hop lands", scenes["two"])
+	}
+}
+
+// TestSceneTakesAnOffset covers the other way to place one: `at`/`delay` work on
+// a scene exactly as on any other action, and a scene pushed past the actions
+// around it stretches the step rather than escaping it.
+func TestSceneTakesAnOffset(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+storyboard {
+  frame late { caption: "late" }
+}
+
+scenario "x"
+  step s "offset" {
+    flow a -> b { dur: 400ms }
+    scene late { at: 900ms }
+  }
+`
+	tl := compileSource(t, src)
+	step := tl.Views[0].Scenarios[0].Steps[0]
+
+	if step.End != 900 {
+		t.Errorf("step span = %d, want 900 — the scene's offset sizes the step", step.End)
+	}
+	for _, tr := range step.Tracks {
+		if tr.Kind == ir.TrackScene && tr.Start != 900 {
+			t.Errorf("scene starts at %d, want its 900ms offset", tr.Start)
+		}
+	}
 }
 
 // TestRevealHidesGroupsTransitively pins the rule that revealing a subgraph

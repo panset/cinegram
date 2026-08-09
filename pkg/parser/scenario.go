@@ -35,6 +35,7 @@ var actionKinds = map[string]struct {
 	"hide":      {ast.ActionHide, arityTarget},
 	"focus":     {ast.ActionFocus, arityTarget},
 	"note":      {ast.ActionNote, arityNote},
+	"scene":     {ast.ActionScene, arityTarget},
 	"wait":      {ast.ActionWait, arityBare},
 	"seq":       {ast.ActionSeq, arityBlock},
 	"set":       {ast.ActionSet, arityTarget},
@@ -45,7 +46,7 @@ var actionKinds = map[string]struct {
 // knownActions lists the vocabulary for the unknown-action hint, in the order
 // a reader would want to meet them rather than the map's.
 const knownActions = "flow, highlight, note, dim, pulse, focus, show, hide, " +
-	"set, gauge, unset, wait, seq"
+	"set, gauge, unset, scene, wait, seq"
 
 // parseScenario reads one `scenario` block. The block is not brace-delimited:
 // it ends at the first token that is not a `step`, which is what lets a `view`

@@ -1,0 +1,48 @@
+diagram: flowchart (flowchart LR)
+direction: LR
+
+nodes:
+  a          label="A"                      shape=rect      
+  b          label="B"                      shape=rect      
+
+edges:
+  e0   a -> b style=normal head=arrow
+
+storyboard "Broken"
+  frame ok           img=""                           caption="the one good frame"
+  frame ok           img=""                           caption="declared twice"
+  frame nothing      img=""                           caption=""
+  frame typo         img=""                           caption="img, not image"
+
+storyboard ""
+  frame also_ok      img="frames/y.svg"               caption=""
+
+scenario "broken"
+  step one "names a frame that does not exist"
+    scene okk
+  step two "names nothing recognisable at all"
+    scene wildly_different_name
+  step three "a scene is not a node, so a node name does not resolve"
+    scene a
+  step four "a scene cannot expire early any more than a highlight can"
+    scene ok {colour="red"}
+
+diagnostics:
+  10:3: error: duplicate frame "ok"
+    hint: frame names are shared across every storyboard block in a file
+  11:3: error: frame "nothing" declares nothing to show
+    hint: give it an `img`, a `caption`, or both
+  12:23: warning: unknown frame attribute "image"
+    hint: did you mean img?
+  13:23: error: expected `{` after frame "missing_braces" but found end of line
+    hint: give the frame an image, a caption, or both
+  14:3: error: expected `frame` but found "notaframe"
+    hint: every entry starts with `frame`
+  24:11: error: no storyboard frame named "okk"
+    hint: did you mean ok?
+  28:11: error: no storyboard frame named "wildly_different_name"
+    hint: known frames: also_ok, nothing, ok, typo
+  32:11: error: no storyboard frame named "a"
+    hint: known frames: also_ok, nothing, ok, typo
+  36:24: warning: unknown scene attribute "colour"
+    hint: known here: at, delay, dur, label, style
