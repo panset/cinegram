@@ -2086,7 +2086,7 @@
     if (tr.status === 'fail') cls += ' dgm-particle-fail';
     g.setAttribute('class', cls);
     // A custom property rather than a fill, so the stylesheet keeps deciding
-    // which of the dot, halo and label the colour reaches.
+    // which of the head, halo and label the colour reaches.
     if (tr.color) g.style.setProperty('--dgm-color', tr.color);
 
     var halo = document.createElementNS(SVG_NS, 'circle');
@@ -2094,19 +2094,19 @@
     halo.setAttribute('class', 'dgm-particle-halo');
     g.appendChild(halo);
 
-    var dot = document.createElementNS(SVG_NS, 'circle');
-    dot.setAttribute('r', '5.5');
-    dot.setAttribute('class', 'dgm-particle-dot');
-    g.appendChild(dot);
-
-    // The chevron rides in its own group because only it turns: rotating the
-    // whole particle would tip the label over with it, and a label upside down
-    // on a right-to-left response is exactly the case this is here to fix.
-    // Drawn along +x, so aimArrow's angle is the heading with no offset.
+    // The head rides in its own group because only it turns: rotating the whole
+    // particle would tip the label over with it, and a label upside down on a
+    // right-to-left response is exactly the case this is here to fix. Drawn
+    // along +x, so aimArrow's angle is the heading with no offset.
     var arrow = document.createElementNS(SVG_NS, 'g');
     arrow.setAttribute('class', 'dgm-particle-arrow');
     var head = document.createElementNS(SVG_NS, 'path');
-    head.setAttribute('d', 'M5,-4.5 L11.5,0 L5,4.5');
+    head.setAttribute('class', 'dgm-particle-head');
+    // A dart rather than a plain triangle: the notch in the back gives it a
+    // direction you can read at a glance even at this size. The tip leads the
+    // point on the path, so the comet behind meets the notch and the two draw
+    // as one arrow rather than as a shape with a line stuck to it.
+    head.setAttribute('d', 'M10,0 L-6,-7.5 L-2,0 L-6,7.5 Z');
     arrow.appendChild(head);
     g.appendChild(arrow);
 

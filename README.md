@@ -151,7 +151,7 @@ A flow may travel **against** the direction an edge was drawn. Response paths
 are the normal case, so `flow pod1 -> svc` reuses the `svc --> pod1` edge and
 marks the track reversed rather than demanding you draw a second arrow.
 
-The picture keeps up: the particle wears a chevron turned to the way it is
+The picture keeps up: the particle is an arrowhead turned to the way it is
 actually travelling, and while a reversed track is open the edge's own
 arrowhead is taken off — a static arrow pointing one way while a `200 OK`
 slides the other is a contradiction the viewer would have to resolve on every
@@ -159,8 +159,9 @@ hop. The arrowhead comes back the moment the track closes.
 
 ### What a flow draws
 
-A flow is not just a dot. While its track is open the edge underneath lights
-up, a comet trails the particle along the real path geometry, and the last
+A flow is not just a mark sliding along a line. While its track is open the
+edge underneath lights up, a comet trails the particle along the real path
+geometry, and the last
 moments before it lands pulse the node it is arriving at — so a multi-hop
 `flow a -> b -> c` reads as two arrivals rather than one long slide.
 

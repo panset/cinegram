@@ -481,35 +481,20 @@ body {
    a custom property it inherits to the shape elements mermaid drew, which is
    where the stroke and fill actually have to land. */
 
-.dgm-particle-dot {
+/* The particle itself: an arrowhead, not a dot. A dot has no direction, and
+   direction is the one thing the diagram underneath cannot say — the edge is
+   drawn once, pointing the way the author declared it, and a response runs
+   back along it. Filled and given the corner join so the notch stays crisp at
+   this size. */
+.dgm-particle-head {
   fill: var(--dgm-color, var(--dgm-accent));
+  stroke-linejoin: miter;
 }
 
 .dgm-particle-halo {
   fill: var(--dgm-color, var(--dgm-accent));
   opacity: 0.25;
   animation: dgm-pulse 1.1s ease-out infinite;
-}
-
-/* The chevron on the nose of the particle. It is the only thing on the page
-   that says which way this flow is going — the edge underneath is drawn once,
-   pointing the way the author declared it, and a response runs back along it.
-   Stroked rather than filled so it reads as a caret riding the dot, not as a
-   second arrowhead competing with mermaid's. */
-.dgm-particle-arrow path {
-  fill: none;
-  stroke: var(--dgm-color, var(--dgm-accent));
-  stroke-width: 2.4px;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.dgm-particle-response .dgm-particle-arrow path {
-  stroke: var(--dgm-color, var(--dgm-response));
-}
-
-.dgm-particle-fail .dgm-particle-arrow path {
-  stroke: var(--dgm-color, var(--dgm-fail));
 }
 
 .dgm-particle-label {
@@ -522,19 +507,21 @@ body {
   stroke-linejoin: round;
 }
 
-.dgm-particle-response .dgm-particle-dot,
+.dgm-particle-response .dgm-particle-head,
 .dgm-particle-response .dgm-particle-halo {
   fill: var(--dgm-color, var(--dgm-response));
 }
 
 /* A failing flow reads as failing before it arrives, so the particle carries
    the outcome the whole way rather than only at the ✕. */
-.dgm-particle-fail .dgm-particle-dot,
+.dgm-particle-fail .dgm-particle-head,
 .dgm-particle-fail .dgm-particle-halo {
   fill: var(--dgm-color, var(--dgm-fail));
 }
 
-.dgm-particle-fail .dgm-particle-dot {
+/* Only the failing head is outlined, and in the page background: it is the one
+   that has to stay legible sitting on top of the ✕ it is about to land on. */
+.dgm-particle-fail .dgm-particle-head {
   stroke: var(--dgm-bg);
   stroke-width: 1.5px;
 }
