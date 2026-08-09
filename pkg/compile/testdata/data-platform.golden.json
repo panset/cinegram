@@ -411,7 +411,7 @@
         {
           "id": "s0",
           "name": "a row's journey",
-          "duration": 7900,
+          "duration": 10300,
           "speed": 1,
           "loop": false,
           "autoplay": true,
@@ -542,6 +542,12 @@
                   "start": 3400,
                   "end": 4000,
                   "target": "lake"
+                },
+                {
+                  "kind": "focus",
+                  "start": 3400,
+                  "end": 4000,
+                  "target": "quality"
                 },
                 {
                   "kind": "flow",
@@ -676,12 +682,12 @@
               "name": "The whole platform at once",
               "desc": "Zoom out. Every arrow on this diagram exists because one of the eight steps above needed it, which is the only honest way to draw a picture this size.",
               "start": 6700,
-              "end": 7900,
+              "end": 10300,
               "tracks": [
                 {
                   "kind": "flow",
                   "start": 6700,
-                  "end": 7300,
+                  "end": 7000,
                   "edge": "e0",
                   "from": "app",
                   "to": "cdc",
@@ -689,11 +695,101 @@
                 },
                 {
                   "kind": "flow",
-                  "start": 7300,
-                  "end": 7900,
+                  "start": 7000,
+                  "end": 7300,
                   "edge": "e4",
                   "from": "cdc",
                   "to": "kafka",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 7300,
+                  "end": 7600,
+                  "edge": "e9",
+                  "from": "kafka",
+                  "to": "flink",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 7600,
+                  "end": 7900,
+                  "edge": "e10",
+                  "from": "flink",
+                  "to": "dedupe",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 7900,
+                  "end": 8200,
+                  "edge": "e11",
+                  "from": "dedupe",
+                  "to": "enrich",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 8200,
+                  "end": 8500,
+                  "edge": "e12",
+                  "from": "enrich",
+                  "to": "bronze",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 8500,
+                  "end": 8800,
+                  "edge": "e13",
+                  "from": "bronze",
+                  "to": "silver",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 8800,
+                  "end": 9100,
+                  "edge": "e14",
+                  "from": "silver",
+                  "to": "gold",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 9100,
+                  "end": 9400,
+                  "edge": "e15",
+                  "from": "gold",
+                  "to": "dw",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 9400,
+                  "end": 9700,
+                  "edge": "e16",
+                  "from": "dw",
+                  "to": "marts",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 9700,
+                  "end": 10000,
+                  "edge": "e17",
+                  "from": "marts",
+                  "to": "semantic",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 10000,
+                  "end": 10300,
+                  "edge": "e18",
+                  "from": "semantic",
+                  "to": "bi",
                   "label": "end to end"
                 }
               ]
@@ -703,7 +799,7 @@
             {
               "kind": "gauge",
               "start": 700,
-              "end": 7900,
+              "end": 10300,
               "target": "kafka",
               "label": "lag",
               "value": "0.4s"
@@ -711,7 +807,7 @@
             {
               "kind": "set",
               "start": 3400,
-              "end": 7900,
+              "end": 10300,
               "target": "silver",
               "label": "validated",
               "value": "ok",

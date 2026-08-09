@@ -112,7 +112,9 @@ scenario "a row's journey" { speed: 1.0 }
 
   step refine "Quality checks promote it to silver" {
     desc: "This is the first stage that can reject a row. A check that fails here stops the promotion rather than propagating a quiet error into everything built on top."
-    focus lake
+    %% quality lives outside the lake, so it joins the focus — a flow should
+    %% not emerge from a dimmed node.
+    focus lake, quality
     flow quality -> silver { label: "assertions pass", dur: 600ms }
     flow bronze -> silver { label: "promote", dur: 600ms }
     set silver { badge: "validated", state: ok, color: "#16a34a" }
@@ -140,5 +142,7 @@ scenario "a row's journey" { speed: 1.0 }
 
   step whole "The whole platform at once" {
     desc: "Zoom out. Every arrow on this diagram exists because one of the eight steps above needed it, which is the only honest way to draw a picture this size."
-    flow app -> cdc -> kafka { label: "end to end", dur: 1200ms }
+    flow app -> cdc -> kafka -> flink -> dedupe -> enrich -> bronze -> silver -> gold -> dw -> marts -> semantic -> bi {
+      label: "end to end", dur: 3600ms
+    }
   }

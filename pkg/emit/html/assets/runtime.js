@@ -1741,13 +1741,25 @@
           self.overlay.appendChild(div);
           self.pills[p.key] = div;
         }
+        // Pills are HTML, so they do not shrink with the SVG. On a large
+        // diagram scaled to fit, a full-size badge dwarfs the node it
+        // annotates and sits over its neighbours — over exactly the region
+        // being animated. Scale with the host, with a floor that keeps the
+        // text legible.
+        var s = Math.max(0.55, Math.min(1, r.height / PILL_HOST_REF));
+        div.style.transform = 'translate(-30%, -50%) scale(' + s + ')';
+        div.style.transformOrigin = 'left center';
         div.style.left = (r.right - stageRect.left) + 'px';
-        div.style.top = (r.top - stageRect.top + i * PILL_STACK) + 'px';
+        div.style.top = (r.top - stageRect.top + i * PILL_STACK * s) + 'px';
       });
     });
   };
 
   var PILL_STACK = 22;
+
+  // PILL_HOST_REF is the on-screen node height at which a pill renders at
+  // full size — roughly a mermaid node at natural scale.
+  var PILL_HOST_REF = 44;
 
   function makePill(p) {
     var div = el('div', 'dgm-pill dgm-pill-' + p.kind + (p.style ? ' dgm-pill-' + safeName(p.style) : ''));
