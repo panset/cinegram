@@ -1,9 +1,9 @@
 package parser
 
 import (
-	"github.com/tejaspanse/diagramator/pkg/ast"
-	"github.com/tejaspanse/diagramator/pkg/diag"
-	"github.com/tejaspanse/diagramator/pkg/symbol"
+	"github.com/tejaspanse/cinegram/pkg/ast"
+	"github.com/tejaspanse/cinegram/pkg/diag"
+	"github.com/tejaspanse/cinegram/pkg/symbol"
 )
 
 // Coverage diagnostics answer a different question from the rest of validation.

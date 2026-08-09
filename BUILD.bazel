@@ -1,4 +1,4 @@
 load("@gazelle//:def.bzl", "gazelle")
 
-# gazelle:prefix github.com/tejaspanse/diagramator
+# gazelle:prefix github.com/tejaspanse/cinegram
 gazelle(name = "gazelle")

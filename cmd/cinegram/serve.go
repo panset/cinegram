@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tejaspanse/diagramator/pkg/compile"
-	"github.com/tejaspanse/diagramator/pkg/emit/html"
-	"github.com/tejaspanse/diagramator/pkg/loader"
+	"github.com/tejaspanse/cinegram/pkg/compile"
+	"github.com/tejaspanse/cinegram/pkg/emit/html"
+	"github.com/tejaspanse/cinegram/pkg/loader"
 )
 
 // The serve loop exists because the alternative was a three-command ritual:
@@ -94,7 +94,7 @@ func (s *server) handlePage(w http.ResponseWriter, r *http.Request) {
 		// empty page — and, when watching, the error page carries the reload
 		// script too, or fixing the file would leave the browser stranded on
 		// the error with nothing listening for the recovery.
-		body := []byte("<!doctype html><meta charset=\"utf-8\"><title>diagramator</title><pre>diagramator: " +
+		body := []byte("<!doctype html><meta charset=\"utf-8\"><title>cinegram</title><pre>cinegram: " +
 			stdhtml.EscapeString(err.Error()) + "</pre>")
 		if s.watch {
 			body = injectReload(body)

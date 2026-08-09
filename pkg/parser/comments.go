@@ -3,9 +3,9 @@ package parser
 import (
 	"strings"
 
-	"github.com/tejaspanse/diagramator/pkg/ast"
-	"github.com/tejaspanse/diagramator/pkg/diag"
-	"github.com/tejaspanse/diagramator/pkg/source"
+	"github.com/tejaspanse/cinegram/pkg/ast"
+	"github.com/tejaspanse/cinegram/pkg/diag"
+	"github.com/tejaspanse/cinegram/pkg/source"
 )
 
 // Comment linting lives in its own file rather than in validate.go, which is
@@ -21,7 +21,7 @@ import (
 // following line — which is usually the diagram header, so the whole diagram
 // then fails to parse with an error pointing at line 1.
 //
-// Diagramator reprints comments verbatim on purpose, so it hands the trap
+// Cinegram reprints comments verbatim on purpose, so it hands the trap
 // straight through to the renderer. Catching it here is the only place it can
 // be caught before the page comes up blank.
 func checkCommentLine(text string, at source.Pos, b *diag.Bag) {

@@ -3,8 +3,8 @@ package parser
 import (
 	"strings"
 
-	"github.com/tejaspanse/diagramator/pkg/diag"
-	"github.com/tejaspanse/diagramator/pkg/source"
+	"github.com/tejaspanse/cinegram/pkg/diag"
+	"github.com/tejaspanse/cinegram/pkg/source"
 )
 
 // The scenario half of the language is brace-structured rather than

@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tejaspanse/diagramator/pkg/compile"
-	"github.com/tejaspanse/diagramator/pkg/ir"
-	"github.com/tejaspanse/diagramator/pkg/loader"
+	"github.com/tejaspanse/cinegram/pkg/compile"
+	"github.com/tejaspanse/cinegram/pkg/ir"
+	"github.com/tejaspanse/cinegram/pkg/loader"
 )
 
 // Frame capture is the serve loop plus a browser plus the deep link from Phase
@@ -25,7 +25,7 @@ import (
 // rule intact. Vendoring a headless renderer to draw a diagram that mermaid.js
 // draws would be absurd.
 
-// chromeCandidates are tried in order when DIAGRAMATOR_CHROME is unset.
+// chromeCandidates are tried in order when CINEGRAM_CHROME is unset.
 var chromeCandidates = []string{
 	"google-chrome",
 	"google-chrome-stable",
@@ -42,9 +42,9 @@ var macChromePaths = []string{
 
 // findChrome locates a browser that can take a headless screenshot.
 func findChrome() (string, error) {
-	if custom := os.Getenv("DIAGRAMATOR_CHROME"); custom != "" {
+	if custom := os.Getenv("CINEGRAM_CHROME"); custom != "" {
 		if _, err := os.Stat(custom); err != nil {
-			return "", fmt.Errorf("DIAGRAMATOR_CHROME is set to %q, which does not exist", custom)
+			return "", fmt.Errorf("CINEGRAM_CHROME is set to %q, which does not exist", custom)
 		}
 		return custom, nil
 	}
@@ -64,7 +64,7 @@ func findChrome() (string, error) {
 
 	return "", fmt.Errorf(
 		"no headless browser found: looked for %s on PATH.\n"+
-			"Set DIAGRAMATOR_CHROME to a Chrome or Chromium binary to use one somewhere else",
+			"Set CINEGRAM_CHROME to a Chrome or Chromium binary to use one somewhere else",
 		strings.Join(chromeCandidates, ", "))
 }
 

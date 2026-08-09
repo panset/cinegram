@@ -11,13 +11,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tejaspanse/diagramator/pkg/ast"
-	"github.com/tejaspanse/diagramator/pkg/diag"
-	"github.com/tejaspanse/diagramator/pkg/emit/mermaid"
-	"github.com/tejaspanse/diagramator/pkg/ir"
-	"github.com/tejaspanse/diagramator/pkg/loader"
-	"github.com/tejaspanse/diagramator/pkg/symbol"
-	"github.com/tejaspanse/diagramator/pkg/units"
+	"github.com/tejaspanse/cinegram/pkg/ast"
+	"github.com/tejaspanse/cinegram/pkg/diag"
+	"github.com/tejaspanse/cinegram/pkg/emit/mermaid"
+	"github.com/tejaspanse/cinegram/pkg/ir"
+	"github.com/tejaspanse/cinegram/pkg/loader"
+	"github.com/tejaspanse/cinegram/pkg/symbol"
+	"github.com/tejaspanse/cinegram/pkg/units"
 )
 
 const (

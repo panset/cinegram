@@ -1,13 +1,13 @@
-// Command diagramator compiles animated diagram sources into an animation
+// Command cinegram compiles animated diagram sources into an animation
 // timeline, plain Mermaid, or a self-contained animated HTML page.
 //
 // Usage:
 //
-//	diagramator compile <file.dgm>   # timeline JSON on stdout
-//	diagramator mermaid <file.dgm>   # the diagram as plain Mermaid
-//	diagramator preview <file.dgm>   # self-contained animated HTML
-//	diagramator narrate <file.dgm>   # the animation as a written walkthrough
-//	diagramator lint    <file.dgm>   # diagnostics only
+//	cinegram compile <file.dgm>   # timeline JSON on stdout
+//	cinegram mermaid <file.dgm>   # the diagram as plain Mermaid
+//	cinegram preview <file.dgm>   # self-contained animated HTML
+//	cinegram narrate <file.dgm>   # the animation as a written walkthrough
+//	cinegram lint    <file.dgm>   # diagnostics only
 package main
 
 import (
@@ -19,22 +19,22 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/tejaspanse/diagramator/pkg/compile"
-	"github.com/tejaspanse/diagramator/pkg/diag"
-	"github.com/tejaspanse/diagramator/pkg/emit/html"
-	"github.com/tejaspanse/diagramator/pkg/emit/mermaid"
-	"github.com/tejaspanse/diagramator/pkg/emit/narrate"
-	"github.com/tejaspanse/diagramator/pkg/ir"
-	"github.com/tejaspanse/diagramator/pkg/loader"
-	"github.com/tejaspanse/diagramator/pkg/parser"
-	"github.com/tejaspanse/diagramator/pkg/units"
+	"github.com/tejaspanse/cinegram/pkg/compile"
+	"github.com/tejaspanse/cinegram/pkg/diag"
+	"github.com/tejaspanse/cinegram/pkg/emit/html"
+	"github.com/tejaspanse/cinegram/pkg/emit/mermaid"
+	"github.com/tejaspanse/cinegram/pkg/emit/narrate"
+	"github.com/tejaspanse/cinegram/pkg/ir"
+	"github.com/tejaspanse/cinegram/pkg/loader"
+	"github.com/tejaspanse/cinegram/pkg/parser"
+	"github.com/tejaspanse/cinegram/pkg/units"
 )
 
 const version = "0.1.0"
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "diagramator:", err)
+		fmt.Fprintln(os.Stderr, "cinegram:", err)
 		os.Exit(1)
 	}
 }
@@ -60,7 +60,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	case "frame":
 		return cmdFrame(rest, stdout, stderr)
 	case "version", "--version", "-v":
-		fmt.Fprintln(stdout, "diagramator", version)
+		fmt.Fprintln(stdout, "cinegram", version)
 		return nil
 	case "help", "--help", "-h":
 		usage(stdout)
@@ -72,22 +72,22 @@ func run(args []string, stdout, stderr io.Writer) error {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprint(w, `diagramator - animated architecture diagrams from a Mermaid-like DSL
+	fmt.Fprint(w, `cinegram - animated architecture diagrams from a Mermaid-like DSL
 
 Usage:
-  diagramator compile <file.dgm> [-o out.json]   compile to an animation timeline
-  diagramator mermaid <file.dgm> [-o out.mmd]    emit the diagram as plain Mermaid
-  diagramator preview <file.dgm> [-o out.html]   build a self-contained animated page
-  diagramator preview <file.dgm> --serve [--watch] [--addr host:port]
+  cinegram compile <file.dgm> [-o out.json]   compile to an animation timeline
+  cinegram mermaid <file.dgm> [-o out.mmd]    emit the diagram as plain Mermaid
+  cinegram preview <file.dgm> [-o out.html]   build a self-contained animated page
+  cinegram preview <file.dgm> --serve [--watch] [--addr host:port]
                                                  serve it, rebuilding as you edit
-  diagramator frame   <file.dgm> --at 2400ms -o out.png
+  cinegram frame   <file.dgm> --at 2400ms -o out.png
                                                  screenshot one exact moment
                                                  (--frames N -o dir/ for a sequence)
-  diagramator narrate <file.dgm> [-o out.md] [--format=md|json]
+  cinegram narrate <file.dgm> [-o out.md] [--format=md|json]
                                                  the animation as a walkthrough
-  diagramator lint    <file.dgm> [--format=text|json]
+  cinegram lint    <file.dgm> [--format=text|json]
                                                  report diagnostics only
-  diagramator version
+  cinegram version
 
 Warnings never fail a build; errors do.
 `)
@@ -284,7 +284,7 @@ func cmdPreview(args []string, stdout, stderr io.Writer) error {
 	// watch for when the output is a file written once.
 	if serve || watch {
 		if output != "" {
-			fmt.Fprintln(stderr, "diagramator: warning: -o is ignored with --serve/--watch; the page is served, not written")
+			fmt.Fprintln(stderr, "cinegram: warning: -o is ignored with --serve/--watch; the page is served, not written")
 		}
 		return runServe(input, addr, watch, stderr)
 	}
@@ -302,7 +302,7 @@ func cmdPreview(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if rootHasNoScenarios(timeline) {
-		fmt.Fprintln(stderr, "diagramator: warning: no scenarios, the page will render a static diagram")
+		fmt.Fprintln(stderr, "cinegram: warning: no scenarios, the page will render a static diagram")
 	}
 
 	page, err := html.Render(timeline, html.Options{})

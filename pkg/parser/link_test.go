@@ -3,7 +3,7 @@ package parser
 import (
 	"testing"
 
-	"github.com/tejaspanse/diagramator/pkg/ast"
+	"github.com/tejaspanse/cinegram/pkg/ast"
 )
 
 func TestSplitLinks(t *testing.T) {

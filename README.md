@@ -1,14 +1,17 @@
-# Diagramator
+# Cinegram
 
-Animated architecture diagrams from a Mermaid-like DSL.
+**Mermaid draws the system; Cinegram plays the story.**
+
+Animated, narrated, explorable architecture diagrams from a Mermaid-compatible
+DSL — for the humans who read them and the AI agents that write them.
 
 A static diagram shows you that an Ingress sits in front of a Service. It cannot
 show you what happens to a single `GET /api/orders` as it travels
-LB → Ingress → Service → Pod and back. Diagramator adds a small animation
+LB → Ingress → Service → Pod and back. Cinegram adds a small animation
 language on top of Mermaid so that path becomes something you can watch.
 
 ```
-bazel run //cmd/diagramator -- preview examples/k8s-request.dgm -o /tmp/k8s.html
+bazel run //cmd/cinegram -- preview examples/k8s-request.dgm -o /tmp/k8s.html
 open /tmp/k8s.html
 ```
 
@@ -54,7 +57,7 @@ scenario "GET /api/orders" { speed: 1.0, loop: true }
 Two properties shape everything else:
 
 **The diagram half is untouched Mermaid.** Delete the scenario blocks and you
-have a file any Mermaid renderer will draw. `diagramator mermaid` does exactly
+have a file any Mermaid renderer will draw. `cinegram mermaid` does exactly
 that, and it is lossless by construction — statements are reprinted from their
 original source text, so `classDef`, `click`, and any Mermaid syntax added after
 this parser was written all survive verbatim.
@@ -404,17 +407,17 @@ illustration.
 ## Commands
 
 ```
-diagramator compile <file.dgm> [-o out.json]   # animation timeline JSON
-diagramator mermaid <file.dgm> [-o out.mmd]    # the diagram as plain Mermaid
-diagramator preview <file.dgm> [-o out.html]   # self-contained animated page
-diagramator narrate <file.dgm> [--format=md|json]   # the animation, written out
-diagramator lint    <file.dgm> [--format=text|json] # diagnostics only
+cinegram compile <file.dgm> [-o out.json]   # animation timeline JSON
+cinegram mermaid <file.dgm> [-o out.mmd]    # the diagram as plain Mermaid
+cinegram preview <file.dgm> [-o out.html]   # self-contained animated page
+cinegram narrate <file.dgm> [--format=md|json]   # the animation, written out
+cinegram lint    <file.dgm> [--format=text|json] # diagnostics only
 ```
 
 ### Authoring
 
 ```
-diagramator preview examples/k8s-request.dgm --serve --watch
+cinegram preview examples/k8s-request.dgm --serve --watch
 ```
 
 Serves the page at `http://127.0.0.1:8731/`, compiled from source on every
@@ -430,14 +433,14 @@ the reload loop is the fastest way to read it.
 For a still of one exact moment:
 
 ```
-diagramator frame examples/payment-checkout.dgm --at 1620ms --scenario s1 -o fail.png
+cinegram frame examples/payment-checkout.dgm --at 1620ms --scenario s1 -o fail.png
 ```
 
 That is `examples/payment-checkout.fail.png` — the gateway timing out, ✕ and
 all. It works by opening the Phase-6 deep link in a headless Chrome, and
 because a deep link lands *paused*, the screenshot is deterministic rather than
 a race against the animation. The browser is found on `PATH`
-(`google-chrome`, `chromium`, …) or named by `$DIAGRAMATOR_CHROME`; shelling
+(`google-chrome`, `chromium`, …) or named by `$CINEGRAM_CHROME`; shelling
 out to one the machine already has is what keeps the no-dependencies rule.
 
 `--frames N -o dir/` captures N evenly spaced moments. Turning those into an
@@ -482,8 +485,8 @@ read the detail instead of choosing between them.
 
 The preview page plays itself: after a view renders, a scenario with
 `autoplay` (the default) starts, unless the reader's system asks for reduced
-motion. `window.DIAGRAMATOR_PLAYER` is the same player, so
-`DIAGRAMATOR_PLAYER.seek(2400)` lands on a moment deterministically.
+motion. `window.CINEGRAM_PLAYER` is the same player, so
+`CINEGRAM_PLAYER.seek(2400)` lands on a moment deterministically.
 
 ### Driving the player
 
@@ -524,7 +527,7 @@ content rather than an effect.
 
 Relative paths are resolved against the directory you ran the command from,
 including under `bazel run` — the binary executes from its runfiles tree, so
-Diagramator honours Bazel's `BUILD_WORKING_DIRECTORY` to get this right.
+Cinegram honours Bazel's `BUILD_WORKING_DIRECTORY` to get this right.
 `preview` with no `-o` writes beside its input.
 
 Some warnings are about omission rather than error — the mistakes that leave a
@@ -567,7 +570,7 @@ source.dgm
         └── html ─────────► self-contained animated page
 ```
 
-Layout is delegated to mermaid.js. Diagramator emits clean Mermaid, mermaid.js
+Layout is delegated to mermaid.js. Cinegram emits clean Mermaid, mermaid.js
 produces the SVG, and the runtime animates particles along the real edge
 geometry using `getPointAtLength`. There is no layout engine here to maintain.
 

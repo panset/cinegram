@@ -16,7 +16,7 @@ go_library(
         "shape.go",
         "validate.go",
     ],
-    importpath = "github.com/tejaspanse/diagramator/pkg/parser",
+    importpath = "github.com/tejaspanse/cinegram/pkg/parser",
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/ast",

@@ -41,10 +41,10 @@ Exercise the CLI (relative paths work; the binary resolves them against
 `BUILD_WORKING_DIRECTORY`):
 
 ```sh
-bazel run //cmd/diagramator -- preview examples/k8s-request.dgm -o /tmp/k8s.html
-bazel run //cmd/diagramator -- compile examples/k8s-request.dgm
-bazel run //cmd/diagramator -- mermaid examples/k8s-request.dgm
-bazel run //cmd/diagramator -- lint    examples/k8s-request.dgm
+bazel run //cmd/cinegram -- preview examples/k8s-request.dgm -o /tmp/k8s.html
+bazel run //cmd/cinegram -- compile examples/k8s-request.dgm
+bazel run //cmd/cinegram -- mermaid examples/k8s-request.dgm
+bazel run //cmd/cinegram -- lint    examples/k8s-request.dgm
 ```
 
 ## Architecture
@@ -191,14 +191,14 @@ same path and the Back button cannot disagree with the browser's own.
 Bazel tests cover the parser, compiler and emitters, but not the browser
 runtime. To check a runtime change actually renders, serve the page — the
 Chrome extension blocks `file://` — and drive the player, which is exposed as
-`window.DIAGRAMATOR_PLAYER`:
+`window.CINEGRAM_PLAYER`:
 
 ```sh
-bazel run //cmd/diagramator -- preview examples/k8s-request.dgm --serve --watch
+bazel run //cmd/cinegram -- preview examples/k8s-request.dgm --serve --watch
 # http://127.0.0.1:8731/ — edit the .dgm and the page reloads itself
 ```
 
-`DIAGRAMATOR_PLAYER.seek(ms)` jumps to a moment deterministically, which is far
+`CINEGRAM_PLAYER.seek(ms)` jumps to a moment deterministically, which is far
 more reliable for verification than watching playback. Two traps to know about:
 
 - A CSS `transition` means `getComputedStyle` right after a class change
@@ -213,15 +213,15 @@ For a still, `frame` captures one exact millisecond with no race against the
 animation, because the deep link it opens lands paused:
 
 ```sh
-bazel run //cmd/diagramator -- frame examples/payment-checkout.dgm \
+bazel run //cmd/cinegram -- frame examples/payment-checkout.dgm \
   --at 1620ms --scenario s1 -o /tmp/fail.png
 ```
 
 It shells out to a headless Chrome found on `PATH` or named by
-`$DIAGRAMATOR_CHROME`. The opt-in end-to-end test for it must run **outside**
+`$CINEGRAM_CHROME`. The opt-in end-to-end test for it must run **outside**
 the Bazel sandbox, which denies the browser what it needs to start:
 
 ```sh
-DIAGRAMATOR_CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-  bazel-bin/cmd/diagramator/diagramator_test_/diagramator_test -test.run TestFrameEndToEnd
+CINEGRAM_CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  bazel-bin/cmd/cinegram/cinegram_test_/cinegram_test -test.run TestFrameEndToEnd
 ```

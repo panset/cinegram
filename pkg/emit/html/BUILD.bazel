@@ -8,7 +8,7 @@ go_library(
         "assets/runtime.css",
         "assets/runtime.js",
     ],
-    importpath = "github.com/tejaspanse/diagramator/pkg/emit/html",
+    importpath = "github.com/tejaspanse/cinegram/pkg/emit/html",
     visibility = ["//visibility:public"],
     deps = ["//pkg/ir"],
 )

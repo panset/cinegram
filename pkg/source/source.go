@@ -1,7 +1,7 @@
 // Package source holds diagram source text and maps between byte offsets and
 // human-readable line/column positions.
 //
-// Diagramator's diagram bodies are line-oriented, exactly like Mermaid's, so
+// Cinegram's diagram bodies are line-oriented, exactly like Mermaid's, so
 // the unit of iteration here is a Line rather than a token. Diagram parsers
 // walk a Cursor; the scenario lexer builds tokens on top of the same Lines.
 package source

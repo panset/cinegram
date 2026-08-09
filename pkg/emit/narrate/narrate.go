@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tejaspanse/diagramator/pkg/ir"
+	"github.com/tejaspanse/cinegram/pkg/ir"
 )
 
 // Doc is a whole timeline, narrated.

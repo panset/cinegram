@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tejaspanse/diagramator/pkg/emit/mermaid"
-	"github.com/tejaspanse/diagramator/pkg/parser"
+	"github.com/tejaspanse/cinegram/pkg/emit/mermaid"
+	"github.com/tejaspanse/cinegram/pkg/parser"
 )
 
 // TestEmitDropsScenariosOnly is the language's central compatibility promise:

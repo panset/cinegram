@@ -11,7 +11,7 @@ package mermaid
 import (
 	"strings"
 
-	"github.com/tejaspanse/diagramator/pkg/ast"
+	"github.com/tejaspanse/cinegram/pkg/ast"
 )
 
 const indentUnit = "  "

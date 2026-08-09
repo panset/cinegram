@@ -1,4 +1,4 @@
-# Diagramator — Implementation Plan
+# Cinegram — Implementation Plan
 
 Ten sequential phases, each sized for one engineer (or one Opus subagent) working
 alone to completion. Every phase ships user-visible value, ends with all tests
@@ -33,9 +33,9 @@ Definition of done for a phase:
    and `bazel run //pkg/compile:compile_test -- -update` (never under `bazel test`).
 3. `bazel run //:gazelle` if packages were added/moved; `gofmt` run via the
    hermetic SDK binary (see CLAUDE.md).
-4. The phase's new example compiles (`bazel run //cmd/diagramator -- compile examples/<x>.dgm`),
+4. The phase's new example compiles (`bazel run //cmd/cinegram -- compile examples/<x>.dgm`),
    lints clean, and previews correctly. Verify runtime changes in a browser by
-   serving the page and driving `window.DIAGRAMATOR_PLAYER.seek(ms)`
+   serving the page and driving `window.CINEGRAM_PLAYER.seek(ms)`
    deterministically (see "Verifying animation changes" in CLAUDE.md).
 5. `README.md` documents any new DSL syntax, CLI flag, or player control.
 6. IR changes bump nothing unless the schema shape changes incompatibly; new
@@ -95,7 +95,7 @@ them. Users can write these attributes today and silently get nothing.
 rollback flow, and `ease: in-out` on the promotion hops. Copy into
 `pkg/compile/testdata/` with a golden JSON so attr passthrough is pinned.
 
-**Acceptance.** Serving the example and calling `DIAGRAMATOR_PLAYER.seek()`
+**Acceptance.** Serving the example and calling `CINEGRAM_PLAYER.seek()`
 mid-flow shows a colored particle; loading the page starts playback unattended;
 a `.dgm` with `colour: red` lints with a warning naming `color`.
 
@@ -344,7 +344,7 @@ and Enter activates it; `?` shows the overlay.
 
 **Scope.**
 
-- **`diagramator narrate <file> [-o out.md] [--format=md|json]`.** A new
+- **`cinegram narrate <file> [-o out.md] [--format=md|json]`.** A new
   `pkg/emit/narrate` package, pure over `ir.Timeline` (no parser/loader
   imports beyond what `main.go` already wires). Markdown output: per view, per
   scenario, an ordered walkthrough — step heading (name), the `desc` prose
@@ -363,7 +363,7 @@ and Enter activates it; `?` shows the overlay.
   scenario (the runtime binds against the selected scenario — say so); a
   `view` declared but never targeted; duplicate scenario names.
 
-**Files.** `pkg/emit/narrate/` (new — run gazelle), `cmd/diagramator/main.go`,
+**Files.** `pkg/emit/narrate/` (new — run gazelle), `cmd/cinegram/main.go`,
 `pkg/parser/validate.go`, `pkg/loader` (only if narrate needs bundle access —
 it should consume the compiled `ir.Timeline`), narrate golden tests
 (`narrate_test.go` with `.golden.md` fixtures), `README.md`.
@@ -373,7 +373,7 @@ it should consume the compiled `ir.Timeline`), narrate golden tests
 agent sees". Also add a deliberately imperfect `pkg/parser/testdata` fixture
 exercising each new lint warning, pinned in `errors.golden`.
 
-**Acceptance.** `bazel run //cmd/diagramator -- narrate examples/oauth-login.dgm`
+**Acceptance.** `bazel run //cmd/cinegram -- narrate examples/oauth-login.dgm`
 reproduces the committed file; `lint --format=json examples/…` emits valid JSON
 (pinned by a golden); the new warnings fire on the fixture and nowhere in
 `examples/`.
@@ -392,11 +392,11 @@ reproduces the committed file; `lint --format=json examples/…` emits valid JSO
   `/generation` and reloads on change. Default addr `127.0.0.1:8731`. This
   also retires the "python3 -m http.server" workaround in CLAUDE.md (update
   it).
-- **`diagramator frame <file> --at 2400ms -o out.png [--scenario id] [--view id]`.**
+- **`cinegram frame <file> --at 2400ms -o out.png [--scenario id] [--view id]`.**
   Renders one deterministic moment: start the serve server on an ephemeral
   port, build the Phase-6 deep link (`#v=…&s=…&t=…`), and shell out to a
   headless Chrome/Chromium (`--headless=new --screenshot=… --window-size=…`),
-  found via `$DIAGRAMATOR_CHROME`, then a small candidate list
+  found via `$CINEGRAM_CHROME`, then a small candidate list
   (`google-chrome`, `chromium`, the macOS app path). Clear error if none
   found. `--frames N -o dir/` captures N evenly spaced moments; the README
   documents the ffmpeg/ImageMagick one-liners to make a GIF from them —
@@ -404,7 +404,7 @@ reproduces the committed file; `lint --format=json examples/…` emits valid JSO
 - Keep the third-party-free rule: shelling out to an existing browser is fine,
   vendoring a screenshot library is not.
 
-**Files.** `cmd/diagramator/main.go` (+ a `cmd/diagramator/serve.go`,
+**Files.** `cmd/cinegram/main.go` (+ a `cmd/cinegram/serve.go`,
 `capture.go`), `pkg/emit/html` (only if the reload script injection needs a
 hook — prefer injecting in the serve handler, keeping the emitted file
 byte-identical to non-serve output), `CLAUDE.md` (verification workflow),
@@ -416,7 +416,7 @@ byte-identical to non-serve output), `CLAUDE.md` (verification workflow),
 PNG as `examples/payment-checkout.fail.png` so the repo shows the feature.
 Add a Go test for the serve handler (compile + serve + `/generation` bump via
 an in-memory read function); gate an end-to-end frame smoke test behind
-`DIAGRAMATOR_CHROME` being set, skipping otherwise.
+`CINEGRAM_CHROME` being set, skipping otherwise.
 
 **Acceptance.** Editing a watched `.dgm` reloads the browser within ~1s;
 `frame --at` produces a PNG whose content matches the seeked state; both
@@ -493,4 +493,4 @@ arrows; `mermaid` subcommand reprints the sequence body byte-faithfully
 > approach. Do not start work belonging to other phases. Finish with the
 > phase's Definition of done: tests green via bazel, goldens regenerated via
 > `bazel run … -- -update`, gazelle + gofmt run, the new example added and
-> verified in a served browser via `DIAGRAMATOR_PLAYER.seek()`, README updated.
+> verified in a served browser via `CINEGRAM_PLAYER.seek()`, README updated.

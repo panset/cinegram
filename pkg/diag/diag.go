@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/tejaspanse/diagramator/pkg/source"
+	"github.com/tejaspanse/cinegram/pkg/source"
 )
 
 // Severity classifies a diagnostic.

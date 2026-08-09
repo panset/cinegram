@@ -76,7 +76,7 @@ func TestServePageCompilesFromSource(t *testing.T) {
 		t.Fatalf("status = %d, want 200\n%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "DIAGRAMATOR_TIMELINE") {
+	if !strings.Contains(body, "CINEGRAM_TIMELINE") {
 		t.Error("page is missing the compiled timeline")
 	}
 	if !strings.Contains(body, "Entry") {
@@ -178,7 +178,7 @@ func TestServeReportsBrokenSourceInThePage(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want 500", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "diagramator:") {
+	if !strings.Contains(rec.Body.String(), "cinegram:") {
 		t.Errorf("body does not explain the failure: %q", rec.Body.String())
 	}
 }
@@ -235,12 +235,12 @@ func TestCaptureNeedsAnOutput(t *testing.T) {
 // Mach ports and crash-reporting paths it insists on, and the browser dies
 // before it renders anything:
 //
-//	DIAGRAMATOR_CHROME="/path/to/Chrome" \
-//	  bazel-bin/cmd/diagramator/diagramator_test_/diagramator_test \
+//	CINEGRAM_CHROME="/path/to/Chrome" \
+//	  bazel-bin/cmd/cinegram/cinegram_test_/cinegram_test \
 //	  -test.run TestFrameEndToEnd
 func TestFrameEndToEnd(t *testing.T) {
-	if os.Getenv("DIAGRAMATOR_CHROME") == "" {
-		t.Skip("set DIAGRAMATOR_CHROME to run the capture end to end")
+	if os.Getenv("CINEGRAM_CHROME") == "" {
+		t.Skip("set CINEGRAM_CHROME to run the capture end to end")
 	}
 
 	dir := t.TempDir()
@@ -270,10 +270,10 @@ func TestFrameEndToEnd(t *testing.T) {
 // TestFindChromeRejectsABadOverride checks the explicit setting is validated
 // rather than handed to exec to fail obscurely later.
 func TestFindChromeRejectsABadOverride(t *testing.T) {
-	t.Setenv("DIAGRAMATOR_CHROME", "/definitely/not/a/browser")
+	t.Setenv("CINEGRAM_CHROME", "/definitely/not/a/browser")
 	if _, err := findChrome(); err == nil {
-		t.Error("expected an error for a DIAGRAMATOR_CHROME that does not exist")
-	} else if !strings.Contains(err.Error(), "DIAGRAMATOR_CHROME") {
+		t.Error("expected an error for a CINEGRAM_CHROME that does not exist")
+	} else if !strings.Contains(err.Error(), "CINEGRAM_CHROME") {
 		t.Errorf("error should name the variable: %v", err)
 	}
 }

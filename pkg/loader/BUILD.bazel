@@ -3,7 +3,7 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "loader",
     srcs = ["loader.go"],
-    importpath = "github.com/tejaspanse/diagramator/pkg/loader",
+    importpath = "github.com/tejaspanse/cinegram/pkg/loader",
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/diag",

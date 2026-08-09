@@ -21,8 +21,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tejaspanse/diagramator/pkg/diag"
-	"github.com/tejaspanse/diagramator/pkg/parser"
+	"github.com/tejaspanse/cinegram/pkg/diag"
+	"github.com/tejaspanse/cinegram/pkg/parser"
 )
 
 // ReadFileFunc reads a source file. os.ReadFile satisfies it.

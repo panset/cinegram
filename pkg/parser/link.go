@@ -3,7 +3,7 @@ package parser
 import (
 	"strings"
 
-	"github.com/tejaspanse/diagramator/pkg/ast"
+	"github.com/tejaspanse/cinegram/pkg/ast"
 )
 
 // linkMatch is a Mermaid link operator found in a line, including any label

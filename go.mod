@@ -1,3 +1,3 @@
-module github.com/tejaspanse/diagramator
+module github.com/tejaspanse/cinegram
 
 go 1.24

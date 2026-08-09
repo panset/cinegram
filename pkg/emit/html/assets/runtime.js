@@ -1,5 +1,5 @@
 /*
- * Diagramator animation runtime.
+ * Cinegram animation runtime.
  *
  * Deliberately a classic script rather than an ES module: pages are opened
  * straight off the filesystem, where `<script type="module">` is blocked by
@@ -956,7 +956,7 @@
     var v = this.view();
     var d = v.diagram || { mermaid: '' };
 
-    this.title.textContent = v.title || this.timeline.title || 'Diagramator';
+    this.title.textContent = v.title || this.timeline.title || 'Cinegram';
     this.syncNav();
 
     window.mermaid.initialize({
@@ -2225,7 +2225,7 @@
     return (ms / 1000).toFixed(1) + 's';
   }
 
-  window.Diagramator = {
+  window.Cinegram = {
     mount: function (root, timeline) {
       return new Player(root, timeline);
     }

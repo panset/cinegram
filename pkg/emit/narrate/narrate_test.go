@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tejaspanse/diagramator/pkg/compile"
-	"github.com/tejaspanse/diagramator/pkg/parser"
+	"github.com/tejaspanse/cinegram/pkg/compile"
+	"github.com/tejaspanse/cinegram/pkg/parser"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tejaspanse/diagramator/pkg/ir"
+	"github.com/tejaspanse/cinegram/pkg/ir"
 )
 
 func sample() *ir.Timeline {
@@ -43,7 +43,7 @@ func TestPageIsSelfContained(t *testing.T) {
 		t.Errorf("page references an external resource: %q", m)
 	}
 
-	for _, want := range []string{"<!doctype html>", "globalThis[\"mermaid\"]", "window.Diagramator", "DIAGRAMATOR_TIMELINE"} {
+	for _, want := range []string{"<!doctype html>", "globalThis[\"mermaid\"]", "window.Cinegram", "CINEGRAM_TIMELINE"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("page is missing %q", want)
 		}

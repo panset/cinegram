@@ -1,4 +1,4 @@
-// Package ast defines the syntax tree for Diagramator documents.
+// Package ast defines the syntax tree for Cinegram documents.
 //
 // A document is a Mermaid diagram body followed by zero or more scenario,
 // view and interact blocks. The two halves are deliberately decoupled: Diagram
@@ -16,7 +16,7 @@ package ast
 import (
 	"strconv"
 
-	"github.com/tejaspanse/diagramator/pkg/source"
+	"github.com/tejaspanse/cinegram/pkg/source"
 )
 
 // Document is a complete parsed source file.

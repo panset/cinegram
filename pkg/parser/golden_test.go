@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tejaspanse/diagramator/pkg/ast"
-	"github.com/tejaspanse/diagramator/pkg/diag"
+	"github.com/tejaspanse/cinegram/pkg/ast"
+	"github.com/tejaspanse/cinegram/pkg/diag"
 )
 
 // update rewrites the .golden fixtures instead of comparing against them.

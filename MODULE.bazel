@@ -1,7 +1,7 @@
-"""Diagramator - animated architecture diagrams from a Mermaid-like DSL."""
+"""Cinegram - animated architecture diagrams from a Mermaid-like DSL."""
 
 module(
-    name = "diagramator",
+    name = "cinegram",
     version = "0.1.0",
 )
 

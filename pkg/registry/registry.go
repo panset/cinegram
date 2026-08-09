@@ -12,10 +12,10 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/tejaspanse/diagramator/pkg/ast"
-	"github.com/tejaspanse/diagramator/pkg/diag"
-	"github.com/tejaspanse/diagramator/pkg/source"
-	"github.com/tejaspanse/diagramator/pkg/symbol"
+	"github.com/tejaspanse/cinegram/pkg/ast"
+	"github.com/tejaspanse/cinegram/pkg/diag"
+	"github.com/tejaspanse/cinegram/pkg/source"
+	"github.com/tejaspanse/cinegram/pkg/symbol"
 )
 
 // DiagramParser parses one Mermaid diagram type.

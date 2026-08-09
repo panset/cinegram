@@ -3,7 +3,7 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "mermaid",
     srcs = ["mermaid.go"],
-    importpath = "github.com/tejaspanse/diagramator/pkg/emit/mermaid",
+    importpath = "github.com/tejaspanse/cinegram/pkg/emit/mermaid",
     visibility = ["//visibility:public"],
     deps = ["//pkg/ast"],
 )

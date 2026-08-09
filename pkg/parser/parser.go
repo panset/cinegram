@@ -1,4 +1,4 @@
-// Package parser turns Diagramator source into an ast.Document.
+// Package parser turns Cinegram source into an ast.Document.
 //
 // A document is parsed in two independent halves. The diagram body is handed to
 // whichever registry.DiagramParser claims its opening keyword; the `scenario`,
@@ -11,11 +11,11 @@ package parser
 import (
 	"strings"
 
-	"github.com/tejaspanse/diagramator/pkg/ast"
-	"github.com/tejaspanse/diagramator/pkg/diag"
-	"github.com/tejaspanse/diagramator/pkg/registry"
-	"github.com/tejaspanse/diagramator/pkg/source"
-	"github.com/tejaspanse/diagramator/pkg/symbol"
+	"github.com/tejaspanse/cinegram/pkg/ast"
+	"github.com/tejaspanse/cinegram/pkg/diag"
+	"github.com/tejaspanse/cinegram/pkg/registry"
+	"github.com/tejaspanse/cinegram/pkg/source"
+	"github.com/tejaspanse/cinegram/pkg/symbol"
 )
 
 // Result is everything a successful parse produces.

@@ -1,5 +1,5 @@
 /*
- * Diagramator runtime styles.
+ * Cinegram runtime styles.
  *
  * Colours are defined as tokens on bare :root so the light palette always has
  * a value, then overridden for the dark theme. The runtime stamps

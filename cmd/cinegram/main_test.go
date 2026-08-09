@@ -6,8 +6,8 @@ import (
 	"flag"
 	"testing"
 
-	"github.com/tejaspanse/diagramator/pkg/diag"
-	"github.com/tejaspanse/diagramator/pkg/source"
+	"github.com/tejaspanse/cinegram/pkg/diag"
+	"github.com/tejaspanse/cinegram/pkg/source"
 )
 
 // TestResolvePathUnderBazelRun covers the case that `bazel run` creates: the

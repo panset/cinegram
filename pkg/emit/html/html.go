@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"html"
 
-	"github.com/tejaspanse/diagramator/pkg/ir"
+	"github.com/tejaspanse/cinegram/pkg/ir"
 )
 
 //go:embed assets/mermaid.min.js
@@ -55,7 +55,7 @@ func Render(t *ir.Timeline, opts Options) ([]byte, error) {
 	b.WriteString("<style>\n")
 	b.WriteString(runtimeCSS)
 	b.WriteString("\n</style>\n</head>\n<body>\n")
-	b.WriteString("<div id=\"diagramator\"></div>\n")
+	b.WriteString("<div id=\"cinegram\"></div>\n")
 
 	b.WriteString("<script>\n")
 	b.WriteString(mermaidJS)
@@ -69,10 +69,10 @@ func Render(t *ir.Timeline, opts Options) ([]byte, error) {
 	// The payload goes in as a JSON string literal parsed at runtime rather
 	// than as an object literal: it keeps diagram text containing `</script>`
 	// or U+2028 from breaking out of the script element.
-	fmt.Fprintf(&b, "var DIAGRAMATOR_TIMELINE = JSON.parse(%s);\n", jsStringLiteral(payload))
+	fmt.Fprintf(&b, "var CINEGRAM_TIMELINE = JSON.parse(%s);\n", jsStringLiteral(payload))
 	// The player is kept on window so a host (a VS Code webview, a test) can
 	// drive playback from outside the page.
-	b.WriteString("window.DIAGRAMATOR_PLAYER = Diagramator.mount(document.getElementById('diagramator'), DIAGRAMATOR_TIMELINE);\n")
+	b.WriteString("window.CINEGRAM_PLAYER = Cinegram.mount(document.getElementById('cinegram'), CINEGRAM_TIMELINE);\n")
 	b.WriteString("</script>\n</body>\n</html>\n")
 
 	return b.Bytes(), nil
@@ -96,7 +96,7 @@ func DefaultTitle(t *ir.Timeline) string {
 			return v.ID
 		}
 	}
-	return "Diagramator"
+	return "Cinegram"
 }
 
 // jsStringLiteral encodes data as a JavaScript string literal that is safe to

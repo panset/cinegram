@@ -1,6 +1,6 @@
 package parser
 
-import "github.com/tejaspanse/diagramator/pkg/ast"
+import "github.com/tejaspanse/cinegram/pkg/ast"
 
 // The scenario grammar is deliberately free of diagram vocabulary: it produces
 // nothing but named references, durations and styles. That is what lets the

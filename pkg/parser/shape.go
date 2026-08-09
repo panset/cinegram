@@ -3,7 +3,7 @@ package parser
 import (
 	"strings"
 
-	"github.com/tejaspanse/diagramator/pkg/ast"
+	"github.com/tejaspanse/cinegram/pkg/ast"
 )
 
 // shapeDef pairs a Mermaid node shape with its delimiters.

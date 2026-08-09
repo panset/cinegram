@@ -9,7 +9,7 @@ package symbol
 import (
 	"strconv"
 
-	"github.com/tejaspanse/diagramator/pkg/source"
+	"github.com/tejaspanse/cinegram/pkg/source"
 )
 
 // Node is an addressable element of a diagram.

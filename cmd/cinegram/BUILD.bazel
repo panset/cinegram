@@ -1,13 +1,13 @@
 load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
 
 go_library(
-    name = "diagramator_lib",
+    name = "cinegram_lib",
     srcs = [
         "capture.go",
         "main.go",
         "serve.go",
     ],
-    importpath = "github.com/tejaspanse/diagramator/cmd/diagramator",
+    importpath = "github.com/tejaspanse/cinegram/cmd/cinegram",
     visibility = ["//visibility:private"],
     deps = [
         "//pkg/compile",
@@ -23,18 +23,18 @@ go_library(
 )
 
 go_binary(
-    name = "diagramator",
-    embed = [":diagramator_lib"],
+    name = "cinegram",
+    embed = [":cinegram_lib"],
     visibility = ["//visibility:public"],
 )
 
 go_test(
-    name = "diagramator_test",
+    name = "cinegram_test",
     srcs = [
         "main_test.go",
         "serve_test.go",
     ],
-    embed = [":diagramator_lib"],
+    embed = [":cinegram_lib"],
     deps = [
         "//pkg/diag",
         "//pkg/source",
