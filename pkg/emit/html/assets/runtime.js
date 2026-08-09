@@ -1791,10 +1791,15 @@
   // `flow-active` is the general "something is travelling here" hook; the style
   // and status names ride alongside it so CSS can distinguish a response from a
   // failure without the runtime hard-coding either.
+  // `flow-reverse` says the traffic is running against the arrow mermaid drew.
+  // The stylesheet uses it to take that arrowhead off for as long as the flow
+  // is open, because an arrowhead pointing one way while the particle travels
+  // the other is a contradiction the viewer has to resolve every time.
   function edgeState(tr) {
     var cls = 'flow-active';
     if (tr.style) cls += ' flow-' + tr.style;
     if (tr.status === 'fail') cls += ' flow-fail';
+    if (tr.reverse) cls += ' flow-reverse';
     return nodeState(cls, tr.color);
   }
 
@@ -1911,11 +1916,9 @@
       var u = backwards ? 1 - eased : eased;
       var len = bind.path.getTotalLength();
       var along = u * len;
-      var pt = bind.path.getPointAtLength(along);
-      if (bind.matrix && pt.matrixTransform) {
-        pt = pt.matrixTransform(bind.matrix);
-      }
+      var pt = pointAt(bind, along);
       fx.group.setAttribute('transform', 'translate(' + pt.x + ',' + pt.y + ')');
+      if (fx.arrow) this.aimArrow(fx.arrow, bind, along, len, backwards);
       if (this.sequence) {
         var box = fx.group.getBoundingClientRect();
         this.flowY = box.top + box.height / 2;
@@ -1926,6 +1929,42 @@
         this.drawFailMark(fx, bind, len, backwards, want[key].progress >= 1 - FAIL_LEAD);
       }
     }
+  };
+
+  // pointAt is a position on a bound edge, in the overlay layer's coordinates.
+  // The path's `d` is in whatever user space mermaid drew it in, so the bind's
+  // matrix is what carries it over to the layer.
+  function pointAt(bind, along) {
+    var pt = bind.path.getPointAtLength(along);
+    if (bind.matrix && pt.matrixTransform) pt = pt.matrixTransform(bind.matrix);
+    return pt;
+  }
+
+  // AIM_STEP is how far either side of the particle the heading is sampled.
+  // Small enough to follow a curve, large enough that two samples on a
+  // straight run do not land on the same point and lose the angle.
+  var AIM_STEP = 3;
+
+  // aimArrow turns the chevron to face the way the flow is travelling, which is
+  // the one thing the diagram underneath cannot say: a response runs against
+  // the arrow mermaid drew, and without this the only cue that it is going the
+  // other way is which side of the dot the trail is on.
+  //
+  // The heading is measured between two points *ordered by travel*, so it comes
+  // out right whether the flow runs with or against the drawn path — no
+  // separate 180° correction to keep in step with `backwards`.
+  Player.prototype.aimArrow = function (arrow, bind, along, len, backwards) {
+    var step = Math.min(AIM_STEP, len);
+    var ahead = backwards ? Math.max(0, along - step) : Math.min(len, along + step);
+    var behind = backwards ? Math.min(len, along + step) : Math.max(0, along - step);
+    var from = pointAt(bind, behind);
+    var to = pointAt(bind, ahead);
+    var dx = to.x - from.x, dy = to.y - from.y;
+    // A degenerate sample (a zero-length path) leaves the last angle standing
+    // rather than snapping the chevron to 0°.
+    if (!dx && !dy) return;
+    arrow.setAttribute('transform',
+      'rotate(' + (Math.atan2(dy, dx) * 180 / Math.PI) + ')');
   };
 
   // drawTrail slides a dash window along the cloned edge so it ends exactly
@@ -1954,20 +1993,22 @@
     fx.mark.style.display = show ? '' : 'none';
     if (!show) return;
 
-    var pt = bind.path.getPointAtLength(backwards ? 0 : len);
-    if (bind.matrix && pt.matrixTransform) {
-      pt = pt.matrixTransform(bind.matrix);
-    }
+    var pt = pointAt(bind, backwards ? 0 : len);
     fx.mark.setAttribute('transform', 'translate(' + pt.x + ',' + pt.y + ')');
   };
 
   // makeFlow builds everything one open flow track draws: the trail underneath,
   // then the particle over it. The ✕ is added later, only if the flow gets far
   // enough to need one.
+  // The two are built in painting order — the layer has no z-index, so the
+  // trail has to be in the DOM before the particle to stay under it.
   Player.prototype.makeFlow = function (tr, bind) {
+    var trail = makeTrail(tr, bind, this.layer);
+    var group = this.makeParticle(tr, this.layer);
     return {
-      trail: makeTrail(tr, bind, this.layer),
-      group: this.makeParticle(tr, this.layer),
+      trail: trail,
+      group: group,
+      arrow: group.querySelector('.dgm-particle-arrow'),
       mark: null
     };
   };
@@ -2045,7 +2086,7 @@
     if (tr.status === 'fail') cls += ' dgm-particle-fail';
     g.setAttribute('class', cls);
     // A custom property rather than a fill, so the stylesheet keeps deciding
-    // which of the dot, halo and label the colour reaches.
+    // which of the head, halo and label the colour reaches.
     if (tr.color) g.style.setProperty('--dgm-color', tr.color);
 
     var halo = document.createElementNS(SVG_NS, 'circle');
@@ -2053,10 +2094,21 @@
     halo.setAttribute('class', 'dgm-particle-halo');
     g.appendChild(halo);
 
-    var dot = document.createElementNS(SVG_NS, 'circle');
-    dot.setAttribute('r', '5.5');
-    dot.setAttribute('class', 'dgm-particle-dot');
-    g.appendChild(dot);
+    // The head rides in its own group because only it turns: rotating the whole
+    // particle would tip the label over with it, and a label upside down on a
+    // right-to-left response is exactly the case this is here to fix. Drawn
+    // along +x, so aimArrow's angle is the heading with no offset.
+    var arrow = document.createElementNS(SVG_NS, 'g');
+    arrow.setAttribute('class', 'dgm-particle-arrow');
+    var head = document.createElementNS(SVG_NS, 'path');
+    head.setAttribute('class', 'dgm-particle-head');
+    // A dart rather than a plain triangle: the notch in the back gives it a
+    // direction you can read at a glance even at this size. The tip leads the
+    // point on the path, so the comet behind meets the notch and the two draw
+    // as one arrow rather than as a shape with a line stuck to it.
+    head.setAttribute('d', 'M10,0 L-6,-7.5 L-2,0 L-6,7.5 Z');
+    arrow.appendChild(head);
+    g.appendChild(arrow);
 
     if (tr.label) {
       var text = document.createElementNS(SVG_NS, 'text');

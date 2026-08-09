@@ -481,8 +481,14 @@ body {
    a custom property it inherits to the shape elements mermaid drew, which is
    where the stroke and fill actually have to land. */
 
-.dgm-particle-dot {
+/* The particle itself: an arrowhead, not a dot. A dot has no direction, and
+   direction is the one thing the diagram underneath cannot say — the edge is
+   drawn once, pointing the way the author declared it, and a response runs
+   back along it. Filled and given the corner join so the notch stays crisp at
+   this size. */
+.dgm-particle-head {
   fill: var(--dgm-color, var(--dgm-accent));
+  stroke-linejoin: miter;
 }
 
 .dgm-particle-halo {
@@ -501,19 +507,21 @@ body {
   stroke-linejoin: round;
 }
 
-.dgm-particle-response .dgm-particle-dot,
+.dgm-particle-response .dgm-particle-head,
 .dgm-particle-response .dgm-particle-halo {
   fill: var(--dgm-color, var(--dgm-response));
 }
 
 /* A failing flow reads as failing before it arrives, so the particle carries
    the outcome the whole way rather than only at the ✕. */
-.dgm-particle-fail .dgm-particle-dot,
+.dgm-particle-fail .dgm-particle-head,
 .dgm-particle-fail .dgm-particle-halo {
   fill: var(--dgm-color, var(--dgm-fail));
 }
 
-.dgm-particle-fail .dgm-particle-dot {
+/* Only the failing head is outlined, and in the page background: it is the one
+   that has to stay legible sitting on top of the ✕ it is about to land on. */
+.dgm-particle-fail .dgm-particle-head {
   stroke: var(--dgm-bg);
   stroke-width: 1.5px;
 }
@@ -538,6 +546,18 @@ body {
 
 .dgm-flow-response {
   stroke: var(--dgm-color, var(--dgm-response)) !important;
+}
+
+/* A flow running against its edge takes that edge's arrowhead off for as long
+   as it is open. Nothing is lost — the particle carries its own chevron, and
+   the arrowhead comes back the moment the track closes — and it removes the
+   one thing on screen that actively disagrees with the animation. `marker-end`
+   as a property beats the presentation attribute mermaid wrote; both ends are
+   cleared because a path mermaid drew from the far end wears its head at the
+   start instead. */
+.dgm-flow-reverse {
+  marker-end: none;
+  marker-start: none;
 }
 
 /* Ordered after the style hooks so a failure wins the colour: `status` is
