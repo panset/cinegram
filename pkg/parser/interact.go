@@ -74,10 +74,31 @@ func parseTopLevel(c *source.Cursor, b *diag.Bag) topLevel {
 		case s.atKeyword("interact"):
 			out.Interactions = append(out.Interactions, parseInteract(s)...)
 		default:
+			// A stray `}` needs its own recovery: skipToLineEnd deliberately
+			// stops at one without consuming it, so that a malformed action
+			// inside a block does not swallow the block's closer. There is no
+			// open block out here, so leaving it would mean this loop reported
+			// the same token forever.
+			if t.kind == tokPunct && t.text == "}" {
+				b.ErrorHintf(t.at, "remove it, or open a block before it",
+					"unexpected `}` with no block open")
+				s.next()
+				break
+			}
+
 			b.ErrorHintf(t.at, "blocks start with `scenario`, `storyboard`, `view` or `interact`",
 				"expected `scenario`, `storyboard`, `view` or `interact` but found %s", describe(t))
+
+			// Recovery must always advance. Every skip above stops rather than
+			// consuming under some condition, and a token that satisfies all of
+			// them would otherwise hang the parser rather than fail — which
+			// matters most where sources are parsed while being typed.
+			before := s.i
 			s.skipToLineEnd()
 			s.skipNewlines()
+			if s.i == before {
+				s.next()
+			}
 		}
 	}
 }

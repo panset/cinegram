@@ -34,6 +34,7 @@ go_test(
     srcs = [
         "golden_test.go",
         "link_test.go",
+        "recover_test.go",
         "shape_test.go",
     ],
     data = glob(["testdata/**"]),
