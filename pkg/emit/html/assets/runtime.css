@@ -491,6 +491,27 @@ body {
   animation: dgm-pulse 1.1s ease-out infinite;
 }
 
+/* The chevron on the nose of the particle. It is the only thing on the page
+   that says which way this flow is going — the edge underneath is drawn once,
+   pointing the way the author declared it, and a response runs back along it.
+   Stroked rather than filled so it reads as a caret riding the dot, not as a
+   second arrowhead competing with mermaid's. */
+.dgm-particle-arrow path {
+  fill: none;
+  stroke: var(--dgm-color, var(--dgm-accent));
+  stroke-width: 2.4px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dgm-particle-response .dgm-particle-arrow path {
+  stroke: var(--dgm-color, var(--dgm-response));
+}
+
+.dgm-particle-fail .dgm-particle-arrow path {
+  stroke: var(--dgm-color, var(--dgm-fail));
+}
+
 .dgm-particle-label {
   fill: var(--dgm-fg);
   font-size: 11px;
@@ -538,6 +559,18 @@ body {
 
 .dgm-flow-response {
   stroke: var(--dgm-color, var(--dgm-response)) !important;
+}
+
+/* A flow running against its edge takes that edge's arrowhead off for as long
+   as it is open. Nothing is lost — the particle carries its own chevron, and
+   the arrowhead comes back the moment the track closes — and it removes the
+   one thing on screen that actively disagrees with the animation. `marker-end`
+   as a property beats the presentation attribute mermaid wrote; both ends are
+   cleared because a path mermaid drew from the far end wears its head at the
+   start instead. */
+.dgm-flow-reverse {
+  marker-end: none;
+  marker-start: none;
 }
 
 /* Ordered after the style hooks so a failure wins the colour: `status` is
