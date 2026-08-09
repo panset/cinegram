@@ -56,6 +56,7 @@ type recordOptions struct {
 	height   int
 	scenario string
 	view     string
+	progress bool
 }
 
 func cmdRecord(args []string, stdout, stderr io.Writer) error {
@@ -67,6 +68,8 @@ func cmdRecord(args []string, stdout, stderr io.Writer) error {
 		fs.IntVar(&opt.height, "height", 720, "viewport height")
 		fs.StringVar(&opt.scenario, "scenario", "", "scenario id or name (default: the first)")
 		fs.StringVar(&opt.view, "view", "", "view id (default: the one the document opens on)")
+		fs.BoolVar(&opt.progress, "progress", false,
+			"report capture progress on stderr, one line per frame")
 	})
 	if err != nil {
 		return err
@@ -166,9 +169,12 @@ func runRecord(opt recordOptions, stderr io.Writer) error {
 	fmt.Fprintf(stderr, "recording %s (%s, %dms) as %d frames at %dfps\n",
 		opt.input, scenarioID, duration, len(times), opt.fps)
 
-	paths, err := captureFrames(chrome, base, viewID, scenarioID, dir, times, opt)
+	paths, err := captureFrames(chrome, base, viewID, scenarioID, dir, times, opt, progressReporter(opt, stderr))
 	if err != nil {
 		return err
+	}
+	if opt.progress {
+		fmt.Fprintln(stderr, progressPrefix+" encode")
 	}
 
 	if opt.format == "gif" {
@@ -185,6 +191,24 @@ func runRecord(opt recordOptions, stderr io.Writer) error {
 	}
 	fmt.Fprintf(stderr, "wrote %s (%d KB)\n", opt.output, info.Size()/1024)
 	return nil
+}
+
+// progressPrefix marks the machine-readable lines --progress adds. It is
+// deliberately unlike anything the human-readable output says, so an editor
+// parsing stderr line by line can pick out ticks without having to understand
+// the rest — and so the existing two lines could stay exactly as they were.
+const progressPrefix = "cinegram-progress"
+
+// progressReporter is what captureFrames calls after each frame lands, or nil
+// when nobody asked. Writes are already serialised by the caller's mutex, so
+// there is nothing to guard here.
+func progressReporter(opt recordOptions, stderr io.Writer) func(done, total int) {
+	if !opt.progress {
+		return nil
+	}
+	return func(done, total int) {
+		fmt.Fprintf(stderr, "%s capture %d %d\n", progressPrefix, done, total)
+	}
 }
 
 // frameTimes is the schedule of moments to capture.
@@ -210,7 +234,12 @@ func frameTimes(duration, fps int) []int {
 // Each frame is an independent, fully-specified URL, so the work parallelises
 // with nothing shared but the server. The first failure cancels the rest rather
 // than letting twenty browsers all time out in turn.
-func captureFrames(chrome, base, viewID, scenarioID, dir string, times []int, opt recordOptions) ([]string, error) {
+//
+// report, when non-nil, is called once per captured frame with how many are
+// finished and how many there are in total. It counts completions rather than
+// indices because the pool finishes frames out of order, and a progress bar
+// that went backwards would be worse than none.
+func captureFrames(chrome, base, viewID, scenarioID, dir string, times []int, opt recordOptions, report func(done, total int)) ([]string, error) {
 	paths := make([]string, len(times))
 	for i := range times {
 		paths[i] = framePath(dir, i+1)
@@ -220,6 +249,7 @@ func captureFrames(chrome, base, viewID, scenarioID, dir string, times []int, op
 		mu       sync.Mutex
 		firstErr error
 		next     int
+		done     int
 		wg       sync.WaitGroup
 	)
 
@@ -246,6 +276,13 @@ func captureFrames(chrome, base, viewID, scenarioID, dir string, times []int, op
 				mu.Unlock()
 				return
 			}
+
+			mu.Lock()
+			done++
+			if report != nil {
+				report(done, len(times))
+			}
+			mu.Unlock()
 		}
 	}
 

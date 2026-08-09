@@ -98,6 +98,9 @@ Usage:
                                                  record a scenario; GIF needs
                                                  nothing installed, mp4/webm
                                                  need ffmpeg
+                              [--progress]       report each captured frame on
+                                                 stderr, for a host drawing a
+                                                 progress bar
   cinegram narrate <file.dgm> [-o out.md] [--format=md|json]
                                                  the animation as a walkthrough
   cinegram lint    <file.dgm> [--format=text|json]

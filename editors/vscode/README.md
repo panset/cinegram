@@ -21,7 +21,39 @@ scenario "A request"
 ````
 
 It also gives `.dgm` files syntax highlighting and a full-chrome preview panel of
-their own (`Cinegram: Open Preview to the Side`).
+their own (`Cinegram: Open Preview to the Side`). A `.dgm` can be opened *as* the
+animation instead of as text — right-click it and choose **Open With… →
+Cinegram Animation** — and either way it can be exported to a GIF from inside
+the editor.
+
+## Exporting a GIF
+
+`Cinegram: Export Animation…` — on the editor title bar's `…` menu, the
+explorer right-click menu, or the command palette — records one scenario and
+writes it beside the diagram:
+
+1. It compiles first, so a typo fails in milliseconds rather than after a
+   minute of recording.
+2. It asks which view and which scenario, but only when there is more than one
+   of each.
+3. The save dialog's extension **is** the format: name the file `demo.gif`,
+   `demo.mp4` or `demo.webm` and there is no second prompt.
+4. A progress notification counts the frames and can be cancelled. Cancelling
+   kills the recorder's headless browsers along with it.
+5. When it lands, **Copy Markdown** puts `![scenario](demo.gif)` on the
+   clipboard, relative to the diagram's own directory — which is the pull
+   request this was built for.
+
+**GIF needs nothing installed**; it is encoded inside the `cinegram` binary.
+mp4 and webm shell out to `ffmpeg`, found on your `PATH` or named by
+`cinegram.ffmpegPath`. Recording needs a Chrome or Chromium, found the same way
+or named by `cinegram.chromePath` — every frame is a separate headless
+screenshot, which is what makes the result independent of how fast the machine
+is, and also what makes `cinegram.record.fps` the setting that decides how long
+an export takes.
+
+Fenced ```` ```dgm ```` blocks inside Markdown cannot be exported: `record`
+takes a path on disk, and a block has none.
 
 ## Installing for development
 
@@ -87,6 +119,18 @@ markdown-it plugin, so the placeholder the host emits is **data only** — every
 line of code the page runs is contributed through `markdown.previewScripts`,
 which VS Code nonces for us.
 
+Export is the one path that does not go through `src/compile.js`. Compiling is
+`execFileSync` because markdown-it cannot await and a compile is milliseconds;
+recording is one headless browser *per frame* and runs for minutes, so
+`src/record.js` uses `spawn`, a cancellable progress notification, and the
+`--progress` lines `cinegram record` writes to stderr for it.
+
+`src/animationEditor.js` is the *Open With…* entry. It is a
+`CustomTextEditorProvider` that reuses `dgmPreview.shell`, so there stays one
+place that knows the CSP and the asset wiring, and it re-renders on save rather
+than on keystroke — assigning `webview.html` is a whole-page reload, and doing
+that per character would reset the playhead and re-parse 2.7 MB of mermaid.
+
 `media/runtime.js`, `media/runtime.css` and `media/mermaid.min.js` are copies of
 the canonical files in `pkg/emit/html/assets/`. They have to be copies: `go:embed`
 cannot reach outside its own package, and `markdown.previewScripts` takes only
@@ -100,6 +144,11 @@ and `bazel run //editors/vscode:sync_assets` fixes it.
 | `cinegram.path` | `""` | Where the binary is. Empty means search, as above. |
 | `cinegram.blockLanguages` | `["dgm", "cinegram"]` | Fence languages rendered as diagrams. |
 | `cinegram.compileTimeout` | `5000` | Milliseconds a block may take to compile. |
+| `cinegram.record.fps` | `12` | Frames per second to export at, and so what an export costs. |
+| `cinegram.record.width` | `1280` | Viewport width to record at, rounded up to even. |
+| `cinegram.record.height` | `720` | Viewport height to record at, rounded up to even. |
+| `cinegram.chromePath` | `""` | The browser that captures frames, as `CINEGRAM_CHROME`. |
+| `cinegram.ffmpegPath` | `""` | `ffmpeg`, as `CINEGRAM_FFMPEG`. Only mp4 and webm need it. |
 
 ## Known limitations
 

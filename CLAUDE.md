@@ -231,6 +231,39 @@ The three browser assets are duplicated into `editors/vscode/media/` because
 of the extension. `bazel test //editors/vscode:assets_test` is what keeps the
 copies honest; `bazel run //editors/vscode:sync_assets` updates them.
 
+**Export is `spawn`, compile is `execFileSync`, and that asymmetry is the
+design, not an inconsistency to clean up.** `src/compile.js` is synchronous
+because markdown-it's renderer cannot await, and it gets away with it because a
+compile is milliseconds. `src/record.js` cannot: `cinegram record` spawns one
+headless Chrome *per frame*, four at a time, so a ten-second scenario at 12fps
+is 121 browsers and minutes of wall clock. Blocking the extension host for that
+would freeze the editor. So export has its own module with `spawn`, a
+cancellable `withProgress` notification, and the `--progress` protocol
+(`cinegram-progress capture <i> <n>`, then `cinegram-progress encode`) that
+`cmd/cinegram/record.go` writes to stderr for it. Two rules there:
+`--progress` is **purely additive** — the two human-readable lines are
+untouched, so anything already parsing today's output still works — and Cancel
+kills the **process group**, not the child, because killing only the recorder
+orphans its browsers. (Go's default `SIGTERM` skips deferred functions, so a
+cancelled record leaves one `cinegram-record-*` temp directory behind. That is
+knowingly traded for not adding signal handling to the CLI.)
+
+The extension never rewrites the CLI's failure messages. `findChrome` and
+`findFFmpeg` already name `CINEGRAM_CHROME` and `CINEGRAM_FFMPEG` and suggest
+recording a GIF instead; a message rewritten in JavaScript could only say less.
+
+**`src/animationEditor.js` re-renders on save, never on keystroke.** It is a
+`CustomTextEditorProvider` at `priority: "option"` — the text editor stays the
+default and the animation appears in *Open With…*, because a source format that
+opens as a picture with its text behind a submenu is a bad trade. It reuses
+`dgmPreview.shell`, so exactly one place knows the CSP and the asset wiring.
+Refreshing per keystroke would mean assigning `webview.html` wholesale on every
+edit, which throws the playhead away and re-parses 2.7 MB of mermaid; it also
+would not be *true*, since `view … from` reads from disk and only a save makes
+the file on disk what the panel claims to show. Live-on-type would need the
+payload delivered by `postMessage` plus the snapshot/restore dance
+`media/preview.js` does for the Markdown path.
+
 ## Constraints
 
 - **No third-party Go dependencies.** Standard library only. A hand-rolled lexer
