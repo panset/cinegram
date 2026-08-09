@@ -21,7 +21,7 @@
           "shape": "actor"
         }
       ],
-      "groups": null,
+      "groups": [],
       "edges": [
         {
           "id": "e0",

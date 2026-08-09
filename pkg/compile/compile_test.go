@@ -680,6 +680,61 @@ scenario "x"
 	}
 }
 
+// TestEmptyListsAreNeverNull pins a property the renderer depends on and that
+// nothing had exercised: a nil slice marshals to `null`, and the renderer walks
+// these lists unconditionally.
+//
+// Every example shipped with the project happens to contain a subgraph, so a
+// flowchart without one — which is most flowcharts anyone writes first — was
+// the case that reached `view.groups.filter` with a null and took the whole
+// page down. A step whose actions all draw nothing was the same bug waiting
+// one line further on.
+func TestEmptyListsAreNeverNull(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "x"
+  step nothing "a step that draws nothing" {
+    wait 300ms
+  }
+  step something "and one that does" {
+    flow a -> b { dur: 400ms }
+  }
+`
+	encoded, err := json.Marshal(compileSource(t, src))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(encoded, &raw); err != nil {
+		t.Fatal(err)
+	}
+	view := raw["views"].([]any)[0].(map[string]any)
+
+	for _, key := range []string{"nodes", "groups", "edges", "scenarios"} {
+		if got, ok := view[key]; !ok || got == nil {
+			t.Errorf("view.%s is %v; the renderer iterates it unconditionally", key, got)
+		}
+	}
+
+	scenario := view["scenarios"].([]any)[0].(map[string]any)
+	if scenario["steps"] == nil {
+		t.Error("scenario.steps is null")
+	}
+	for i, s := range scenario["steps"].([]any) {
+		if s.(map[string]any)["tracks"] == nil {
+			t.Errorf("step %d has null tracks; a step may legitimately draw nothing", i)
+		}
+	}
+
+	// The blunt version of the same check, so a field added later is covered
+	// without anyone having to remember this test exists.
+	if strings.Contains(string(encoded), ": null") || strings.Contains(string(encoded), ":null") {
+		t.Errorf("timeline contains a null:\n%s", encoded)
+	}
+}
+
 // TestRevealHidesGroupsTransitively pins the rule that revealing a subgraph
 // conceals everything inside it. Hiding the frame while its members stayed
 // drawn would look broken, and the renderer must not have to work that out.

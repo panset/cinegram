@@ -75,24 +75,35 @@ func compileView(doc *ast.Document, table *symbol.Table, id, title string, alias
 		v.Title = doc.Scenarios[0].Name
 	}
 
-	for _, n := range table.Nodes() {
+	// Allocated empty rather than left nil, because a nil slice marshals to
+	// `null` and these keys are not optional — the renderer iterates all four
+	// unconditionally. A flowchart with no subgraph is an ordinary diagram, and
+	// it must not hand the runtime a null to walk.
+	nodes, groups, edges := table.Nodes(), table.Groups(), table.Edges()
+	v.Nodes = make([]ir.Node, 0, len(nodes))
+	v.Groups = make([]ir.Group, 0, len(groups))
+	v.Edges = make([]ir.Edge, 0, len(edges))
+
+	for _, n := range nodes {
 		v.Nodes = append(v.Nodes, ir.Node{
 			ID: n.ID, Label: n.Label, Shape: n.Shape, Group: n.Group, Class: n.Class,
 		})
 	}
-	for _, g := range table.Groups() {
+	for _, g := range groups {
 		v.Groups = append(v.Groups, ir.Group{
 			ID: g.ID, Label: g.Label, Parent: g.Parent, Children: g.Children,
 		})
 	}
-	for _, e := range table.Edges() {
+	for _, e := range edges {
 		v.Edges = append(v.Edges, ir.Edge{
 			ID: e.ID, From: e.From, To: e.To, Label: e.Label,
 			Style: e.Style, Head: e.Head, Bidir: e.Bidir,
 		})
 	}
 
-	for i, sc := range resolveVariants(doc.Scenarios) {
+	scenarios := resolveVariants(doc.Scenarios)
+	v.Scenarios = make([]ir.Scenario, 0, len(scenarios))
+	for i, sc := range scenarios {
 		v.Scenarios = append(v.Scenarios, compileScenario(sc, i, table, bag))
 	}
 
@@ -290,6 +301,8 @@ func compileScenario(sc *ast.Scenario, index int, table *symbol.Table, bag *diag
 		Autoplay: attrBool(sc.Attrs, "autoplay", true, bag),
 		Outcome:  sc.Attrs.String("outcome"),
 	}
+
+	out.Steps = make([]ir.Step, 0, len(sc.Steps))
 
 	p := newPersist()
 	// Occurrence tracking is per scenario: each walkthrough consumes the
@@ -520,7 +533,11 @@ func offsetOf(a ast.Action, bag *diag.Bag) int {
 
 // layout places actions between start and end, emitting absolute-time tracks.
 func layout(actions []ast.Action, start, end int, table *symbol.Table, bag *diag.Bag, p *persist, seen hopCount) []ir.Track {
-	var tracks []ir.Track
+	// Empty rather than nil for the same reason View's slices are: a step whose
+	// actions all draw nothing — a lone `wait`, or a step that only sets its own
+	// duration — is legitimate, and `"tracks": null` is a null the renderer
+	// would have to walk.
+	tracks := make([]ir.Track, 0, len(actions))
 	for _, a := range actions {
 		tracks = append(tracks, layoutAction(a, start, end, table, bag, p, seen)...)
 	}

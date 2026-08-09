@@ -27,7 +27,7 @@
           "shape": "rect"
         }
       ],
-      "groups": null,
+      "groups": [],
       "edges": [
         {
           "id": "e0",
@@ -109,7 +109,7 @@
               "name": "Nothing on screen changes while the token is verified",
               "start": 1100,
               "end": 1500,
-              "tracks": null
+              "tracks": []
             },
             {
               "id": "back",
