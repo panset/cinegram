@@ -1,4 +1,4 @@
-%% An OIDC login through authena, as the shared engine actually runs it.
+%% An OIDC login through authhandling, as the shared engine actually runs it.
 %% ---
 %% `oauth-login.dgm` tells the protocol story in the abstract. This one is the
 %% same handshake with the implementation left in: which process holds which
@@ -17,8 +17,8 @@
 sequenceDiagram
   autonumber
   participant U as Browser
-  participant A as authena
-  participant E as clusterlib/oidc engine
+  participant A as authhandling
+  participant E as common/oidc engine
   participant PG as PostgreSQL
   participant IdP as External IdP
 
@@ -67,7 +67,7 @@ storyboard "What the person signing in sees" {
 
 scenario "sign in with an external IdP" { speed: 1.0 }
 
-  step ask "The browser asks authena to start a login" {
+  step ask "The browser asks authhandling to start a login" {
     desc: "The request names a provider and nothing else. Which IdP that is, what it is called, and what secret talks to it are all server-side facts, because anything the browser carries is anything the browser can change."
     flow U -> A { dur: 700ms, msg: 1 }
     highlight A { style: active }
@@ -98,7 +98,7 @@ scenario "sign in with an external IdP" { speed: 1.0 }
   }
 
   step redirect "The browser is handed to the IdP" {
-    desc: "authena replies with a 302 and stops taking part. From here until the callback the conversation is between the user and their identity provider, which is exactly why authena can never leak a password it was never shown."
+    desc: "authhandling replies with a 302 and stops taking part. From here until the callback the conversation is between the user and their identity provider, which is exactly why authhandling can never leak a password it was never shown."
     seq {
       flow E -> A { dur: 500ms, style: response, msg: 1 }
       flow A -> U { dur: 500ms, style: response, msg: 1 }
@@ -120,7 +120,7 @@ scenario "sign in with an external IdP" { speed: 1.0 }
       wait 700ms
       scene idp_mfa
     }
-    note IdP "password + MFA\nnever seen by authena" { side: below }
+    note IdP "password + MFA\nnever seen by authhandling" { side: below }
     highlight IdP { style: active }
   }
 
