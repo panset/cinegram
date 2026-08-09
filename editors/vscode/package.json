@@ -61,12 +61,30 @@
         }
       }
     ],
+    "customEditors": [
+      {
+        "viewType": "cinegram.animation",
+        "displayName": "Cinegram Animation",
+        "selector": [
+          {
+            "filenamePattern": "*.dgm"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
     "commands": [
       {
         "command": "cinegram.showPreview",
         "title": "Open Preview to the Side",
         "category": "Cinegram",
         "icon": "$(open-preview)"
+      },
+      {
+        "command": "cinegram.export",
+        "title": "Export Animation…",
+        "category": "Cinegram",
+        "icon": "$(device-camera-video)"
       }
     ],
     "menus": {
@@ -75,11 +93,27 @@
           "command": "cinegram.showPreview",
           "when": "resourceExtname == .dgm",
           "group": "navigation"
+        },
+        {
+          "command": "cinegram.export",
+          "when": "resourceExtname == .dgm",
+          "group": "1_run"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "cinegram.export",
+          "when": "resourceExtname == .dgm",
+          "group": "1_run"
         }
       ],
       "commandPalette": [
         {
           "command": "cinegram.showPreview",
+          "when": "resourceExtname == .dgm"
+        },
+        {
+          "command": "cinegram.export",
           "when": "resourceExtname == .dgm"
         }
       ]
@@ -108,6 +142,34 @@
           "type": "number",
           "default": 5000,
           "description": "Milliseconds to allow a block to compile before giving up. The preview renders on every edit, so this bounds how long a pathological source can block the editor."
+        },
+        "cinegram.record.fps": {
+          "type": "number",
+          "default": 12,
+          "minimum": 1,
+          "markdownDescription": "Frames per second for `Cinegram: Export Animation…`. Every frame is a separate headless-browser screenshot, so this is also what a recording costs."
+        },
+        "cinegram.record.width": {
+          "type": "number",
+          "default": 1280,
+          "description": "Viewport width to record at. Rounded up to an even number, which mp4 and webm require."
+        },
+        "cinegram.record.height": {
+          "type": "number",
+          "default": 720,
+          "description": "Viewport height to record at. Rounded up to an even number, which mp4 and webm require."
+        },
+        "cinegram.chromePath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "markdownDescription": "Path to the Chrome or Chromium used to capture frames, passed as `CINEGRAM_CHROME`. When empty, the recorder looks for one on your `PATH`."
+        },
+        "cinegram.ffmpegPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "markdownDescription": "Path to `ffmpeg`, passed as `CINEGRAM_FFMPEG`. Only mp4 and webm need it — a GIF is encoded in the binary itself."
         }
       }
     }

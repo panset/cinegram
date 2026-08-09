@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"image/gif"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -187,6 +189,85 @@ func TestVideoFailureSurfacesTheEncodersComplaint(t *testing.T) {
 	}
 }
 
+// TestCaptureProgressTicksOncePerFrame pins the reporter contract the editor's
+// progress bar is built on, without needing a browser: `shoot` only requires
+// that the file it asked for exists afterwards, so a shell script that touches
+// the path named by --screenshot is a complete stand-in — the same trick
+// TestVideoCommandLine plays on ffmpeg.
+//
+// The properties that matter are that every frame ticks exactly once, that
+// `done` never goes backwards (the pool finishes out of order, so reporting the
+// index would), and that `total` is the frame count throughout.
+func TestCaptureProgressTicksOncePerFrame(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stub browser is a shell script")
+	}
+	dir := t.TempDir()
+	stub := filepath.Join(dir, "fake-chrome")
+	script := "#!/bin/sh\n" +
+		"for a in \"$@\"; do case \"$a\" in --screenshot=*) : > \"${a#--screenshot=}\";; esac; done\n"
+	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	times := frameTimes(1000, 12)
+
+	var mu sync.Mutex
+	var seen []int
+	totals := map[int]bool{}
+	report := func(done, total int) {
+		mu.Lock()
+		defer mu.Unlock()
+		seen = append(seen, done)
+		totals[total] = true
+	}
+
+	paths, err := captureFrames(stub, "http://127.0.0.1:1/", "v0", "s0", dir, times,
+		recordOptions{width: 400, height: 300}, report)
+	if err != nil {
+		t.Fatalf("captureFrames: %v", err)
+	}
+	if len(paths) != len(times) {
+		t.Fatalf("captured %d paths, want %d", len(paths), len(times))
+	}
+
+	if len(seen) != len(times) {
+		t.Fatalf("reporter fired %d times for %d frames", len(seen), len(times))
+	}
+	for i, done := range seen {
+		if done != i+1 {
+			t.Fatalf("report %d said %d done; the count must rise by one each time, got %v", i, done, seen)
+		}
+	}
+	if len(totals) != 1 || !totals[len(times)] {
+		t.Errorf("total should be a constant %d, got %v", len(times), totals)
+	}
+
+	// nil is the off switch, and it must not be called into.
+	if _, err := captureFrames(stub, "http://127.0.0.1:1/", "v0", "s0", dir, times[:2],
+		recordOptions{width: 400, height: 300}, nil); err != nil {
+		t.Fatalf("captureFrames without a reporter: %v", err)
+	}
+}
+
+// TestProgressReporterIsOptIn keeps --progress purely additive: without it there
+// is no reporter at all, so nothing new reaches stderr.
+func TestProgressReporterIsOptIn(t *testing.T) {
+	var log bytes.Buffer
+	if progressReporter(recordOptions{}, &log) != nil {
+		t.Error("a reporter was made without --progress")
+	}
+
+	r := progressReporter(recordOptions{progress: true}, &log)
+	if r == nil {
+		t.Fatal("--progress made no reporter")
+	}
+	r(3, 7)
+	if got := log.String(); got != "cinegram-progress capture 3 7\n" {
+		t.Errorf("progress line = %q", got)
+	}
+}
+
 func indexOf(xs []string, want string) int {
 	for i, x := range xs {
 		if x == want {
@@ -218,10 +299,16 @@ func TestRecordEndToEnd(t *testing.T) {
 	// browsers is enough to prove the pool without spending a minute on it.
 	err := runRecord(recordOptions{
 		input: src, output: out, format: "gif", fps: 5, width: 400, height: 300,
+		progress: true,
 	}, &log)
 	if err != nil {
 		t.Fatalf("record failed: %v\n%s", err, log.String())
 	}
+
+	// The progress protocol, through a real run: one capture line per frame and
+	// then exactly one encode line, with the two human-readable lines still
+	// around them because --progress is additive.
+	assertProgressProtocol(t, log.String(), len(frameTimes(400, 5)))
 
 	f, err := os.Open(out)
 	if err != nil {
@@ -241,6 +328,39 @@ func TestRecordEndToEnd(t *testing.T) {
 	}
 	if got.LoopCount != 0 {
 		t.Errorf("LoopCount = %d, want a GIF that loops", got.LoopCount)
+	}
+}
+
+// assertProgressProtocol checks what a host parsing stderr is entitled to
+// assume: `capture i n` for every frame, in order, then one `encode`, and the
+// pre-existing human lines untouched.
+func assertProgressProtocol(t *testing.T, log string, frames int) {
+	t.Helper()
+
+	var captures []string
+	encodes := 0
+	for _, line := range strings.Split(log, "\n") {
+		switch {
+		case strings.HasPrefix(line, "cinegram-progress capture "):
+			captures = append(captures, line)
+		case line == "cinegram-progress encode":
+			encodes++
+		}
+	}
+
+	if len(captures) != frames {
+		t.Errorf("got %d capture lines, want %d:\n%s", len(captures), frames, log)
+	}
+	for i, line := range captures {
+		if want := fmt.Sprintf("cinegram-progress capture %d %d", i+1, frames); line != want {
+			t.Errorf("capture line %d = %q, want %q", i, line, want)
+		}
+	}
+	if encodes != 1 {
+		t.Errorf("got %d encode lines, want exactly 1:\n%s", encodes, log)
+	}
+	if !strings.Contains(log, "frames at 5fps") || !strings.Contains(log, "wrote ") {
+		t.Errorf("--progress must not disturb the human-readable lines:\n%s", log)
 	}
 }
 

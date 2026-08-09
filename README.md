@@ -628,6 +628,7 @@ first".
 | `--fps` | `12` | |
 | `--width`, `--height` | `1280`, `720` | Rounded up to even, which yuv420p requires and a GIF does not mind. |
 | `--scenario`, `--view` | the first / the entry document | Which walkthrough to record. |
+| `--progress` | off | `cinegram-progress capture <i> <n>` per frame and one `cinegram-progress encode`, on stderr, for a host drawing a progress bar. Purely additive: the human-readable lines are unchanged. |
 
 ### What an agent sees
 
@@ -812,10 +813,11 @@ and link form, `sequenceDiagram`, nested subgraphs, frontmatter, scenarios with
 narration and persistent state, focus, deep links and embedding, the timeline
 compiler, clickable drill-down between diagrams of different types, the
 animated HTML preview, a serve/watch authoring loop, `narrate`, PNG frame
-capture, and the VS Code extension — ```dgm blocks animate inside the built-in
-Markdown preview, and `.dgm` files get syntax highlighting and a preview panel
-(see `editors/vscode/`).
+capture, GIF/mp4/webm recording, and the VS Code extension — ```dgm blocks
+animate inside the built-in Markdown preview, and `.dgm` files get syntax
+highlighting, a preview panel, an *Open With… → Cinegram Animation* editor, and
+`Cinegram: Export Animation…` to record one straight to a GIF (see
+`editors/vscode/`).
 
 Not built yet: `architecture-beta` and the other Mermaid diagram types (the
-registry seam exists for them), and WASM builds. GIF export is deliberately out
-of scope — `frame --frames` plus ffmpeg does it better than a Go encoder would.
+registry seam exists for them), and WASM builds.

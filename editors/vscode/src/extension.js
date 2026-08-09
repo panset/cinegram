@@ -23,12 +23,16 @@
 
 const vscode = require('vscode');
 
+const animationEditor = require('./animationEditor');
 const binary = require('./binary');
 const compile = require('./compile');
 const dgmPreview = require('./dgmPreview');
+const record = require('./record');
 
 function activate(context) {
   dgmPreview.register(context);
+  animationEditor.register(context);
+  record.register(context);
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
