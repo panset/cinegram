@@ -1,4 +1,4 @@
-load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+load("@rules_go//go:def.bzl", "go_binary", "go_cross_binary", "go_library", "go_test")
 
 go_library(
     name = "cinegram_lib",
@@ -29,6 +29,30 @@ go_binary(
     embed = [":cinegram_lib"],
     visibility = ["//visibility:public"],
 )
+
+# One binary per platform the VS Code extension ships for.
+#
+# The extension spawns this rather than reimplementing anything, so a package
+# for a platform is a package with the matching binary in it — which means
+# building all of them from one machine. The hermetic Go SDK makes that a flag
+# rather than a cross-compilation toolchain to install.
+#
+# gazelle:ignore
+[
+    go_cross_binary(
+        name = "cinegram_" + target,
+        platform = "@rules_go//go/toolchain:" + platform,
+        target = ":cinegram",
+        visibility = ["//visibility:public"],
+    )
+    for target, platform in {
+        "darwin-arm64": "darwin_arm64",
+        "darwin-x64": "darwin_amd64",
+        "linux-arm64": "linux_arm64",
+        "linux-x64": "linux_amd64",
+        "win32-x64": "windows_amd64",
+    }.items()
+]
 
 go_test(
     name = "cinegram_test",

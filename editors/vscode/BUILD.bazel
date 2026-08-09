@@ -1,0 +1,27 @@
+load("@rules_go//go:def.bzl", "go_test")
+
+# The extension's copies of the browser assets. They are committed, because the
+# extension has to work when installed from this folder on a machine with no
+# Bazel and no Go.
+filegroup(
+    name = "media",
+    srcs = glob(["media/*"]),
+    visibility = ["//visibility:public"],
+)
+
+# gazelle:ignore
+go_test(
+    name = "assets_test",
+    srcs = ["assets_test.go"],
+    data = [
+        ":media",
+        "//pkg/emit/html:browser_assets",
+    ],
+)
+
+# The fix for what assets_test reports. Aliased here so that the command the
+# failure message prints lives beside the check that prints it.
+alias(
+    name = "sync_assets",
+    actual = "//editors/vscode/sync",
+)

@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "vsix_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/tejaspanse/cinegram/cmd/vsix",
+    visibility = ["//visibility:private"],
+)
+
+go_binary(
+    name = "vsix",
+    embed = [":vsix_lib"],
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,117 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Cinegram",
+  "scopeName": "source.dgm",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#frontmatter" },
+    { "include": "#top-level" },
+    { "include": "#diagram" },
+    { "include": "#string" },
+    { "include": "#attribute" },
+    { "include": "#duration" }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.percentage.dgm",
+      "match": "%%.*$"
+    },
+
+    "frontmatter": {
+      "name": "meta.embedded.block.frontmatter.dgm",
+      "begin": "\\A---\\s*$",
+      "end": "^---\\s*$",
+      "patterns": [{ "include": "#string" }, { "include": "#attribute" }]
+    },
+
+    "top-level": {
+      "patterns": [
+        {
+          "comment": "The four blocks the scenario half of the language opens with. This list is the contract in isTopLevelKeyword (pkg/parser/interact.go); a diagram parser must hand the cursor back at every one of them.",
+          "name": "keyword.control.block.dgm",
+          "match": "^\\s*\\b(scenario|storyboard|interact|view)\\b"
+        },
+        {
+          "name": "keyword.control.step.dgm",
+          "match": "^\\s*\\b(step|frame)\\b"
+        },
+        {
+          "comment": "`from` in a view declaration, and the verbs a click binding can take.",
+          "name": "keyword.other.dgm",
+          "match": "\\b(from|click|to)\\b"
+        },
+        {
+          "comment": "Actions. The list mirrors actionSpecs in pkg/parser/scenario.go — a new action added there needs adding here, which is the one place this grammar has to keep up with the language.",
+          "name": "support.function.action.dgm",
+          "match": "\\b(flow|highlight|note|dim|pulse|focus|show|hide|set|gauge|unset|scene|wait|seq|reveal|url)\\b"
+        }
+      ]
+    },
+
+    "diagram": {
+      "patterns": [
+        {
+          "comment": "Mermaid diagram openers and structure. Deliberately shallow: the diagram body round-trips verbatim through the emitter, and colouring it in depth would be a second Mermaid implementation to keep in step.",
+          "name": "keyword.control.diagram.dgm",
+          "match": "^\\s*\\b(flowchart|graph|sequenceDiagram|subgraph|end|direction|participant|actor|activate|deactivate|loop|alt|else|opt|par|rect|autonumber|Note)\\b"
+        },
+        {
+          "name": "constant.language.direction.dgm",
+          "match": "\\b(LR|RL|TB|BT|TD)\\b"
+        },
+        {
+          "comment": "A link, in any of the forms pkg/parser/link.go recognises.",
+          "name": "keyword.operator.link.dgm",
+          "match": "(-{2,}>|={2,}>|-{2,}|={2,}|\\.-+>|<-{2,}>|-{1,2}[xo]|->>|-->>|--x|--\\))"
+        },
+        {
+          "comment": "A node declaration's label, in whichever bracket pair gives it its shape.",
+          "name": "string.unquoted.label.dgm",
+          "match": "(?<=[\\[\\(\\{>])[^\\]\\)\\}]*(?=[\\]\\)\\}])"
+        }
+      ]
+    },
+
+    "string": {
+      "name": "string.quoted.double.dgm",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.dgm",
+          "match": "\\\\."
+        }
+      ]
+    },
+
+    "attribute": {
+      "patterns": [
+        {
+          "comment": "An attribute name, up to its colon. Matching the shape rather than a fixed list keeps a new attribute from looking like a mistake before this file catches up.",
+          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(:)",
+          "captures": {
+            "1": { "name": "variable.parameter.dgm" },
+            "2": { "name": "punctuation.separator.key-value.dgm" }
+          }
+        },
+        {
+          "name": "constant.language.boolean.dgm",
+          "match": "\\b(true|false)\\b"
+        }
+      ]
+    },
+
+    "duration": {
+      "patterns": [
+        {
+          "name": "constant.numeric.duration.dgm",
+          "match": "\\b\\d+(\\.\\d+)?(ms|s)\\b"
+        },
+        {
+          "name": "constant.numeric.dgm",
+          "match": "\\b\\d+(\\.\\d+)?\\b"
+        }
+      ]
+    }
+  }
+}

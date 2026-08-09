@@ -1,0 +1,64 @@
+/*
+ * What a ```dgm block looks like inside the Markdown preview.
+ *
+ * runtime.css does the diagram itself and is loaded whole beside this file;
+ * everything here is about the seam between that and the document around it, so
+ * colours come from the editor's own tokens rather than the diagram's palette.
+ * A block should read as part of the page it is in.
+ */
+
+pre.cinegram-block {
+  display: block;
+  margin: 1.2em 0;
+}
+
+/* The runtime paints its own surface from --dgm-bg, which is a white or a near
+   black rather than whatever the reader's editor theme uses. Handing it the
+   editor's background instead keeps a diagram from being a bright rectangle in a
+   dark document, without runtime.css having to know anything about VS Code. */
+pre.cinegram-block .dgm {
+  --dgm-bg: var(--vscode-editor-background);
+  --dgm-panel: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  --dgm-border: var(--vscode-widget-border, var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.35)));
+  --dgm-fg: var(--vscode-editor-foreground, var(--vscode-foreground));
+  --dgm-muted: var(--vscode-descriptionForeground);
+  --dgm-accent: var(--vscode-textLink-foreground);
+}
+
+/* A diagram is not prose and should not be measured like it: the preview sets a
+   comfortable reading width on the body, and a diagram wants the room. */
+pre.cinegram-block .dgm-stage {
+  max-height: 70vh;
+}
+
+/* --- failures --------------------------------------------------------------
+ *
+ * A block that does not compile says so where the diagram would have been. It
+ * is styled as an editor message rather than as a diagram, because that is what
+ * it is — and the hint is the part worth reading, so it is not made small.
+ */
+
+.cinegram-error {
+  border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground));
+  background: var(--vscode-inputValidation-errorBackground, transparent);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.9em;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.cinegram-error-msg {
+  color: var(--vscode-errorForeground);
+}
+
+.cinegram-error-hint {
+  color: var(--vscode-descriptionForeground);
+  margin: 2px 0 8px 0;
+}
+
+.cinegram-error-hint:last-child {
+  margin-bottom: 0;
+}

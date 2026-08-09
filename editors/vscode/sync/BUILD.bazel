@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "sync_lib",
+    srcs = ["sync.go"],
+    importpath = "github.com/tejaspanse/cinegram/editors/vscode/sync",
+    visibility = ["//visibility:private"],
+)
+
+go_binary(
+    name = "sync",
+    embed = [":sync_lib"],
+    visibility = ["//visibility:public"],
+)

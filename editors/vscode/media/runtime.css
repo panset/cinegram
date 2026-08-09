@@ -1,0 +1,1051 @@
+/*
+ * Cinegram runtime styles.
+ *
+ * Colours are defined as tokens on bare :root so the light palette always has
+ * a value, then overridden for the dark theme. The runtime stamps
+ * data-theme on <html>, and prefers-color-scheme covers the untouched default.
+ */
+
+:root {
+  --dgm-bg: #ffffff;
+  --dgm-panel: #f6f7f9;
+  --dgm-border: #dfe3e8;
+  --dgm-fg: #1c2024;
+  --dgm-muted: #6b7480;
+  --dgm-accent: #2f6feb;
+  --dgm-accent-soft: rgba(47, 111, 235, 0.14);
+  --dgm-busy: #d97706;
+  --dgm-response: #16a34a;
+  --dgm-fail: #dc2626;
+  --dgm-warn-bg: #fff4e5;
+  --dgm-warn-fg: #8a4b08;
+  --dgm-shadow: rgba(16, 24, 40, 0.12);
+}
+
+:root[data-theme='dark'],
+:root:not([data-theme='light']) {
+  --dgm-bg: #0f1216;
+  --dgm-panel: #171b21;
+  --dgm-border: #2a313a;
+  --dgm-fg: #e6e9ee;
+  --dgm-muted: #98a2b0;
+  --dgm-accent: #6ea8fe;
+  --dgm-accent-soft: rgba(110, 168, 254, 0.18);
+  --dgm-busy: #fbbf24;
+  --dgm-response: #4ade80;
+  --dgm-fail: #f87171;
+  --dgm-warn-bg: #3a2a12;
+  --dgm-warn-fg: #f6c177;
+  --dgm-shadow: rgba(0, 0, 0, 0.5);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --dgm-bg: #ffffff;
+    --dgm-panel: #f6f7f9;
+    --dgm-border: #dfe3e8;
+    --dgm-fg: #1c2024;
+    --dgm-muted: #6b7480;
+    --dgm-accent: #2f6feb;
+    --dgm-accent-soft: rgba(47, 111, 235, 0.14);
+    --dgm-busy: #d97706;
+    --dgm-response: #16a34a;
+    --dgm-fail: #dc2626;
+    --dgm-warn-bg: #fff4e5;
+    --dgm-warn-fg: #8a4b08;
+    --dgm-shadow: rgba(16, 24, 40, 0.12);
+  }
+}
+
+/* Everything that claims the page is scoped to .dgm-standalone, which only the
+   emitted page sets on <body>. This stylesheet is also loaded whole into hosts
+   that own the document around the diagram — the VS Code Markdown preview
+   contributes it alongside the editor's own — and a bare `body` rule there would
+   restyle the reader's prose to match the diagram. The tokens above are safe to
+   share; laying out the page is not. */
+body.dgm-standalone {
+  margin: 0;
+  background: var(--dgm-bg);
+  color: var(--dgm-fg);
+  font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.dgm {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-sizing: border-box;
+  gap: 12px;
+  /* Not inherited from the host: the runtime's own sizing is in px throughout,
+     and an editor's prose font would leave the controls at the wrong scale. */
+  font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--dgm-fg);
+}
+
+/* Filling the window is the standalone page's job. Embedded, the diagram is one
+   element among others and takes the height its content asks for. */
+.dgm-standalone .dgm {
+  min-height: 100vh;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* --- chrome ------------------------------------------------------------- */
+
+.dgm-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.dgm-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dgm-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* The trail of views drilled through. Muted, because it is orientation
+   rather than content. */
+.dgm-crumb {
+  font-size: 12px;
+  color: var(--dgm-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dgm-back {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.dgm-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dgm-btn,
+.dgm-select {
+  appearance: none;
+  border: 1px solid var(--dgm-border);
+  background: var(--dgm-panel);
+  color: var(--dgm-fg);
+  border-radius: 7px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.dgm-btn:hover,
+.dgm-select:hover {
+  border-color: var(--dgm-accent);
+}
+
+.dgm-btn-primary {
+  background: var(--dgm-accent);
+  border-color: var(--dgm-accent);
+  color: #fff;
+  min-width: 72px;
+  font-weight: 600;
+}
+
+/* Embed mode. The stage, its narration and the transport survive; the page
+   furniture does not, because the embedding page has its own. */
+.dgm-embed { min-height: 0; padding: 8px; }
+.dgm-embed .dgm-bar,
+.dgm-embed .dgm-steps { display: none; }
+.dgm-embed .dgm-body { grid-template-columns: minmax(0, 1fr); }
+/* The storyboard is content rather than furniture, so it survives embedding —
+   but with the step list gone it takes that column instead of a third one. */
+.dgm-embed.dgm-has-board .dgm-body {
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 320px);
+}
+
+/* Inline mode: one diagram among the paragraphs of a document, rather than a
+   page of its own. It builds on embed — the step list and the page furniture are
+   already gone — and puts back only the two things a reader cannot do without:
+   somewhere to press Play, and a way back out of a diagram they drilled into.
+   Everything else in the bar belongs to authoring a diagram, not reading one.
+
+   Selecting what stays, rather than what goes, is deliberate: a control added to
+   the bar later should have to earn its place in a document explicitly. */
+.dgm-inline {
+  border: 1px solid var(--dgm-border);
+  border-radius: 10px;
+  background: var(--dgm-bg);
+  padding: 10px 12px;
+  gap: 8px;
+}
+
+.dgm-inline .dgm-bar { display: flex; }
+.dgm-inline .dgm-title { display: none; }
+.dgm-inline .dgm-controls > * { display: none; }
+.dgm-inline .dgm-controls > .dgm-play,
+.dgm-inline .dgm-controls > .dgm-select { display: inline-block; }
+
+/* Back and the scenario picker are left to the runtime, which already hides
+   each until it has something to offer — Back until the reader has drilled into
+   something, the picker until there is more than one scenario. Both do it by
+   writing element.style, which beats the rules above, so a document shows them
+   only when they mean something. The breadcrumb stays for the same reason: it
+   renders empty until there is a trail to describe. */
+
+.dgm-inline .dgm-stage { min-height: 180px; }
+
+/* Presenter mode. The room is looking at the stage and the presenter is doing
+   the narrating, so the step list, the scrubber and most of the transport go
+   away: what is left is the diagram, the storyboard beside it, and the current
+   step's prose at a size that survives a projector. Following the .dgm-embed
+   precedent above — strip chrome by class, never rebuild the page. */
+.dgm-present .dgm-steps,
+.dgm-present .dgm-foot,
+.dgm-present .dgm-crumb { display: none; }
+
+.dgm-present .dgm-body { grid-template-columns: minmax(0, 1fr); }
+
+/* The storyboard survives, because a demo is exactly when someone wants to
+   point at what the user sees. */
+.dgm-present.dgm-has-board .dgm-body {
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 380px);
+}
+
+/* Play, Restart, the speed cycle and Copy link are things you do while
+   building a diagram, not while showing one; they carry .dgm-authoring so this
+   rule names them rather than guessing from the shape of their other classes.
+   Exit, the scenario picker, zoom reset, theme and help stay. */
+.dgm-present .dgm-authoring { display: none; }
+
+.dgm-present .dgm-stage { min-height: 60vh; }
+
+.dgm-present .dgm-caption { min-height: 0; padding: 16px 20px; }
+.dgm-present .dgm-caption-name { font-size: 18px; }
+.dgm-present .dgm-caption-desc { font-size: 1.45rem; line-height: 1.45; }
+
+/* Off-screen holding pen for the share link when the clipboard API is not
+   available — a page opened from the filesystem is not a secure context. It has
+   to be focusable and selectable, so it cannot be display:none. */
+.dgm-linkbox {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.dgm-btn-icon {
+  min-width: 34px;
+  padding: 6px 8px;
+  text-align: center;
+}
+
+.dgm-btn-icon.is-on {
+  border-color: var(--dgm-accent);
+  color: var(--dgm-accent);
+}
+
+/* --- focus ---------------------------------------------------------------
+   One visible ring for everything reachable by keyboard, including the SVG
+   groups that only became focusable because the runtime said so. */
+
+.dgm-btn:focus-visible,
+.dgm-select:focus-visible,
+.dgm-step:focus-visible,
+.dgm-chip:focus-visible,
+.dgm-scrub:focus-visible,
+.dgm-scrub-mark:focus-visible {
+  outline: 2px solid var(--dgm-accent);
+  outline-offset: 2px;
+}
+
+.dgm-clickable:focus-visible {
+  outline: 2px solid var(--dgm-accent);
+  outline-offset: 3px;
+}
+
+/* --- keyboard help ------------------------------------------------------- */
+
+.dgm-help {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 16px;
+}
+
+.dgm-help-panel {
+  background: var(--dgm-bg);
+  color: var(--dgm-fg);
+  border: 1px solid var(--dgm-border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  min-width: 300px;
+  max-width: 440px;
+  box-shadow: 0 20px 60px var(--dgm-shadow);
+}
+
+.dgm-help-title {
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.dgm-help-note {
+  font-size: 12px;
+  color: var(--dgm-muted);
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.dgm-help-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0 0 14px;
+  font-size: 13px;
+}
+
+.dgm-help-list dt {
+  font-family: 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--dgm-accent);
+  white-space: nowrap;
+}
+
+.dgm-help-list dd {
+  margin: 0;
+  color: var(--dgm-muted);
+}
+
+.dgm-warning {
+  background: var(--dgm-warn-bg);
+  color: var(--dgm-warn-fg);
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+/* --- layout ------------------------------------------------------------- */
+
+.dgm-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 16px;
+  align-items: start;
+}
+
+/* With a storyboard the stage still dominates: the panel takes a column of its
+   own and the step list keeps the width it always had, so adding a storyboard
+   costs the diagram some room rather than rearranging the page. */
+.dgm-has-board .dgm-body {
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 320px) 280px;
+}
+
+@media (max-width: 900px) {
+  .dgm-body,
+  .dgm-has-board .dgm-body,
+  .dgm-embed.dgm-has-board .dgm-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* overflow is hidden rather than scrolled: the stage is pannable now, and a
+   scrollbar competing with drag-to-pan reads as two ways to do one thing. */
+.dgm-stage {
+  position: relative;
+  background: var(--dgm-panel);
+  border: 1px solid var(--dgm-border);
+  border-radius: 12px;
+  padding: 20px;
+  overflow: hidden;
+  min-height: 320px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.dgm-stage:active { cursor: grabbing; }
+
+.dgm-svg-holder svg {
+  display: block;
+  margin: 0 auto;
+}
+
+.dgm-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* --- storyboard ----------------------------------------------------------
+ *
+ * What the human sees, beside what the system does. The two image layers are
+ * stacked and crossfade by opacity, which is why the stack needs a height of
+ * its own — absolutely positioned children contribute none.
+ */
+
+.dgm-board {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--dgm-border);
+  border-radius: 12px;
+  background: var(--dgm-panel);
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.dgm-board-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dgm-muted);
+}
+
+.dgm-board-stack {
+  position: relative;
+  min-height: 180px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--dgm-bg);
+}
+
+/* A caption-only frame has no picture, so the box that would have held one
+   collapses and the words get the room instead. */
+.dgm-board.is-wordy .dgm-board-stack {
+  min-height: 0;
+  background: none;
+}
+
+.dgm-board-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.dgm-board-layer.is-front { opacity: 1; }
+
+.dgm-board-img {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+}
+
+.dgm-board-caption {
+  font-size: 13px;
+  color: var(--dgm-fg);
+  white-space: pre-line;
+}
+
+.dgm-board.is-wordy .dgm-board-caption {
+  font-size: 15px;
+  padding: 24px 8px;
+  text-align: center;
+  color: var(--dgm-muted);
+}
+
+/* --- step list ---------------------------------------------------------- */
+
+.dgm-steps {
+  list-style: none;
+  counter-reset: dgm-step;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--dgm-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.dgm-step-row {
+  counter-increment: dgm-step;
+}
+
+/* A real <button>, so it is in the tab order and answers Enter and Space
+   without any of that being reimplemented. The reset undoes what being a
+   button brings with it. */
+.dgm-step {
+  appearance: none;
+  width: 100%;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px 10px 34px;
+  position: relative;
+  cursor: pointer;
+  border: 0;
+  border-bottom: 1px solid var(--dgm-border);
+  transition: background 0.15s;
+}
+
+.dgm-step-row:last-child .dgm-step { border-bottom: 0; }
+
+.dgm-step::before {
+  content: counter(dgm-step);
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1px solid var(--dgm-border);
+  font-size: 10px;
+  line-height: 17px;
+  text-align: center;
+  color: var(--dgm-muted);
+}
+
+.dgm-step:hover { background: var(--dgm-accent-soft); }
+
+.dgm-step.is-active {
+  background: var(--dgm-accent-soft);
+  box-shadow: inset 3px 0 0 var(--dgm-accent);
+}
+
+.dgm-step.is-active::before {
+  background: var(--dgm-accent);
+  border-color: var(--dgm-accent);
+  color: #fff;
+}
+
+.dgm-step.is-done .dgm-step-name { color: var(--dgm-muted); }
+
+.dgm-step-name { font-size: 13px; }
+.dgm-step-time { font-size: 11px; color: var(--dgm-muted); font-variant-numeric: tabular-nums; }
+
+/* --- caption ------------------------------------------------------------ */
+
+/* The narration for the step the clock is inside. It keeps its height when
+   empty so the stage does not jump as the caption comes and goes between
+   steps. */
+.dgm-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 9px 14px;
+  border: 1px solid var(--dgm-border);
+  border-radius: 10px;
+  background: var(--dgm-panel);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.dgm-caption.is-on { opacity: 1; }
+
+.dgm-caption-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.dgm-caption-desc {
+  font-size: 13px;
+  color: var(--dgm-muted);
+  white-space: pre-line;
+}
+
+/* --- transport ---------------------------------------------------------- */
+
+.dgm-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dgm-scrub-wrap {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.dgm-scrub {
+  flex: 1;
+  accent-color: var(--dgm-accent);
+}
+
+/* Step boundaries, laid over the scrubber. The container ignores the pointer
+   so dragging the range still works everywhere between the ticks; each tick
+   takes it back for itself. */
+.dgm-scrub-marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.dgm-scrub-mark {
+  position: absolute;
+  top: 50%;
+  width: 3px;
+  height: 12px;
+  margin-left: -1.5px;
+  transform: translateY(-50%);
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: var(--dgm-muted);
+  opacity: 0.5;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: opacity 0.15s, background 0.15s, height 0.15s;
+}
+
+.dgm-scrub-mark:hover,
+.dgm-scrub-mark:focus-visible {
+  background: var(--dgm-accent);
+  opacity: 1;
+  height: 17px;
+}
+
+.dgm-clock {
+  font-size: 12px;
+  color: var(--dgm-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 96px;
+  text-align: right;
+}
+
+/* --- animation states --------------------------------------------------- */
+
+.dgm-layer {
+  pointer-events: none;
+}
+
+/* --dgm-color is the per-track override. The runtime sets it inline on the
+   particle group or the node group when a `color:` attribute was compiled in,
+   and every rule below reads it through var(--dgm-color, <theme token>) so an
+   absent colour falls back to exactly what the theme did before. Because it is
+   a custom property it inherits to the shape elements mermaid drew, which is
+   where the stroke and fill actually have to land. */
+
+/* The particle itself: an arrowhead, not a dot. A dot has no direction, and
+   direction is the one thing the diagram underneath cannot say — the edge is
+   drawn once, pointing the way the author declared it, and a response runs
+   back along it. Filled and given the corner join so the notch stays crisp at
+   this size. */
+.dgm-particle-head {
+  fill: var(--dgm-color, var(--dgm-accent));
+  stroke-linejoin: miter;
+}
+
+.dgm-particle-halo {
+  fill: var(--dgm-color, var(--dgm-accent));
+  opacity: 0.25;
+  animation: dgm-pulse 1.1s ease-out infinite;
+}
+
+.dgm-particle-label {
+  fill: var(--dgm-fg);
+  font-size: 11px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--dgm-bg);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.dgm-particle-response .dgm-particle-head,
+.dgm-particle-response .dgm-particle-halo {
+  fill: var(--dgm-color, var(--dgm-response));
+}
+
+/* A failing flow reads as failing before it arrives, so the particle carries
+   the outcome the whole way rather than only at the ✕. */
+.dgm-particle-fail .dgm-particle-head,
+.dgm-particle-fail .dgm-particle-halo {
+  fill: var(--dgm-color, var(--dgm-fail));
+}
+
+/* Only the failing head is outlined, and in the page background: it is the one
+   that has to stay legible sitting on top of the ✕ it is about to land on. */
+.dgm-particle-fail .dgm-particle-head {
+  stroke: var(--dgm-bg);
+  stroke-width: 1.5px;
+}
+
+@keyframes dgm-pulse {
+  0%   { transform: scale(0.7); opacity: 0.35; }
+  70%  { transform: scale(1.5); opacity: 0;    }
+  100% { transform: scale(1.5); opacity: 0;    }
+}
+
+/* --- active edges ------------------------------------------------------- */
+
+/* While a flow track is open its edge is lit. The transition is short and on
+   the edge itself rather than on a wrapper, so a scrub that closes the track
+   fades the edge back instead of snapping. */
+
+.dgm-flow-active {
+  stroke: var(--dgm-color, var(--dgm-accent)) !important;
+  stroke-width: 2.6px !important;
+  transition: stroke 0.15s ease, stroke-width 0.15s ease;
+}
+
+.dgm-flow-response {
+  stroke: var(--dgm-color, var(--dgm-response)) !important;
+}
+
+/* A flow running against its edge takes that edge's arrowhead off for as long
+   as it is open. Nothing is lost — the particle carries its own chevron, and
+   the arrowhead comes back the moment the track closes — and it removes the
+   one thing on screen that actively disagrees with the animation. `marker-end`
+   as a property beats the presentation attribute mermaid wrote; both ends are
+   cleared because a path mermaid drew from the far end wears its head at the
+   start instead. */
+.dgm-flow-reverse {
+  marker-end: none;
+  marker-start: none;
+}
+
+/* Ordered after the style hooks so a failure wins the colour: `status` is
+   semantic and `style` is decoration, and the two can appear together. */
+.dgm-flow-fail {
+  stroke: var(--dgm-color, var(--dgm-fail)) !important;
+}
+
+/* The comet. A clone of the edge path with a dash window the runtime slides
+   along it, drawn in .dgm-layer so it sits above the edge but below the
+   particle that leads it. */
+.dgm-trail {
+  fill: none;
+  stroke: var(--dgm-color, var(--dgm-accent));
+  stroke-width: 5px;
+  stroke-linecap: round;
+  opacity: 0.4;
+}
+
+.dgm-trail-response {
+  stroke: var(--dgm-color, var(--dgm-response));
+}
+
+.dgm-trail-fail {
+  stroke: var(--dgm-color, var(--dgm-fail));
+}
+
+.dgm-fail-mark circle {
+  fill: var(--dgm-bg);
+  opacity: 0.92;
+}
+
+.dgm-fail-mark line {
+  stroke: var(--dgm-fail);
+  stroke-width: 3px;
+  stroke-linecap: round;
+}
+
+/* Node states. Mermaid draws the node body as the shape element inside g.node,
+   so the state classes target those descendants rather than the group. */
+
+.dgm-highlight rect,
+.dgm-highlight circle,
+.dgm-highlight polygon,
+.dgm-highlight path {
+  stroke: var(--dgm-color, var(--dgm-accent)) !important;
+  stroke-width: 3px !important;
+  filter: drop-shadow(0 0 8px var(--dgm-color, var(--dgm-accent)));
+}
+
+.dgm-busy rect,
+.dgm-busy circle,
+.dgm-busy polygon,
+.dgm-busy path {
+  stroke: var(--dgm-color, var(--dgm-busy)) !important;
+  stroke-width: 3px !important;
+  filter: drop-shadow(0 0 10px var(--dgm-color, var(--dgm-busy)));
+}
+
+/* The pulse scales the shape inside the node, never the g.node itself.
+   Mermaid positions g.node with a `transform` attribute, and CSS `transform` is
+   the same property rather than an addition to it — animating the group throws
+   the node to the origin. `transform-box: fill-box` then makes the shape scale
+   about its own centre instead of the SVG's. */
+.dgm-pulse rect,
+.dgm-pulse circle,
+.dgm-pulse polygon,
+.dgm-pulse path {
+  stroke: var(--dgm-color, var(--dgm-accent)) !important;
+  stroke-width: 2.5px !important;
+  animation: dgm-node-pulse 0.9s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes dgm-node-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.05); }
+}
+
+/* --- focus -------------------------------------------------------------- */
+
+/* Focus is drawn as what recedes. Desaturating as well as fading is what makes
+   it read as "not this" rather than "faint": colour is most of what pulls the
+   eye across a diagram. */
+.dgm-unfocused {
+  opacity: 0.18;
+  filter: saturate(0.15);
+  transition: opacity 0.25s ease, filter 0.25s ease;
+}
+
+/* A hop's destination, in the last moments before the particle lands. It
+   animates the glow rather than a transform: mermaid positions g.node with a
+   `transform` attribute, and a CSS transform is the same property, so animating
+   one here would move the node to the origin. */
+.dgm-waypoint {
+  animation: dgm-waypoint 0.6s ease-out infinite;
+}
+
+.dgm-waypoint rect,
+.dgm-waypoint circle,
+.dgm-waypoint polygon,
+.dgm-waypoint path {
+  stroke: var(--dgm-color, var(--dgm-accent)) !important;
+  stroke-width: 2.5px !important;
+}
+
+@keyframes dgm-waypoint {
+  0%   { filter: drop-shadow(0 0 1px var(--dgm-color, var(--dgm-accent))); }
+  50%  { filter: drop-shadow(0 0 11px var(--dgm-color, var(--dgm-accent))); }
+  100% { filter: drop-shadow(0 0 1px var(--dgm-color, var(--dgm-accent))); }
+}
+
+.dgm-dim { opacity: 0.28; }
+.dgm-hidden { opacity: 0; }
+.dgm-show { opacity: 1; }
+
+/* --- interaction -------------------------------------------------------- */
+
+/* A clickable element advertises itself on hover rather than permanently, so
+   the diagram still reads as a diagram at rest. */
+.dgm-clickable { cursor: pointer; }
+
+.dgm-clickable:hover rect,
+.dgm-clickable:hover circle,
+.dgm-clickable:hover polygon,
+.dgm-clickable:hover path {
+  stroke: var(--dgm-accent) !important;
+  stroke-width: 2.5px !important;
+  filter: drop-shadow(0 0 6px var(--dgm-accent));
+}
+
+/* Collapsed is reveal state, not timeline state: an element waiting to be
+   clicked into view. Unlike .dgm-hidden it also stops taking pointer events,
+   so an invisible node is not accidentally clickable.
+
+   The unfold is opacity and a blur rather than a scale, for the same reason the
+   pulse avoids one: these classes land on g.node, whose `transform` attribute
+   is doing the positioning. `display` stays out of it too — a display change
+   cannot transition, and would pop. */
+.dgm-collapsed {
+  opacity: 0;
+  filter: blur(3px);
+  pointer-events: none;
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+/* --- affordance chips --------------------------------------------------- */
+
+/* A reveal nobody can see is a reveal nobody finds: the diagram looks complete
+   and the detail behind it is discovered by accident. The chip says how much is
+   folded away before the click and what is being undone after. */
+.dgm-chip {
+  position: absolute;
+  transform: translate(-45%, -55%);
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border: 1px solid var(--dgm-accent);
+  border-radius: 999px;
+  background: var(--dgm-accent);
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 2px 6px var(--dgm-shadow);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.dgm-chip:hover {
+  transform: translate(-45%, -55%) scale(1.12);
+}
+
+.dgm-chip.is-open {
+  background: var(--dgm-bg);
+  color: var(--dgm-accent);
+}
+
+.dgm-chip-view {
+  background: var(--dgm-bg);
+  color: var(--dgm-accent);
+  font-weight: 600;
+}
+
+.dgm-noted rect,
+.dgm-noted circle,
+.dgm-noted polygon,
+.dgm-noted path {
+  stroke: var(--dgm-accent) !important;
+}
+
+.dgm-highlight,
+.dgm-busy,
+.dgm-dim,
+.dgm-hidden,
+.dgm-noted {
+  transition: opacity 0.25s ease;
+}
+
+/* --- persistent state --------------------------------------------------- */
+
+/* A standing state, as opposed to something happening to the node right now.
+   It reads as a quieter, permanent version of a highlight: an outline rather
+   than a glow, so an animation can still play over the top of it. */
+.dgm-stated rect,
+.dgm-stated circle,
+.dgm-stated polygon,
+.dgm-stated path {
+  stroke: var(--dgm-color, var(--dgm-accent)) !important;
+  stroke-width: 2px !important;
+}
+
+/* Badges and gauge readings. Anchored to the element's top-right corner and
+   stacked downwards by the runtime, so a node can carry several without them
+   landing on top of each other. */
+.dgm-pill {
+  position: absolute;
+  transform: translate(-30%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 160px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--dgm-color, var(--dgm-accent));
+  background: var(--dgm-bg);
+  color: var(--dgm-color, var(--dgm-accent));
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px var(--dgm-shadow);
+  pointer-events: none;
+}
+
+.dgm-pill-set {
+  background: var(--dgm-color, var(--dgm-accent));
+  color: var(--dgm-bg);
+}
+
+.dgm-pill-label {
+  font-weight: 500;
+  opacity: 0.75;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 9px;
+}
+
+.dgm-pill-value {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- notes -------------------------------------------------------------- */
+
+/* The runtime positions notes by their top-left corner rather than through a
+   translate, because it has to clamp them into the stage and push them clear of
+   each other — arithmetic that needs the real box, not an offset from one. */
+.dgm-note {
+  position: absolute;
+  background: var(--dgm-fg);
+  color: var(--dgm-bg);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-line;
+  box-shadow: 0 6px 20px var(--dgm-shadow);
+  max-width: 240px;
+  pointer-events: none;
+}
+
+.dgm-note::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: inherit;
+  border-radius: 1px;
+}
+
+.dgm-note-above::after { left: 50%; bottom: -5px; transform: translateX(-50%) rotate(45deg); }
+.dgm-note-below::after { left: 50%; top: -5px;    transform: translateX(-50%) rotate(45deg); }
+.dgm-note-left::after  { top: 50%;  right: -5px;  transform: translateY(-50%) rotate(45deg); }
+.dgm-note-right::after { top: 50%;  left: -5px;   transform: translateY(-50%) rotate(45deg); }
+
+/* A note that had to be moved to avoid another one is no longer pointing at
+   its target, so it stops pretending to. */
+.dgm-note.is-adrift::after { display: none; }
+
+/* --- reduced motion ------------------------------------------------------
+ *
+ * A reader who asks for reduced motion still wants the diagram — they want it
+ * to hold still. Autoplay is already suppressed in the runtime; what is left is
+ * the decoration that moves on its own, which goes away entirely, while the
+ * transitions that communicate a change of state are only shortened. The
+ * particle still travels: that is the content, not an effect.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .dgm-particle-halo,
+  .dgm-pulse rect,
+  .dgm-pulse circle,
+  .dgm-pulse polygon,
+  .dgm-pulse path,
+  .dgm-waypoint {
+    animation: none;
+  }
+
+  .dgm-btn,
+  .dgm-select,
+  .dgm-step,
+  .dgm-chip,
+  .dgm-caption,
+  .dgm-board-layer,
+  .dgm-collapsed,
+  .dgm-unfocused,
+  .dgm-flow-active,
+  .dgm-scrub-mark,
+  .dgm-highlight,
+  .dgm-busy,
+  .dgm-dim,
+  .dgm-hidden,
+  .dgm-noted {
+    transition-duration: 0.01ms;
+  }
+}

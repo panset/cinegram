@@ -1,0 +1,115 @@
+{
+  "name": "cinegram",
+  "displayName": "Cinegram",
+  "description": "Animated architecture diagrams in the Markdown preview, from ```dgm blocks.",
+  "version": "0.1.0",
+  "publisher": "cinegram",
+  "license": "SEE LICENSE IN ../../README.md",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Visualization"
+  ],
+  "activationEvents": [],
+  "main": "./src/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Rendering a diagram runs the cinegram binary, which a workspace can point at through cinegram.path."
+    }
+  },
+  "contributes": {
+    "markdown.markdownItPlugins": true,
+    "markdown.previewScripts": [
+      "./media/mermaid.min.js",
+      "./media/runtime.js",
+      "./media/preview.js"
+    ],
+    "markdown.previewStyles": [
+      "./media/runtime.css",
+      "./media/preview.css"
+    ],
+    "languages": [
+      {
+        "id": "dgm",
+        "aliases": [
+          "Cinegram",
+          "dgm"
+        ],
+        "extensions": [
+          ".dgm"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "dgm",
+        "scopeName": "source.dgm",
+        "path": "./syntaxes/dgm.tmLanguage.json"
+      },
+      {
+        "scopeName": "markdown.dgm.codeblock",
+        "path": "./syntaxes/dgm.markdown.injection.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.dgm": "dgm"
+        }
+      }
+    ],
+    "commands": [
+      {
+        "command": "cinegram.showPreview",
+        "title": "Open Preview to the Side",
+        "category": "Cinegram",
+        "icon": "$(open-preview)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "cinegram.showPreview",
+          "when": "resourceExtname == .dgm",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "cinegram.showPreview",
+          "when": "resourceExtname == .dgm"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Cinegram",
+      "properties": {
+        "cinegram.path": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "markdownDescription": "Path to the `cinegram` binary. When empty, the extension uses the copy bundled with it, then a Bazel build in the workspace (`bazel-bin/cmd/cinegram/...`), then `cinegram` on your PATH."
+        },
+        "cinegram.blockLanguages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "dgm",
+            "cinegram"
+          ],
+          "description": "Fenced code block languages rendered as animated diagrams."
+        },
+        "cinegram.compileTimeout": {
+          "type": "number",
+          "default": 5000,
+          "description": "Milliseconds to allow a block to compile before giving up. The preview renders on every edit, so this bounds how long a pathological source can block the editor."
+        }
+      }
+    }
+  }
+}

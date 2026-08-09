@@ -197,6 +197,40 @@ Navigation goes through `location.hash`: `navigate()` only moves the hash and
 `applyHash()` does the work, so a click and a browser history move follow the
 same path and the Back button cannot disagree with the browser's own.
 
+### The VS Code extension is a consumer, not a second implementation
+
+`editors/vscode/` renders ```` ```dgm ```` blocks inside VS Code's **built-in**
+Markdown preview. It holds no diagram, scenario or timing knowledge: it shells
+out to `cinegram compile - --as <path> --envelope` and mounts whatever timeline
+comes back, so a new diagram type, action or timing rule reaches the preview
+with no change there. Keep it that way.
+
+Two constraints of that preview decide its shape, and both are load-bearing:
+
+- **Its CSP is `script-src 'nonce-…'`, and the nonce never reaches a markdown-it
+  plugin.** So the placeholder the extension host emits is *data only* — a
+  `<pre>` with a base64 payload — and every line of code the page runs is
+  contributed through `markdown.previewScripts`, which VS Code nonces. Emitting
+  a `<script>` would be blocked *and* would raise the "content has been
+  disabled" banner. There is no WASM there either: no `wasm-unsafe-eval`.
+- **Content updates are a morphdom diff.** An edit anywhere in the file reverts
+  a rendered block to its placeholder, disposing nothing and firing no event
+  beyond `vscode.markdown.updateContent`. `media/preview.js` therefore asks the
+  DOM whether each block is still mounted rather than remembering, and carries
+  each player's playhead across by keying on a hash of the block's own source.
+
+`Cinegram.mount(root, timeline, opts)` takes the options that make several
+players share one page: `inline`, `keys: 'scoped'`, `hash: false`, `autoplay`,
+`theme`. Every default is the standalone page's existing behaviour, so the
+emitted page is unaffected. `runtime.css` scopes its page-level rules behind
+`.dgm-standalone` for the same reason — the sheet is loaded whole into documents
+the extension does not own.
+
+The three browser assets are duplicated into `editors/vscode/media/` because
+`go:embed` cannot reach out of its package and `previewScripts` cannot reach out
+of the extension. `bazel test //editors/vscode:assets_test` is what keeps the
+copies honest; `bazel run //editors/vscode:sync_assets` updates them.
+
 ## Constraints
 
 - **No third-party Go dependencies.** Standard library only. A hand-rolled lexer

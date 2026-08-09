@@ -798,9 +798,12 @@ standard library.
 
 `pkg/emit/html/assets/` holds the vendored `mermaid.min.js` plus the runtime's
 `runtime.js` and `runtime.css`. They live inside the package because `go:embed`
-cannot reach outside it; a future VS Code plugin should consume them from there
-rather than keeping a second copy. The runtime is a classic script, not an ES
-module, because module scripts are blocked on `file://` and awkward in webviews.
+cannot reach outside it. The VS Code extension has to keep its own copies —
+`markdown.previewScripts` takes only extension-relative paths — so
+`//editors/vscode:assets_test` fails when they drift and `bazel run
+//editors/vscode:sync_assets` fixes it. The runtime is a classic script, not an
+ES module, because module scripts are blocked on `file://` and awkward in
+webviews.
 
 ## Status
 
@@ -808,10 +811,11 @@ Working today: flowcharts (`flowchart` / `graph`) with every Mermaid node shape
 and link form, `sequenceDiagram`, nested subgraphs, frontmatter, scenarios with
 narration and persistent state, focus, deep links and embedding, the timeline
 compiler, clickable drill-down between diagrams of different types, the
-animated HTML preview, a serve/watch authoring loop, `narrate`, and PNG frame
-capture.
+animated HTML preview, a serve/watch authoring loop, `narrate`, PNG frame
+capture, and the VS Code extension — ```dgm blocks animate inside the built-in
+Markdown preview, and `.dgm` files get syntax highlighting and a preview panel
+(see `editors/vscode/`).
 
 Not built yet: `architecture-beta` and the other Mermaid diagram types (the
-registry seam exists for them), the VS Code plugin, and WASM builds. GIF export
-is deliberately out of scope — `frame --frames` plus ffmpeg does it better than
-a Go encoder would.
+registry seam exists for them), and WASM builds. GIF export is deliberately out
+of scope — `frame --frames` plus ffmpeg does it better than a Go encoder would.

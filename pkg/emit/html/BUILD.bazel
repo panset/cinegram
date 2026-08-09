@@ -1,5 +1,18 @@
 load("@rules_go//go:def.bzl", "go_library", "go_test")
 
+# The canonical copies of the three files the browser runs. go:embed pulls them
+# into the binary; this filegroup is for anything that needs them as files —
+# today, the check that the VS Code extension's copies have not gone stale.
+filegroup(
+    name = "browser_assets",
+    srcs = [
+        "assets/mermaid.min.js",
+        "assets/runtime.css",
+        "assets/runtime.js",
+    ],
+    visibility = ["//visibility:public"],
+)
+
 go_library(
     name = "html",
     srcs = ["html.go"],
