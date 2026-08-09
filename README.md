@@ -458,9 +458,14 @@ cinegram preview examples/oidc-login.dgm --serve
 # then open http://127.0.0.1:8731/?present
 ```
 
-Space or → plays one beat and pauses at its end; ← backs up to the start of a
-beat so Space replays it; a click on the stage advances, because presenting from
-a lectern means a clicker and a clicker sends a click. The step list, the
+Space or → plays one beat and pauses at its end. Pressing it again while a beat
+is still running **skips the rest of it** rather than starting it over —
+reaching for the key mid-animation means "get on with it", and answering that by
+replaying the beat would trap you in it until it had played out in full. Nothing
+is lost by skipping, because a step's end state is a pure function of the time.
+← backs up to the start of a beat, so Space replays it when you do want that; a
+click on the stage advances, because presenting from a lectern means a clicker
+and a clicker sends a click. The step list, the
 scrubber and the authoring controls go away, the stage grows, and the step's
 `desc` becomes speaker text at a size that survives a projector. The storyboard
 panel stays — a demo is exactly when someone wants to point at what the user

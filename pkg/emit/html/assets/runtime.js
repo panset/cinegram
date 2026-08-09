@@ -1617,14 +1617,27 @@
 
   // advanceStep plays the next beat and stops at its end.
   //
-  // "Next" is the first step that has not finished: from the start of a step
-  // that means the step itself, from its end the one after, and from the middle
-  // it means replaying the one you are inside — which is what someone reaching
-  // for Space in the middle of a sentence actually wants.
+  // "Next" is the first step that has not *started*, which is the rule that
+  // makes advancing always move forwards. Sitting exactly at a step's start
+  // counts as not started, so the first press plays that step; anywhere inside
+  // one, the press skips the rest of it and moves on.
+  //
+  // The alternative — the first step that has not finished — replays whatever
+  // is mid-flight, and that is wrong for the case this control exists for.
+  // Someone reaching for the key while a beat is still running is saying "yes,
+  // yes, get on with it", and answering that by starting the beat over means
+  // they cannot leave it until it has played out in full.
+  //
+  // Nothing is lost by skipping: a step's end state is a pure function of the
+  // time, so seeking to the next step's start shows everything the one being
+  // cut short would have finished by.
   Player.prototype.advanceStep = function () {
     var steps = this.scenario().steps;
     for (var i = 0; i < steps.length; i++) {
-      if (steps[i].end <= this.time + 1) continue;
+      // The millisecond of tolerance is the same one prevStep and nextStep
+      // use: the clock rarely lands exactly on a boundary, and a step whose
+      // start it has drifted a fraction past is still the step to play.
+      if (steps[i].start < this.time - 1) continue;
       this.pause();
       this.seek(steps[i].start); // clears stopAt, so it is set after
       this.stopAt = steps[i].end;
