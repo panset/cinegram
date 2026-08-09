@@ -40,6 +40,9 @@ const running = new Map();
 /** Capture fills the bar to here; encoding holds it there until the file lands. */
 const CAPTURE_SHARE = 95;
 
+/** How long a cancelled recorder gets to exit on SIGTERM before SIGKILL. */
+const KILL_GRACE_MS = 2000;
+
 function register(context) {
   channel = vscode.window.createOutputChannel('Cinegram');
   context.subscriptions.push(channel);
@@ -318,21 +321,41 @@ function spawnRecorder(found, args, progress, token) {
  */
 function killTree(child) {
   if (!child.pid) return;
-  try {
-    if (process.platform === 'win32') {
-      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
-    } else {
-      process.kill(-child.pid, 'SIGTERM');
-    }
-  } catch (e) {
-    // The group may already be gone, or never have become one. Either way the
-    // child itself is still worth a try.
-    try {
-      child.kill('SIGTERM');
-    } catch (e2) {
-      /* nothing left to do */
-    }
+
+  if (process.platform === 'win32') {
+    spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
+    return;
   }
+
+  const signal = (sig) => {
+    try {
+      process.kill(-child.pid, sig);
+      return true;
+    } catch (e) {
+      // The group may already be gone, or never have become one. Either way
+      // the child itself is still worth a try.
+      try {
+        child.kill(sig);
+      } catch (e2) {
+        /* nothing left to do */
+      }
+      return false;
+    }
+  };
+
+  signal('SIGTERM');
+
+  // SIGTERM is the polite ask, and Chrome does not always take it — a headless
+  // browser wedged badly enough to have blown the capture timeout is exactly
+  // the one least likely to answer. Anything still standing after the grace
+  // period is not going to shut down on its own, and a leaked headless Chrome
+  // holds hundreds of megabytes for as long as the machine is up.
+  const followUp = setTimeout(() => {
+    if (child.exitCode === null && child.signalCode === null) signal('SIGKILL');
+  }, KILL_GRACE_MS);
+  // Do not hold the extension host's event loop open for this.
+  if (followUp.unref) followUp.unref();
+  child.once('close', () => clearTimeout(followUp));
 }
 
 /** The two path settings, passed the way the CLI already reads them. */
@@ -396,7 +419,15 @@ function describeSkew(found, stderr) {
 function summarise(lines) {
   const said = lines
     .map((l) => l.trim())
-    .filter((l) => l && !/^recording /.test(l) && !/^wrote /.test(l));
+    .filter(
+      (l) =>
+        l &&
+        !/^recording /.test(l) &&
+        !/^wrote /.test(l) &&
+        // A retry that was survived is not the failure; a retry that was not is
+        // already restated by the "after N attempts" error the CLI ends with.
+        !/ failed, retrying \(/.test(l)
+    );
   if (!said.length) return '';
   const text = said.join(' ');
   return text.length > 400 ? text.slice(0, 397) + '…' : text;

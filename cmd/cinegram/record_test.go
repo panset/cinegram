@@ -222,10 +222,14 @@ func TestCaptureProgressTicksOncePerFrame(t *testing.T) {
 		totals[total] = true
 	}
 
+	var log bytes.Buffer
 	paths, err := captureFrames(stub, "http://127.0.0.1:1/", "v0", "s0", dir, times,
-		recordOptions{width: 400, height: 300}, report)
+		recordOptions{width: 400, height: 300}, report, &log)
 	if err != nil {
 		t.Fatalf("captureFrames: %v", err)
+	}
+	if log.Len() != 0 {
+		t.Errorf("a run where nothing failed should say nothing: %s", log.String())
 	}
 	if len(paths) != len(times) {
 		t.Fatalf("captured %d paths, want %d", len(paths), len(times))
@@ -245,8 +249,89 @@ func TestCaptureProgressTicksOncePerFrame(t *testing.T) {
 
 	// nil is the off switch, and it must not be called into.
 	if _, err := captureFrames(stub, "http://127.0.0.1:1/", "v0", "s0", dir, times[:2],
-		recordOptions{width: 400, height: 300}, nil); err != nil {
+		recordOptions{width: 400, height: 300}, nil, &log); err != nil {
 		t.Fatalf("captureFrames without a reporter: %v", err)
+	}
+}
+
+// TestCaptureRetriesAStarvedBrowser covers the failure that actually happens in
+// the field: four browsers contending on a busy machine push one past the
+// timeout in `shoot`, while the same frame captures in seconds on its own.
+// Without a retry that single straggler discards every frame already captured.
+//
+// One frame, so the stub's counter needs no locking and the attempt sequence is
+// exactly determined.
+func TestCaptureRetriesAStarvedBrowser(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stub browser is a shell script")
+	}
+	dir := t.TempDir()
+	counter := filepath.Join(dir, "attempts")
+
+	// Fails the first two invocations, succeeds on the third — the last attempt
+	// captureAttempts allows.
+	stub := filepath.Join(dir, "flaky-chrome")
+	script := "#!/bin/sh\n" +
+		"n=$(cat " + counter + " 2>/dev/null || echo 0); n=$((n+1)); echo $n > " + counter + "\n" +
+		"if [ \"$n\" -lt 3 ]; then echo 'starved' >&2; exit 1; fi\n" +
+		"for a in \"$@\"; do case \"$a\" in --screenshot=*) : > \"${a#--screenshot=}\";; esac; done\n"
+	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var ticks int
+	var log bytes.Buffer
+	paths, err := captureFrames(stub, "http://127.0.0.1:1/", "v0", "s0", dir, []int{0},
+		recordOptions{width: 400, height: 300},
+		func(done, total int) { ticks++ }, &log)
+	if err != nil {
+		t.Fatalf("a frame that succeeded on the third attempt still failed the run: %v", err)
+	}
+	if len(paths) != 1 {
+		t.Fatalf("captured %d paths, want 1", len(paths))
+	}
+
+	// The progress bar must count the frame once, not once per attempt.
+	if ticks != 1 {
+		t.Errorf("reporter fired %d times for one frame; a retry must not double-count", ticks)
+	}
+
+	raw, _ := os.ReadFile(counter)
+	if got := strings.TrimSpace(string(raw)); got != "3" {
+		t.Errorf("the browser ran %s times, want 3", got)
+	}
+
+	// A silent retry would make a recording that takes three times as long look
+	// like a hang, so the attempts are said out loud.
+	if n := strings.Count(log.String(), "failed, retrying"); n != 2 {
+		t.Errorf("got %d retry notices, want 2:\n%s", n, log.String())
+	}
+}
+
+// TestCaptureGivesUpAfterTheAttempts keeps the retry from hiding a real
+// failure: a browser that never works still fails the run, and says how hard it
+// tried.
+func TestCaptureGivesUpAfterTheAttempts(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stub browser is a shell script")
+	}
+	dir := t.TempDir()
+	stub := filepath.Join(dir, "broken-chrome")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\necho 'no display' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var log bytes.Buffer
+	_, err := captureFrames(stub, "http://127.0.0.1:1/", "v0", "s0", dir, []int{0},
+		recordOptions{width: 400, height: 300}, nil, &log)
+	if err == nil {
+		t.Fatal("a browser that never succeeds was reported as success")
+	}
+	if !strings.Contains(err.Error(), "3 attempts") {
+		t.Errorf("the error should say how many attempts were made: %v", err)
+	}
+	if !strings.Contains(err.Error(), "no display") {
+		t.Errorf("the browser's own complaint is missing from %v", err)
 	}
 }
 
