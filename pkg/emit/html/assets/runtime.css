@@ -357,9 +357,13 @@ body.dgm-standalone {
 }
 
 @media (max-width: 900px) {
+  /* Every two-column variant has to be named here, not just .dgm-body: the
+     board rules above are more specific, so a narrow screen would otherwise
+     keep squeezing a 240px panel beside the diagram. */
   .dgm-body,
   .dgm-has-board .dgm-body,
-  .dgm-embed.dgm-has-board .dgm-body {
+  .dgm-embed.dgm-has-board .dgm-body,
+  .dgm-present.dgm-has-board .dgm-body {
     grid-template-columns: minmax(0, 1fr);
   }
 }

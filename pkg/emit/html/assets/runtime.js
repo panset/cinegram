@@ -444,6 +444,9 @@
     this.picker = el('select', 'dgm-select');
     this.picker.addEventListener('change', function () {
       self.selectScenario(parseInt(self.picker.value, 10));
+      // Only here: a pick is the one scenario change the address does not
+      // already know about. See syncHash.
+      self.syncHash();
     });
     controls.appendChild(this.picker);
 
@@ -1219,6 +1222,13 @@
   //
   // No `t`: the moment is what Copy link is for, and a hash that froze the time
   // at the instant of the pick would send anyone reloading to a stopped clock.
+  //
+  // Only a *human* picking from the selector calls this, which is why it hangs
+  // off the change listener rather than off selectScenario. selectScenario also
+  // runs while a deep link is being applied, and a hash written there would
+  // overwrite the `t=` of the very link being followed — replaceState at that
+  // moment destroys the shared moment in the address bar and in history both,
+  // so the link would survive being opened but not being reloaded.
   Player.prototype.syncHash = function () {
     if (!this.usesHash()) return;
     var want = '#' + this.hashParts().join('&');
@@ -1259,7 +1269,6 @@
     this.syncBoard();
     this.apply(0);
     this.syncChrome();
-    this.syncHash();
   };
 
   // setView switches the stage to another diagram. Call navigate() rather than
