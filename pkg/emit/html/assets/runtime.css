@@ -153,6 +153,40 @@ body {
 .dgm-embed .dgm-bar,
 .dgm-embed .dgm-steps { display: none; }
 .dgm-embed .dgm-body { grid-template-columns: minmax(0, 1fr); }
+/* The storyboard is content rather than furniture, so it survives embedding —
+   but with the step list gone it takes that column instead of a third one. */
+.dgm-embed.dgm-has-board .dgm-body {
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 320px);
+}
+
+/* Presenter mode. The room is looking at the stage and the presenter is doing
+   the narrating, so the step list, the scrubber and most of the transport go
+   away: what is left is the diagram, the storyboard beside it, and the current
+   step's prose at a size that survives a projector. Following the .dgm-embed
+   precedent above — strip chrome by class, never rebuild the page. */
+.dgm-present .dgm-steps,
+.dgm-present .dgm-foot,
+.dgm-present .dgm-crumb { display: none; }
+
+.dgm-present .dgm-body { grid-template-columns: minmax(0, 1fr); }
+
+/* The storyboard survives, because a demo is exactly when someone wants to
+   point at what the user sees. */
+.dgm-present.dgm-has-board .dgm-body {
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 380px);
+}
+
+/* Play, Restart, the speed cycle and Copy link are things you do while
+   building a diagram, not while showing one; they carry .dgm-authoring so this
+   rule names them rather than guessing from the shape of their other classes.
+   Exit, the scenario picker, zoom reset, theme and help stay. */
+.dgm-present .dgm-authoring { display: none; }
+
+.dgm-present .dgm-stage { min-height: 60vh; }
+
+.dgm-present .dgm-caption { min-height: 0; padding: 16px 20px; }
+.dgm-present .dgm-caption-name { font-size: 18px; }
+.dgm-present .dgm-caption-desc { font-size: 1.45rem; line-height: 1.45; }
 
 /* Off-screen holding pen for the share link when the clipboard API is not
    available — a page opened from the filesystem is not a secure context. It has
@@ -269,8 +303,17 @@ body {
   align-items: start;
 }
 
+/* With a storyboard the stage still dominates: the panel takes a column of its
+   own and the step list keeps the width it always had, so adding a storyboard
+   costs the diagram some room rather than rearranging the page. */
+.dgm-has-board .dgm-body {
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 320px) 280px;
+}
+
 @media (max-width: 900px) {
-  .dgm-body {
+  .dgm-body,
+  .dgm-has-board .dgm-body,
+  .dgm-embed.dgm-has-board .dgm-body {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -300,6 +343,78 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
+}
+
+/* --- storyboard ----------------------------------------------------------
+ *
+ * What the human sees, beside what the system does. The two image layers are
+ * stacked and crossfade by opacity, which is why the stack needs a height of
+ * its own — absolutely positioned children contribute none.
+ */
+
+.dgm-board {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--dgm-border);
+  border-radius: 12px;
+  background: var(--dgm-panel);
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.dgm-board-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dgm-muted);
+}
+
+.dgm-board-stack {
+  position: relative;
+  min-height: 180px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--dgm-bg);
+}
+
+/* A caption-only frame has no picture, so the box that would have held one
+   collapses and the words get the room instead. */
+.dgm-board.is-wordy .dgm-board-stack {
+  min-height: 0;
+  background: none;
+}
+
+.dgm-board-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.dgm-board-layer.is-front { opacity: 1; }
+
+.dgm-board-img {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+}
+
+.dgm-board-caption {
+  font-size: 13px;
+  color: var(--dgm-fg);
+  white-space: pre-line;
+}
+
+.dgm-board.is-wordy .dgm-board-caption {
+  font-size: 15px;
+  padding: 24px 8px;
+  text-align: center;
+  color: var(--dgm-muted);
 }
 
 /* --- step list ---------------------------------------------------------- */
@@ -875,6 +990,7 @@ body {
   .dgm-step,
   .dgm-chip,
   .dgm-caption,
+  .dgm-board-layer,
   .dgm-collapsed,
   .dgm-unfocused,
   .dgm-flow-active,

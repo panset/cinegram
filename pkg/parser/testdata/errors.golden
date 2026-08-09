@@ -63,7 +63,7 @@ diagnostics:
   19:40: warning: unknown highlight attribute "wobble"
     hint: known here: at, color, delay, dur, label, style
   23:5: error: unknown action "teleport"
-    hint: known actions: flow, highlight, note, dim, pulse, focus, show, hide, set, gauge, unset, wait, seq
+    hint: known actions: flow, highlight, note, dim, pulse, focus, show, hide, set, gauge, unset, scene, wait, seq
   27:34: warning: unknown flow attribute "colour"
     hint: did you mean color?
   27:45: warning: unknown flow attribute "durr"

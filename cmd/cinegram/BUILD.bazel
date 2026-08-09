@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "capture.go",
         "main.go",
+        "record.go",
         "serve.go",
     ],
     importpath = "github.com/tejaspanse/cinegram/cmd/cinegram",
@@ -15,6 +16,7 @@ go_library(
         "//pkg/emit/html",
         "//pkg/emit/mermaid",
         "//pkg/emit/narrate",
+        "//pkg/gifenc",
         "//pkg/ir",
         "//pkg/loader",
         "//pkg/parser",
@@ -32,6 +34,7 @@ go_test(
     name = "cinegram_test",
     srcs = [
         "main_test.go",
+        "record_test.go",
         "serve_test.go",
     ],
     embed = [":cinegram_lib"],

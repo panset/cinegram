@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320" width="480" height="320" role="img" aria-label="The app's home page with the user signed in">
+  <rect width="480" height="320" rx="10" fill="#ffffff" stroke="#dfe3e8"/>
+  <path d="M0 10a10 10 0 0 1 10-10h460a10 10 0 0 1 10 10v24H0z" fill="#f1f3f5"/>
+  <rect x="14" y="9" width="200" height="16" rx="8" fill="#ffffff" stroke="#dfe3e8"/>
+  <text x="24" y="21" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" fill="#6b7480">app.example.com/home</text>
+  <line x1="0" y1="34" x2="480" y2="34" stroke="#dfe3e8"/>
+
+  <!-- App chrome: a signed-in header with the account chip on the right. -->
+  <rect x="0" y="34" width="480" height="40" fill="#ffffff"/>
+  <rect x="20" y="46" width="24" height="16" rx="5" fill="#2f6feb"/>
+  <text x="32" y="58" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">A</text>
+  <text x="54" y="59" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="600" fill="#1c2024">Acme</text>
+
+  <circle cx="440" cy="54" r="12" fill="#16a34a"/>
+  <text x="440" y="58" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">AD</text>
+  <text x="418" y="58" text-anchor="end" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#6b7480">ada@acme.example</text>
+  <line x1="0" y1="74" x2="480" y2="74" stroke="#dfe3e8"/>
+
+  <text x="24" y="106" font-family="ui-sans-serif, system-ui, sans-serif" font-size="15" font-weight="600" fill="#1c2024">Welcome back, Ada</text>
+
+  <g fill="#ffffff" stroke="#dfe3e8">
+    <rect x="24" y="124" width="136" height="76" rx="9"/>
+    <rect x="172" y="124" width="136" height="76" rx="9"/>
+    <rect x="320" y="124" width="136" height="76" rx="9"/>
+  </g>
+  <g fill="#f1f3f5">
+    <rect x="38" y="140" width="70" height="8" rx="4"/>
+    <rect x="186" y="140" width="70" height="8" rx="4"/>
+    <rect x="334" y="140" width="70" height="8" rx="4"/>
+    <rect x="38" y="158" width="100" height="6" rx="3"/>
+    <rect x="186" y="158" width="100" height="6" rx="3"/>
+    <rect x="334" y="158" width="100" height="6" rx="3"/>
+    <rect x="38" y="172" width="82" height="6" rx="3"/>
+    <rect x="186" y="172" width="82" height="6" rx="3"/>
+    <rect x="334" y="172" width="82" height="6" rx="3"/>
+  </g>
+
+  <!-- The cookie is the only thing the browser ended up holding, so it is the
+       one detail this frame states rather than mocks. -->
+  <rect x="24" y="220" width="432" height="40" rx="9" fill="#ffffff" stroke="#16a34a"/>
+  <circle cx="46" cy="240" r="8" fill="#16a34a"/>
+  <path d="M42 240l3 3 6-6" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="64" y="237" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="600" fill="#1c2024">Session cookie set</text>
+  <text x="64" y="251" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9" fill="#6b7480">opaque · HttpOnly · Secure — no token in the browser</text>
+</svg>

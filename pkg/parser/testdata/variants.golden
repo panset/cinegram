@@ -1,0 +1,77 @@
+diagram: flowchart (flowchart LR)
+direction: LR
+
+nodes:
+  a          label="A"                      shape=rect      
+  b          label="B"                      shape=rect      
+  c          label="C"                      shape=rect      
+
+edges:
+  e0   a -> b style=normal head=arrow
+  e1   b -> c style=normal head=arrow
+
+interact:
+  click a          -> step wrong
+  click b          -> step one
+
+scenario "base" {outcome="ok"}
+  step one "the shared opening"
+    flow a -> b {dur="400ms"}
+  step two "still shared"
+    flow b -> c {dur="400ms"}
+  step three "not shared"
+    flow a -> b {dur="400ms"}
+
+scenario "diverges" {variant="base" until="two" outcome="fail"}
+  step wrong "and then it goes wrong"
+    flow b -> c {dur="400ms" status="fail"}
+
+scenario "and also" {variant="base"}
+  step extra "one more beat on the end"
+    flow a -> b {dur="300ms"}
+
+scenario "chained" {variant="diverges" until="wrong"}
+  step nope "never reached"
+    flow a -> b
+
+scenario "self" {variant="self"}
+  step alone "on its own"
+    flow a -> b
+
+scenario "no such base" {variant="bse"}
+  step orphan "nothing to inherit"
+    flow a -> b
+
+scenario "until with nothing to inherit from" {until="two"}
+  step lonely "no variant attribute"
+    flow a -> b
+
+scenario "until names a step the base does not have" {variant="base" until="seventeen"}
+  step after "after a step that is not there"
+    flow a -> b
+
+scenario "collides" {variant="base" until="two"}
+  step one "same id as an inherited step"
+    flow a -> b
+
+scenario "bad outcome" {outcome="probably"}
+  step whatever "outcome is a closed set"
+    flow a -> b
+
+diagnostics:
+  39:31: error: scenario "diverges" is itself a variant; a variant cannot inherit from another variant
+    hint: inherit from the original instead, or write this scenario out in full
+  45:28: error: scenario "self" is a variant of itself
+    hint: name the scenario this one diverges from
+  51:36: error: no scenario named "bse" to inherit from
+    hint: did you mean base?
+  57:56: error: `until` names a step to inherit up to, but no scenario is being inherited from
+    hint: add `variant: "<scenario name>"` to say which scenario to inherit from
+  63:80: error: scenario "base" has no step "seventeen" to inherit up to
+    hint: known steps: one, two, three
+  73:3: error: step id "one" is already inherited from scenario "base"
+    hint: rename this step; the inherited prefix already uses that id
+  77:35: error: attribute "outcome": "probably" is not a status
+    hint: valid statuses are ok, fail
+  88:19: warning: step "wrong" is only in scenario "diverges", so this click does nothing until that scenario is chosen
+    hint: a step click acts on the scenario currently selected; give scenario diverges a step of this name too, or bind to a step in the first scenario

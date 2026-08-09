@@ -45,7 +45,13 @@ bazel run //cmd/cinegram -- preview examples/k8s-request.dgm -o /tmp/k8s.html
 bazel run //cmd/cinegram -- compile examples/k8s-request.dgm
 bazel run //cmd/cinegram -- mermaid examples/k8s-request.dgm
 bazel run //cmd/cinegram -- lint    examples/k8s-request.dgm
+bazel run //cmd/cinegram -- record  examples/payment-checkout.dgm -o /tmp/out.gif --fps 10
 ```
+
+`record` shells out to the same headless Chrome `frame` uses, once per frame in
+a small worker pool, then encodes. GIF goes through `pkg/gifenc` — stdlib only,
+so it works with nothing installed; `--format mp4|webm` needs ffmpeg on `PATH`
+or `$CINEGRAM_FFMPEG`.
 
 ## Architecture
 
@@ -101,7 +107,9 @@ for the symbol table, never rewrite the text.
 ### The timeline is the renderer contract
 
 `pkg/ir` holds absolute integer milliseconds and **no geometry** — tracks and
-bindings reference node, edge and group IDs only. Two consequences worth
+bindings reference node, edge, group and storyboard-frame IDs only. Storyboard
+images arrive as `data:` URIs the loader built, never as paths: `pkg/parser`
+does no I/O, and the page has to work from the filesystem. Two consequences worth
 protecting: a renderer is just a clock plus a scrubber, and a Go-native SVG
 backend remains possible later without touching the compiler. Do not add
 coordinates to `ir`.
@@ -119,6 +127,17 @@ Timing rules live entirely in `pkg/compile`:
   whole step.
 - A flow may run against an edge's drawn direction; `symbol.Table.FindEdge`
   matches reversed edges and the track records `Reverse`.
+- `scene` is a stateful action like any other here, but its target is a
+  **storyboard frame**, not a node: it is the one action `validate.go` resolves
+  against `doc.Storyboards` instead of the symbol table, and the runtime shows
+  the latest scene track with `Start <= t` rather than the ones open at t. That
+  stickiness is what makes the panel hold a screen across the steps where
+  nothing the user can see changes.
+- `scenario … { variant: "base", until: <step> }` is spliced in
+  `resolveVariants` **before** any timing runs, so the merged scenario is an
+  ordinary `ast.Scenario` and every rule above applies to it unchanged.
+  Depth-1 only; `until` is inclusive. Keep the splice at AST level — lowering
+  it would mean reimplementing hop-occurrence and persistent-window resets.
 
 ### Parsing strategy differs by half, deliberately
 
@@ -157,6 +176,13 @@ up and fight over Space and the arrow keys if the chrome were built more than
 once. Click listeners attach in `index()`, the one place that runs per mermaid
 render with the id→element maps in hand; they live on SVG elements that
 `render()` replaces wholesale, so they never need removing.
+
+The storyboard panel is overlay-style HTML built once in `build()` and shown or
+hidden by `syncBoard()`, which re-runs per render *and* per scenario change
+because scene usage is per scenario. It is outside the SVG, so `baseClass` and
+`STICKY` do not apply to it; `applyBoard` diffs on the frame id instead, and has
+to — rewriting an `<img src>` every frame would restart the crossfade
+transition forever.
 
 **`baseClass` strips `dgm-*` classes and `applyNodeStates` rewrites the whole
 class attribute every frame.** Anything that must outlive a frame — the click

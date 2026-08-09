@@ -18,9 +18,10 @@ import (
 // topLevelKeywords are the block openers that belong to this package rather
 // than to a diagram parser.
 var topLevelKeywords = map[string]bool{
-	"scenario": true,
-	"view":     true,
-	"interact": true,
+	"scenario":   true,
+	"storyboard": true,
+	"view":       true,
+	"interact":   true,
 }
 
 // isTopLevelKeyword reports whether word opens a block that belongs to the
@@ -39,6 +40,7 @@ var bindingVerbs = map[string]ast.BindingKind{
 // topLevel is everything the scenario half of a document contributes.
 type topLevel struct {
 	Scenarios    []*ast.Scenario
+	Storyboards  []*ast.Storyboard
 	Views        []*ast.ViewDecl
 	Interactions []*ast.Binding
 }
@@ -61,6 +63,10 @@ func parseTopLevel(c *source.Cursor, b *diag.Bag) topLevel {
 			if sc := parseScenario(s); sc != nil {
 				out.Scenarios = append(out.Scenarios, sc)
 			}
+		case s.atKeyword("storyboard"):
+			if sb := parseStoryboard(s); sb != nil {
+				out.Storyboards = append(out.Storyboards, sb)
+			}
 		case s.atKeyword("view"):
 			if v := parseViewDecl(s); v != nil {
 				out.Views = append(out.Views, v)
@@ -68,8 +74,8 @@ func parseTopLevel(c *source.Cursor, b *diag.Bag) topLevel {
 		case s.atKeyword("interact"):
 			out.Interactions = append(out.Interactions, parseInteract(s)...)
 		default:
-			b.ErrorHintf(t.at, "blocks start with `scenario`, `view` or `interact`",
-				"expected `scenario`, `view` or `interact` but found %s", describe(t))
+			b.ErrorHintf(t.at, "blocks start with `scenario`, `storyboard`, `view` or `interact`",
+				"expected `scenario`, `storyboard`, `view` or `interact` but found %s", describe(t))
 			s.skipToLineEnd()
 			s.skipNewlines()
 		}

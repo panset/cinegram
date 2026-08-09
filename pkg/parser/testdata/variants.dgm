@@ -1,0 +1,90 @@
+%% Scenario inheritance: the valid shapes and every way of getting it wrong.
+flowchart LR
+  a[A]
+  b[B]
+  c[C]
+
+  a --> b
+  b --> c
+
+scenario "base" { outcome: ok }
+
+  step one "the shared opening" {
+    flow a -> b { dur: 400ms }
+  }
+
+  step two "still shared" {
+    flow b -> c { dur: 400ms }
+  }
+
+  step three "not shared" {
+    flow a -> b { dur: 400ms }
+  }
+
+%% The good case: replay the base through `two` — inclusive — then diverge.
+scenario "diverges" { variant: "base", until: two, outcome: fail }
+
+  step wrong "and then it goes wrong" {
+    flow b -> c { dur: 400ms, status: fail }
+  }
+
+%% No `until` inherits the whole base and appends to it.
+scenario "and also" { variant: "base" }
+
+  step extra "one more beat on the end" {
+    flow a -> b { dur: 300ms }
+  }
+
+%% A variant of a variant: depth-1 only, so this is an error.
+scenario "chained" { variant: "diverges", until: wrong }
+
+  step nope "never reached" {
+    flow a -> b
+  }
+
+scenario "self" { variant: "self" }
+
+  step alone "on its own" {
+    flow a -> b
+  }
+
+scenario "no such base" { variant: "bse" }
+
+  step orphan "nothing to inherit" {
+    flow a -> b
+  }
+
+scenario "until with nothing to inherit from" { until: two }
+
+  step lonely "no variant attribute" {
+    flow a -> b
+  }
+
+scenario "until names a step the base does not have" { variant: "base", until: seventeen }
+
+  step after "after a step that is not there" {
+    flow a -> b
+  }
+
+%% `one` is inherited from the base and used again here, so the merged scenario
+%% would address two different beats by one id.
+scenario "collides" { variant: "base", until: two }
+
+  step one "same id as an inherited step" {
+    flow a -> b
+  }
+
+scenario "bad outcome" { outcome: probably }
+
+  step whatever "outcome is a closed set" {
+    flow a -> b
+  }
+
+%% Click targets are resolved against the *merged* scenario. `wrong` belongs to
+%% a variant, and `two` is inherited by three of them, so neither is an error —
+%% but `two` is not in the first scenario's own steps either, and the runtime
+%% binds a step click against whichever scenario is selected.
+interact {
+  click a -> step wrong
+  click b -> step one
+}

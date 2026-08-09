@@ -14,10 +14,12 @@
 package loader
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -39,6 +41,12 @@ type Unit struct {
 	// Views maps each local alias this document declared to the canonical
 	// ViewID it resolved to. Compilation rewrites bindings through it.
 	Views map[string]string
+
+	// FrameData maps each storyboard `img` path, exactly as written, to a
+	// self-contained `data:` URI. Inlining happens here for the same reason
+	// view paths resolve here: the parser never touches a filesystem, and the
+	// emitted page has to work from one anyway.
+	FrameData map[string]string
 }
 
 // Bundle is every document reachable from an entry file.
@@ -93,6 +101,8 @@ func Load(path string, readFile ReadFileFunc) (*Bundle, error) {
 	// target already loaded.
 	for i := 0; i < len(bundle.Units); i++ {
 		u := bundle.Units[i]
+		loadFrames(u, readFile)
+
 		for _, decl := range u.Result.Document.Views {
 			if decl.Path == "" || filepath.IsAbs(decl.Path) {
 				continue // already reported by validation
@@ -124,13 +134,77 @@ func Load(path string, readFile ReadFileFunc) (*Bundle, error) {
 func parseUnit(path, viewID, title string, content []byte) *Unit {
 	res, bag := parser.Parse(path, string(content))
 	return &Unit{
-		ViewID: viewID,
-		Title:  title,
-		Path:   path,
-		Result: res,
-		Bag:    bag,
-		Views:  map[string]string{},
+		ViewID:    viewID,
+		Title:     title,
+		Path:      path,
+		Result:    res,
+		Bag:       bag,
+		Views:     map[string]string{},
+		FrameData: map[string]string{},
 	}
+}
+
+// frameMIME maps an image extension onto the type a data URI has to declare.
+//
+// The set is closed rather than guessed at: a browser shown `data:;base64,...`
+// renders nothing at all, and a frame that silently fails to appear is exactly
+// the failure a storyboard cannot afford. Anything else is an error naming what
+// is supported.
+var frameMIME = map[string]string{
+	".svg":  "image/svg+xml",
+	".png":  "image/png",
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".gif":  "image/gif",
+	".webp": "image/webp",
+}
+
+// loadFrames inlines every storyboard image this unit declares.
+//
+// An unreadable image is reported against the `img` attribute and loading
+// continues, the same way a broken `view` path is: one run should surface every
+// missing frame rather than stopping at the first.
+func loadFrames(u *Unit, readFile ReadFileFunc) {
+	dir := filepath.Dir(u.Path)
+
+	for _, sb := range u.Result.Document.Storyboards {
+		for _, f := range sb.Frames {
+			if f.Img == "" {
+				continue // caption-only, which is allowed
+			}
+			if _, done := u.FrameData[f.Img]; done {
+				continue // two frames may legitimately show the same picture
+			}
+
+			mime, ok := frameMIME[strings.ToLower(filepath.Ext(f.Img))]
+			if !ok {
+				u.Bag.ErrorHintf(f.ImgAt, "supported image types: "+strings.Join(frameTypes(), ", "),
+					"frame %q has an image type this cannot inline: %q", f.Name, f.Img)
+				continue
+			}
+
+			data, err := readFile(filepath.Clean(filepath.Join(dir, f.Img)))
+			if err != nil {
+				u.Bag.ErrorHintf(f.ImgAt, hintFor(err),
+					"cannot read the image for frame %q from %s", f.Name, f.Img)
+				continue
+			}
+
+			// base64 cannot produce a `<`, so the payload is safe inside the
+			// <script> element the timeline is embedded in.
+			u.FrameData[f.Img] = "data:" + mime + ";base64," +
+				base64.StdEncoding.EncodeToString(data)
+		}
+	}
+}
+
+func frameTypes() []string {
+	out := make([]string, 0, len(frameMIME))
+	for ext := range frameMIME {
+		out = append(out, ext)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func hintFor(err error) string {

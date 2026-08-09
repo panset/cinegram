@@ -190,10 +190,11 @@
           "speed": 1,
           "loop": false,
           "autoplay": true,
+          "outcome": "fail",
           "steps": [
             {
-              "id": "outage-submit",
-              "name": "Shopper submits the same order",
+              "id": "submit",
+              "name": "Shopper submits the order",
               "start": 0,
               "end": 600,
               "tracks": [

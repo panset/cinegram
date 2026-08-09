@@ -36,7 +36,7 @@ const (
 // A document that declares views compiles here with those bindings unresolved —
 // use CompileBundle to follow them.
 func Compile(doc *ast.Document, table *symbol.Table, bag *diag.Bag) *ir.Timeline {
-	v := compileView(doc, table, "main", "", nil, bag)
+	v := compileView(doc, table, "main", "", nil, nil, bag)
 	return &ir.Timeline{Version: ir.Version, Root: v.ID, Views: []ir.View{v}}
 }
 
@@ -46,14 +46,16 @@ func CompileBundle(b *loader.Bundle) *ir.Timeline {
 	t := &ir.Timeline{Version: ir.Version, Root: b.Root}
 	for _, u := range b.Units {
 		t.Views = append(t.Views, compileView(
-			u.Result.Document, u.Result.Symbols, u.ViewID, u.Title, u.Views, u.Bag))
+			u.Result.Document, u.Result.Symbols, u.ViewID, u.Title, u.Views, u.FrameData, u.Bag))
 	}
 	return t
 }
 
 // compileView lowers one document. aliases maps the local `view` names the
 // document used onto canonical view ids; it is nil when compiling standalone.
-func compileView(doc *ast.Document, table *symbol.Table, id, title string, aliases map[string]string, bag *diag.Bag) ir.View {
+// frameData maps each storyboard image path onto the data URI the loader read
+// for it, and is likewise nil when there was no filesystem to read from.
+func compileView(doc *ast.Document, table *symbol.Table, id, title string, aliases, frameData map[string]string, bag *diag.Bag) ir.View {
 	v := ir.View{
 		ID:      id,
 		Title:   title,
@@ -90,12 +92,118 @@ func compileView(doc *ast.Document, table *symbol.Table, id, title string, alias
 		})
 	}
 
-	for i, sc := range doc.Scenarios {
+	for i, sc := range resolveVariants(doc.Scenarios) {
 		v.Scenarios = append(v.Scenarios, compileScenario(sc, i, table, bag))
 	}
 
+	v.Storyboard = compileStoryboard(doc.Storyboards, frameData)
 	v.Bindings, v.Hidden = compileBindings(doc.Interactions, table, aliases)
 	return v
+}
+
+// compileStoryboard flattens every storyboard block into the one panel the
+// runtime draws.
+//
+// Frames are carried whether or not a scene names them: the panel is per view,
+// the scenes are per scenario, and a frame used only by the second scenario
+// still has to be there when the reader switches to it. A frame whose image
+// failed to load compiles with an empty Image rather than being dropped —
+// compilation stays total, and the loader has already put the error in the bag.
+func compileStoryboard(storyboards []*ast.Storyboard, frameData map[string]string) *ir.Storyboard {
+	if len(storyboards) == 0 {
+		return nil
+	}
+	out := &ir.Storyboard{}
+	for _, sb := range storyboards {
+		// Several blocks merge into one panel, so the first title given names
+		// the whole thing rather than the last one silently winning.
+		if out.Title == "" {
+			out.Title = sb.Title
+		}
+		for _, f := range sb.Frames {
+			out.Frames = append(out.Frames, ir.Frame{
+				ID:      f.Name,
+				Caption: f.Caption,
+				Image:   frameData[f.Img],
+			})
+		}
+	}
+	return out
+}
+
+// resolveVariants expands scenario inheritance into ordinary scenarios.
+//
+// The splice happens at AST level, before any timing runs, which is the whole
+// reason this is cheap: a variant is literally the base's first N steps
+// followed by its own, so every timing rule — step spans, seq chaining, hop
+// occurrence counting, persistent-state windows — applies to it unchanged.
+// Those are all reset per scenario inside compileScenario, so the inherited
+// prefix replays from the start rather than continuing the base's counters.
+//
+// An unresolvable variant has already been reported by validation; here it
+// simply compiles as its own steps alone, because compilation stays total.
+func resolveVariants(scenarios []*ast.Scenario) []*ast.Scenario {
+	byName := make(map[string]*ast.Scenario, len(scenarios))
+	for _, sc := range scenarios {
+		if sc.Name != "" && byName[sc.Name] == nil {
+			byName[sc.Name] = sc
+		}
+	}
+
+	out := make([]*ast.Scenario, 0, len(scenarios))
+	for _, sc := range scenarios {
+		out = append(out, spliceVariant(sc, byName))
+	}
+	return out
+}
+
+func spliceVariant(sc *ast.Scenario, byName map[string]*ast.Scenario) *ast.Scenario {
+	want, ok := sc.Attrs.Get("variant")
+	if !ok {
+		return sc
+	}
+	base := byName[want.Raw]
+	// Depth-1: a base that is itself a variant was rejected during validation,
+	// and honouring it here would compile something the author was told is not
+	// allowed.
+	if base == nil || base == sc || base.Attrs.Has("variant") {
+		return sc
+	}
+
+	prefix := len(base.Steps)
+	if until, has := sc.Attrs.Get("until"); has {
+		i := -1
+		for j, st := range base.Steps {
+			if st.EffectiveID(j) == until.Raw {
+				i = j
+				break
+			}
+		}
+		if i < 0 {
+			return sc // reported during validation
+		}
+		prefix = i + 1 // inclusive: the named step is the last one inherited
+	}
+
+	// The inherited steps are shared rather than copied. Nothing downstream
+	// mutates an ast.Step, and copying would only invite the two scenarios to
+	// drift.
+	steps := make([]*ast.Step, 0, prefix+len(sc.Steps))
+	steps = append(steps, base.Steps[:prefix]...)
+	steps = append(steps, sc.Steps...)
+
+	// The variant keeps its own attributes minus the two that described the
+	// inheritance itself, which have now been consumed.
+	merged := ast.Attrs{}
+	for _, k := range sc.Attrs.Keys() {
+		if k == "variant" || k == "until" {
+			continue
+		}
+		v, _ := sc.Attrs.Get(k)
+		merged.Set(k, v)
+	}
+
+	return &ast.Scenario{Name: sc.Name, Attrs: merged, Steps: steps, StartPos: sc.StartPos}
 }
 
 // compileBindings lowers click bindings and derives the set of elements that
@@ -180,6 +288,7 @@ func compileScenario(sc *ast.Scenario, index int, table *symbol.Table, bag *diag
 		Speed:    attrFloat(sc.Attrs, "speed", 1.0, bag),
 		Loop:     attrBool(sc.Attrs, "loop", false, bag),
 		Autoplay: attrBool(sc.Attrs, "autoplay", true, bag),
+		Outcome:  sc.Attrs.String("outcome"),
 	}
 
 	p := newPersist()

@@ -27,6 +27,14 @@ import (
 
 var scenarioAttrs = map[string]string{
 	"speed": "float", "loop": "bool", "autoplay": "bool", "style": "string",
+
+	// A failure path is usually the happy path up to a point and then not.
+	// `variant` names the scenario to inherit from and `until` the last step to
+	// take from it, so the divergence is written once instead of the prefix
+	// being copied. `outcome` is how it ended, from the same closed vocabulary
+	// a flow's `status` uses — the picker marks a failure, so an invented word
+	// would silently mark nothing.
+	"variant": "string", "until": "string", "outcome": "status",
 }
 
 var stepAttrs = map[string]string{
@@ -36,6 +44,13 @@ var stepAttrs = map[string]string{
 
 var bindingAttrs = map[string]string{
 	"label": "string", "style": "string",
+}
+
+// frameAttrs are the two things a storyboard frame can be: a picture, a line of
+// text, or both. The path is left as written — resolving and reading it is
+// pkg/loader's job, so this table only says the key exists.
+var frameAttrs = map[string]string{
+	"img": "string", "caption": "string",
 }
 
 // timingAttrs are the keys every action understands: where it sits inside its
@@ -65,6 +80,7 @@ var actionAttrs = map[ast.ActionKind]map[string]string{
 	ast.ActionShow:  timingAttrs,
 	ast.ActionHide:  timingAttrs,
 	ast.ActionFocus: timingAttrs,
+	ast.ActionScene: timingAttrs,
 	ast.ActionWait:  timingAttrs,
 	ast.ActionSeq:   timingAttrs,
 

@@ -80,6 +80,7 @@ actions inside one step to chain instead.
 | `set` | `set n1 { badge: "leader" }` | Standing state. Outlives its step — see below. |
 | `gauge` | `gauge n1 { label: "term", value: 2 }` | A named reading that persists and updates. |
 | `unset` | `unset n1` | Retire everything `set` or `gauge` put on a node. |
+| `scene` | `scene idp_login` | Show a storyboard frame beside the diagram — see below. |
 | `wait` | `wait 500ms` | Consume time, draw nothing. |
 | `seq` | `seq { … }` | Run the contained actions in sequence. |
 
@@ -111,6 +112,9 @@ suggestion rather than a silent no-op.
 | `speed` | scenario | Initial playback rate, e.g. `1.5`. The player starts here; the speed button cycles from it. |
 | `loop` | scenario | Restart at the end. |
 | `autoplay` | scenario | Start playing once the diagram has rendered. Defaults to **true**, and is skipped when the system asks for reduced motion. |
+| `variant`, `until` | scenario | Inherit another scenario's opening steps — see [Failure paths](#failure-paths). |
+| `outcome` | scenario | `ok` or `fail`. A failure is marked `✕` in the scenario picker. |
+| `img`, `caption` | storyboard frame | The picture to show and the line under it. At least one is required. |
 
 `color` reaches the page as a `--dgm-color` custom property on the particle or
 the node, which `runtime.css` reads with the theme colour as its fallback — so a
@@ -335,6 +339,113 @@ clicking the element does. A reveal nobody can see is a reveal nobody finds.
 `examples/layered-arch.dgm` walks a request down four layers, focusing one at a
 time, with the cross-cutting concerns folded away behind a chip.
 
+## Storyboard
+
+A diagram says what the system does. It rarely says what the *person* sees, and
+in an authentication flow that is half the story: eighteen messages fly and the
+user looks at four screens. A `storyboard` block gives them a panel beside the
+stage, and a `scene` says which one is in front of them.
+
+```
+storyboard "What the person signing in sees" {
+  frame app_signin { img: "frames/app-signin.svg", caption: "One button, no password field." }
+  frame idp_form   { img: "frames/idp-login.svg",  caption: "The provider's domain." }
+  frame consent    { caption: "Caption-only frames are allowed." }
+}
+
+step redirect "The browser is handed to the IdP" {
+  flow E -> A { dur: 500ms, style: response }
+  scene idp_form
+}
+```
+
+Cinegram supplies the synchronisation, not the content. There is no browser
+bezel, no window chrome, no drawing tools — a frame is an image you wrote and a
+caption, which is what keeps the feature bounded: a screenshot of an email is as
+valid a frame as a login form.
+
+**A scene is sticky.** At any moment the panel shows the last scene to have
+started, not the scene belonging to the current step. That is what lets six
+steps of server-side verification sit under one motionless "Signing you in…"
+interstitial, which is exactly what those six steps look like from a chair. It
+is also a pure function of the time, so scrubbing backwards lands where playing
+forwards would.
+
+Frame names are flat across every `storyboard` block in a file — there is one
+panel, so qualifying a name would buy nothing — and blocks merge. Images are
+read by the loader and inlined as `data:` URIs, so the emitted page stays
+self-contained; `.svg`, `.png`, `.jpg`, `.gif` and `.webp` are understood, and
+paths resolve relative to the file that declares them. The panel appears only
+for scenarios that actually use a scene, so a document can storyboard its happy
+path and give the failure path the full width.
+
+`examples/oidc-login.dgm` is the worked example, with its frames in
+`examples/frames/`.
+
+## Failure paths
+
+The interesting scenario is usually the happy path right up to the moment it
+stops being one. Writing that prefix twice means maintaining it twice, so a
+scenario can inherit it:
+
+```
+scenario "happy path" { speed: 1.0 }
+  step submit "Shopper submits the order" { … }
+  step authorize "The primary gateway authorises the card" { … }
+  …
+
+scenario "gateway outage" { variant: "happy path", until: submit, outcome: fail }
+  step attempt "The primary gateway never answers" { … }
+```
+
+`until` is **inclusive**: the variant replays the base *through* that step and
+then diverges, because "X happened, and then things went wrong" is the sentence
+the pair is meant to read as. With no `until` the whole base is inherited and
+the variant's steps are appended.
+
+Inheritance is depth-1 — a variant of a variant is an error. A chain would make
+a step's addressable id a function of an arbitrarily long ancestry, and
+`click … -> step` has to stay something you can work out by looking. For the
+same reason, an id that would collide with an inherited one is rejected by name
+rather than silently shadowed.
+
+The splice happens before any timing runs, so every rule applies to the merged
+scenario unchanged: step spans, `seq` chaining, which of several parallel
+messages a hop takes, and the windows persistent state holds for. All of those
+reset per scenario, so an inherited prefix genuinely replays rather than
+continuing the base's bookkeeping.
+
+`outcome: fail` marks the scenario `✕` in the picker, using the same glyph a
+failing flow draws — a reader should be able to see that one of the alternatives
+ends badly before choosing it. Choosing a scenario also rewrites the address, so
+the link you copy names what you are looking at.
+
+`examples/payment-checkout.dgm` tells checkout twice: the path everyone draws,
+and the one that costs money.
+
+## Presenter mode
+
+Talking over a diagram is not watching a video. `?present` — or the **Present**
+button, which toggles in place without reloading — switches Space from "play"
+to "play exactly the next step, then stop":
+
+```sh
+cinegram preview examples/oidc-login.dgm --serve
+# then open http://127.0.0.1:8731/?present
+```
+
+Space or → plays one beat and pauses at its end; ← backs up to the start of a
+beat so Space replays it; a click on the stage advances, because presenting from
+a lectern means a clicker and a clicker sends a click. The step list, the
+scrubber and the authoring controls go away, the stage grows, and the step's
+`desc` becomes speaker text at a size that survives a projector. The storyboard
+panel stays — a demo is exactly when someone wants to point at what the user
+sees. Escape leaves.
+
+Nothing about the timeline changes: the stop is a moment in the same
+milliseconds the clock already runs in, so the speed button, deep links and
+`CINEGRAM_PLAYER.seek()` all keep working.
+
 ## Interaction
 
 One diagram can only say so much. A cluster-level view has to either omit what
@@ -417,6 +528,8 @@ illustration.
 cinegram compile <file.dgm> [-o out.json]   # animation timeline JSON
 cinegram mermaid <file.dgm> [-o out.mmd]    # the diagram as plain Mermaid
 cinegram preview <file.dgm> [-o out.html]   # self-contained animated page
+cinegram frame   <file.dgm> --at 1620ms -o still.png   # one exact moment
+cinegram record  <file.dgm> -o out.gif      # a GIF, mp4 or webm of one scenario
 cinegram narrate <file.dgm> [--format=md|json]   # the animation, written out
 cinegram lint    <file.dgm> [--format=text|json] # diagnostics only
 ```
@@ -450,16 +563,42 @@ a race against the animation. The browser is found on `PATH`
 (`google-chrome`, `chromium`, …) or named by `$CINEGRAM_CHROME`; shelling
 out to one the machine already has is what keeps the no-dependencies rule.
 
-`--frames N -o dir/` captures N evenly spaced moments. Turning those into an
-animation is a job for tools that already do it well:
+`--frames N -o dir/` captures N evenly spaced moments as a numbered sequence.
+
+### Recording
+
+`record` is `frame` in a loop, encoded:
 
 ```
-ffmpeg -framerate 12 -i dir/frame-%04d.png -vf palettegen palette.png
-ffmpeg -framerate 12 -i dir/frame-%04d.png -i palette.png -lavfi paletteuse out.gif
-
-# or, with ImageMagick
-magick -delay 8 -loop 0 dir/frame-*.png out.gif
+cinegram record examples/payment-checkout.dgm -o checkout.gif --fps 10
+cinegram record examples/oidc-login.dgm -o login.mp4 --scenario s0
 ```
+
+Because every frame is an independent deep link that lands paused, the
+recording is a sequence of deterministic stills rather than a capture of
+playback — the output does not depend on how fast the machine is. Frames are
+shot in parallel, four browsers at a time, and taken in `?embed` mode so the
+page furniture is not in the picture.
+
+**GIF needs nothing installed.** The encoder is in `pkg/gifenc`: median-cut
+quantization onto one 256-colour palette shared by every frame, and delays
+tiled so 12fps stays 12fps instead of drifting a centisecond a frame. One
+palette rather than one per frame is deliberate — per-frame palettes cost
+several times as much and make the result shimmer, because a colour quantized
+one way in frame 3 and another way in frame 4 flickers even where nothing moved.
+
+`--format mp4` and `--format webm` shell out to **ffmpeg**, which is found on
+`PATH` or named by `$CINEGRAM_FFMPEG`. It stays strictly out of the GIF path, so
+"export this diagram for a pull request" never turns into "install a package
+first".
+
+| Flag | Default | |
+| --- | --- | --- |
+| `-o` | *required* | Where the recording goes. |
+| `--format` | from the `-o` extension | `gif`, `mp4` or `webm`. |
+| `--fps` | `12` | |
+| `--width`, `--height` | `1280`, `720` | Rounded up to even, which yuv420p requires and a GIF does not mind. |
+| `--scenario`, `--view` | the first / the entry document | Which walkthrough to record. |
 
 ### What an agent sees
 
@@ -501,11 +640,12 @@ Press `?` in the page for this list.
 
 | Key | Does |
 | --- | --- |
-| `Space` | Play or pause |
+| `Space` | Play or pause — in presenter mode, play exactly the next step |
 | `←` / `→` | Previous or next step |
 | `Home` / `End` | Jump to the start or the end |
 | `1`–`9` | Jump to step *n* |
-| `Esc` | Back out of a drilled-in view, or close the help |
+| Click stage | In presenter mode, advance one step |
+| `Esc` | Leave presenter mode, back out of a drilled-in view, or close the help |
 | `?` | Show or hide the shortcut list |
 
 Scroll to zoom the stage — anchored on the cursor, so the thing you are

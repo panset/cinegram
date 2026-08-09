@@ -14,6 +14,7 @@ go_library(
         "scenario.go",
         "sequence.go",
         "shape.go",
+        "storyboard.go",
         "validate.go",
     ],
     importpath = "github.com/tejaspanse/cinegram/pkg/parser",

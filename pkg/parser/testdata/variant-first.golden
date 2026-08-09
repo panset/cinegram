@@ -1,0 +1,27 @@
+diagram: flowchart (flowchart LR)
+direction: LR
+
+nodes:
+  a          label="A"                      shape=rect      
+  b          label="B"                      shape=rect      
+
+edges:
+  e0   a -> b style=normal head=arrow
+
+interact:
+  click a          -> step opening
+  click b          -> step later
+
+scenario "the failure, told first" {variant="the whole story" until="opening" outcome="fail"}
+  step broke "and then it did not work"
+    flow a -> b {dur="400ms" status="fail"}
+
+scenario "the whole story"
+  step opening "how it starts either way"
+    flow a -> b {dur="400ms"}
+  step later "how it ends when nothing goes wrong"
+    flow a -> b {dur="400ms"}
+
+diagnostics:
+  15:19: warning: step "later" is only in scenario "the whole story", so this click does nothing until that scenario is chosen
+    hint: a step click acts on the scenario currently selected; give scenario the whole story a step of this name too, or bind to a step in the first scenario

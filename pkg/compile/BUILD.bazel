@@ -23,6 +23,7 @@ go_test(
     embed = [":compile"],
     deps = [
         "//pkg/ir",
+        "//pkg/loader",
         "//pkg/parser",
     ],
 )

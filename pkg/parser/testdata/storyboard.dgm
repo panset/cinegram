@@ -1,0 +1,44 @@
+%% The storyboard half of the language, exercised on its own: two blocks that
+%% merge into one flat namespace, a caption-only frame, and scenes placed on the
+%% steps where the screen in front of the reader actually changes.
+flowchart LR
+  user[Reader]
+  app[App]
+  idp[Identity Provider]
+
+  user --> app
+  app --> idp
+  idp --> user
+
+storyboard "What the reader sees" {
+  frame signin { img: "frames/signin.svg", caption: "The app's sign-in page" }
+  frame idp_form { img: "frames/idp-form.png", caption: "The provider's credential form" }
+}
+
+%% A second block merges into the same panel; there is one storyboard at
+%% runtime, so there is one namespace here.
+storyboard {
+  frame consent { caption: "A consent screen the mock does not draw" }
+}
+
+scenario "sign in"
+
+  step land "The reader opens the app" {
+    flow user -> app { dur: 500ms }
+    scene signin
+  }
+
+  step redirect "The app hands off to the provider" {
+    flow app -> idp { dur: 600ms }
+    scene idp_form
+  }
+
+  step consented "They approve the scopes" {
+    scene consent { dur: 400ms }
+  }
+
+  step back "And land back signed in" {
+    %% No scene here: the panel holds the last one, which is the point of
+    %% scenes being sticky rather than spanning only their own step.
+    flow idp -> user { dur: 500ms }
+  }

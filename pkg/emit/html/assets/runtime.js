@@ -345,6 +345,12 @@
     this.panX = 0;
     this.panY = 0;
 
+    // Presenter mode plays exactly one step at a time. stopAt is the moment the
+    // clock should stop at, in timeline milliseconds — the same domain as
+    // this.time, so the speed multiplier composes with it for free.
+    this.present = false;
+    this.stopAt = null;
+
     this.build();
   }
 
@@ -414,17 +420,27 @@
     });
     controls.appendChild(this.picker);
 
-    this.playBtn = button('Play', 'dgm-btn dgm-btn-primary', function () { self.toggle(); });
+    // `dgm-authoring` marks the controls that belong to building a diagram
+    // rather than showing one; presenter mode hides exactly that set.
+    this.playBtn = button('Play', 'dgm-btn dgm-btn-primary dgm-authoring', function () { self.toggle(); });
     controls.appendChild(this.playBtn);
-    controls.appendChild(button('Restart', 'dgm-btn', function () { self.seek(0); }));
+    controls.appendChild(button('Restart', 'dgm-btn dgm-authoring', function () { self.seek(0); }));
 
-    this.speedBtn = button(speedLabel(this.speed), 'dgm-btn', function () { self.cycleSpeed(); });
+    this.speedBtn = button(speedLabel(this.speed), 'dgm-btn dgm-authoring', function () { self.cycleSpeed(); });
     controls.appendChild(this.speedBtn);
 
     // "Look at *this* step" is most of why anyone sends a diagram to a
     // colleague, and reproducing a moment by describing it never works.
-    this.shareBtn = button('Copy link', 'dgm-btn', function () { self.copyLink(); });
+    this.shareBtn = button('Copy link', 'dgm-btn dgm-authoring', function () { self.copyLink(); });
     controls.appendChild(this.shareBtn);
+
+    // Presenter mode is a toggle rather than a link, so leaving it does not
+    // reload and lose the moment the presenter had reached. It doubles as the
+    // way out: in presenter mode almost everything else in the bar is hidden.
+    this.presentBtn = button('Present', 'dgm-btn', function () {
+      self.setPresenter(!self.present);
+    });
+    controls.appendChild(this.presentBtn);
 
     this.zoomBtn = button('⌂', 'dgm-btn dgm-btn-icon', function () { self.resetZoom(); });
     this.zoomBtn.title = 'Reset zoom and pan';
@@ -461,6 +477,12 @@
     this.stage.appendChild(this.overlay);
     body.appendChild(this.stage);
     this.bindStageGestures();
+
+    // The storyboard sits between the stage and the step list: what the human
+    // sees, beside what the system does. It is built once and hidden when the
+    // showing scenario has no scenes, rather than being created per render —
+    // the crossfade needs two layers that outlive a frame.
+    body.appendChild(this.buildBoard());
 
     this.steps = el('ol', 'dgm-steps');
     body.appendChild(this.steps);
@@ -528,6 +550,7 @@
     // controls: an iframe in a doc page wants the stage, the narration and the
     // scrubber, and has its own heading and navigation already.
     if (isEmbedded()) this.root.classList.add('dgm-embed');
+    this.setPresenter(isPresenter());
 
     this.viewIndex = Math.max(0, this.viewIndexOf(this.hashView()));
     this.buildPicker();
@@ -558,11 +581,12 @@
   // SHORTCUTS is both the key handler's documentation and the help overlay's
   // content, so the two cannot drift apart.
   var SHORTCUTS = [
-    ['Space', 'Play or pause'],
+    ['Space', 'Play or pause — in presenter mode, play exactly the next step'],
     ['← / →', 'Previous or next step'],
     ['Home / End', 'Jump to the start or the end'],
     ['1 – 9', 'Jump to step n'],
-    ['Esc', 'Back out of a drilled-in view'],
+    ['Esc', 'Leave presenter mode, or back out of a drilled-in view'],
+    ['Click stage', 'In presenter mode, advance one step'],
     ['?', 'Show or hide this list'],
     ['Scroll', 'Zoom the diagram; drag to pan, ⌂ to reset']
   ];
@@ -577,9 +601,26 @@
     if (ev.key === '?') { ev.preventDefault(); this.toggleHelp(); return; }
     if (ev.key === 'Escape') {
       if (this.helpOpen()) { ev.preventDefault(); this.toggleHelp(); return; }
+      // Escape means "get me out of the mode I am in", innermost first.
+      if (this.present) { ev.preventDefault(); this.setPresenter(false); return; }
       if (this.stack.length) { ev.preventDefault(); this.back(); }
       return;
     }
+
+    // In presenter mode the transport is one step at a time: Space plays the
+    // next beat and stops at its end, rather than starting a run the presenter
+    // then has to catch.
+    if (this.present && (ev.key === ' ' || ev.key === 'ArrowRight')) {
+      ev.preventDefault();
+      this.advanceStep();
+      return;
+    }
+    if (this.present && ev.key === 'ArrowLeft') {
+      ev.preventDefault();
+      this.prevStep();
+      return;
+    }
+
     if (ev.key === ' ') { ev.preventDefault(); this.toggle(); return; }
     if (ev.key === 'ArrowRight') { ev.preventDefault(); this.nextStep(1); return; }
     if (ev.key === 'ArrowLeft') { ev.preventDefault(); this.nextStep(-1); return; }
@@ -639,6 +680,149 @@
     this.help.style.display = this.helpOpen() ? 'none' : '';
   };
 
+  // ---------------------------------------------------------------------
+  // Storyboard
+  //
+  // The side-stage: the screens a person would be looking at while the diagram
+  // animates. Cinegram supplies the synchronisation; the pictures are the
+  // author's, which is what keeps the feature bounded — an email screenshot is
+  // as valid a frame as a login form.
+  //
+  // A scene is *sticky*: at time t the panel shows the latest scene track whose
+  // start is at or before t, across the whole scenario rather than the current
+  // step. That is a pure function of t, so scrubbing backwards lands exactly
+  // where playing forwards would, and the panel does not blank between scenes —
+  // what someone is looking at does not vanish because a step ended.
+  //
+  // The panel is overlay-style HTML, not part of the SVG, so baseClass and
+  // STICKY have no bearing on it. Its state is keyed off the diffed frame id.
+  // ---------------------------------------------------------------------
+
+  Player.prototype.buildBoard = function () {
+    this.board = el('div', 'dgm-board');
+    this.board.style.display = 'none';
+
+    this.boardTitle = el('div', 'dgm-board-title');
+    this.board.appendChild(this.boardTitle);
+
+    var stack = el('div', 'dgm-board-stack');
+    // Two layers, absolutely stacked, taking it in turns to be the front one.
+    // A single element swapping its src would flash the page background at
+    // every scene change.
+    this.boardLayers = [el('div', 'dgm-board-layer'), el('div', 'dgm-board-layer')];
+    for (var i = 0; i < this.boardLayers.length; i++) {
+      var img = document.createElement('img');
+      img.className = 'dgm-board-img';
+      img.alt = '';
+      this.boardLayers[i].appendChild(img);
+      stack.appendChild(this.boardLayers[i]);
+    }
+    this.boardFront = 0;
+    this.boardLayers[0].classList.add('is-front');
+    this.board.appendChild(stack);
+
+    this.boardCaption = el('div', 'dgm-board-caption');
+    this.board.appendChild(this.boardCaption);
+
+    this.boardOn = false;
+    this.boardKey = null;
+    this.frames = {};
+    return this.board;
+  };
+
+  // syncBoard decides whether the panel belongs on the page at all.
+  //
+  // Scene usage is per scenario, not per view: a document may storyboard its
+  // happy path and say nothing about its failure path, and the failure path
+  // should get the full width rather than an empty panel. So this re-runs on
+  // every scenario change as well as every render.
+  Player.prototype.syncBoard = function () {
+    var sb = this.view().storyboard;
+    var frames = (sb && sb.frames) || [];
+
+    this.frames = {};
+    for (var i = 0; i < frames.length; i++) {
+      this.frames[frames[i].id] = frames[i];
+    }
+
+    this.boardOn = frames.length > 0 && hasScenes(this.scenario());
+    this.root.classList.toggle('dgm-has-board', this.boardOn);
+    this.board.style.display = this.boardOn ? '' : 'none';
+
+    var title = (sb && sb.title) || '';
+    this.boardTitle.textContent = title;
+    this.boardTitle.style.display = title ? '' : 'none';
+
+    // Force the next applyBoard to redraw: the same frame id can mean a
+    // different picture once the view has changed.
+    this.boardKey = null;
+    this.applyBoard(this.activeScene(this.time, this.scenario()));
+  };
+
+  function hasScenes(sc) {
+    var steps = sc.steps || [];
+    for (var s = 0; s < steps.length; s++) {
+      var tracks = steps[s].tracks || [];
+      for (var k = 0; k < tracks.length; k++) {
+        if (tracks[k].kind === 'scene') return true;
+      }
+    }
+    return false;
+  }
+
+  // activeScene is the frame showing at time t: the last one to have started.
+  //
+  // It scans every step rather than the ones whose window contains t, which is
+  // exactly what makes a scene outlast its step — the panel holds the last
+  // screen until something replaces it.
+  Player.prototype.activeScene = function (t, sc) {
+    var best = null;
+    var steps = sc.steps || [];
+    for (var s = 0; s < steps.length; s++) {
+      var tracks = steps[s].tracks || [];
+      for (var k = 0; k < tracks.length; k++) {
+        var tr = tracks[k];
+        if (tr.kind !== 'scene' || tr.start > t) continue;
+        if (!best || tr.start >= best.start) best = tr;
+      }
+    }
+    return best;
+  };
+
+  // applyBoard swaps the panel to a frame, crossfading.
+  //
+  // It diffs on the frame id first and touches nothing when the answer has not
+  // changed. That is the same discipline syncCaption follows and for a stronger
+  // reason: rewriting an <img> src sixty times a second would restart the
+  // opacity transition on every frame and the crossfade would never finish.
+  Player.prototype.applyBoard = function (tr) {
+    if (!this.boardOn) return;
+
+    var frame = tr ? this.frames[tr.target] : null;
+    var key = frame ? frame.id : '';
+    if (key === this.boardKey) return;
+    this.boardKey = key;
+
+    var back = this.boardLayers[this.boardFront ^ 1];
+    var img = back.querySelector('.dgm-board-img');
+    if (frame && frame.image) {
+      img.src = frame.image;
+      img.style.display = '';
+    } else {
+      img.removeAttribute('src');
+      img.style.display = 'none';
+    }
+
+    back.classList.add('is-front');
+    this.boardLayers[this.boardFront].classList.remove('is-front');
+    this.boardFront ^= 1;
+
+    this.boardCaption.textContent = (frame && frame.caption) || '';
+    // A caption-only frame is text, not a picture with a label under it, so it
+    // gets the room the image box would have taken.
+    this.board.classList.toggle('is-wordy', !!(frame && !frame.image));
+  };
+
   // --- pan and zoom -----------------------------------------------------
   //
   // The transform goes on the SVG holder rather than the SVG's viewBox, which
@@ -694,6 +878,13 @@
       // also drill into it.
       if (moved) { ev.stopPropagation(); ev.preventDefault(); moved = false; }
     }, true);
+
+    // Presenting from a lectern means a clicker, and a clicker sends a click.
+    // A click on a bound element stops propagating before it gets here, so
+    // drilling into a view still wins over advancing.
+    this.stage.addEventListener('click', function () {
+      if (self.present) self.advanceStep();
+    });
   };
 
   Player.prototype.zoomAt = function (clientX, clientY, factor) {
@@ -736,6 +927,13 @@
   // hash being rewritten by navigation.
   function isEmbedded() {
     return /(^|[?&])embed(=|&|$)/.test(location.search);
+  }
+
+  // isPresenter is the same trick for `?present`: a flag that says how the page
+  // should behave, kept out of the hash so navigating between views cannot
+  // silently drop it.
+  function isPresenter() {
+    return /(^|[?&])present(=|&|$)/.test(location.search);
   }
 
   // copyLink puts the deep link on the clipboard and says so on the button
@@ -869,18 +1067,48 @@
   // shareLink is the address of exactly what is on screen: this view, this
   // scenario, this moment.
   Player.prototype.shareLink = function () {
-    var parts = [
+    return pageBase() + '#' + this.hashParts().concat(['t=' + Math.round(this.time)]).join('&');
+  };
+
+  // hashParts is what the address should say about the page, moment aside.
+  Player.prototype.hashParts = function () {
+    return [
       'v=' + encodeURIComponent(this.view().id),
-      's=' + encodeURIComponent(this.scenario().id || ''),
-      't=' + Math.round(this.time)
+      's=' + encodeURIComponent(this.scenario().id || '')
     ];
-    // Built from href rather than origin + pathname: a page opened off the
-    // filesystem (or in a sandboxed iframe) has the literal origin "null",
-    // which would produce a link starting with the word null.
+  };
+
+  // pageBase is the address without its fragment.
+  //
+  // Built from href rather than origin + pathname: a page opened off the
+  // filesystem (or in a sandboxed iframe) has the literal origin "null", which
+  // would produce a link starting with the word null.
+  function pageBase() {
     var base = location.href;
     var cut = base.indexOf('#');
-    if (cut >= 0) base = base.slice(0, cut);
-    return base + '#' + parts.join('&');
+    return cut >= 0 ? base.slice(0, cut) : base;
+  }
+
+  // syncHash rewrites the address to name the scenario now showing.
+  //
+  // It *replaces* rather than pushes, unlike navigate(): drilling into another
+  // view is navigation and Back should undo it, where choosing a scenario is
+  // changing a setting on the page you are already on. Replacing also fires no
+  // hashchange, so this cannot re-enter applyHash and re-select what the reader
+  // just picked.
+  //
+  // No `t`: the moment is what Copy link is for, and a hash that froze the time
+  // at the instant of the pick would send anyone reloading to a stopped clock.
+  Player.prototype.syncHash = function () {
+    var want = '#' + this.hashParts().join('&');
+    if (want === location.hash) return;
+    try {
+      history.replaceState(null, '', pageBase() + want);
+    } catch (e) {
+      // Some sandboxed iframes forbid replaceState. A pushed hash is still
+      // better than an address that has stopped describing the page.
+      location.hash = want;
+    }
   };
 
   // buildPicker fills the scenario selector for the current view, hiding it
@@ -892,7 +1120,9 @@
     scenarios.forEach(function (s, i) {
       var o = document.createElement('option');
       o.value = String(i);
-      o.textContent = s.name || 'scenario ' + (i + 1);
+      // A failure path is worth spotting before you pick it. The glyph is the
+      // one the fail mark already uses, so the two read as the same idea.
+      o.textContent = (s.name || 'scenario ' + (i + 1)) + (s.outcome === 'fail' ? ' ✕' : '');
       self.picker.appendChild(o);
     });
     this.picker.value = String(this.scenarioIndex);
@@ -902,10 +1132,13 @@
   Player.prototype.selectScenario = function (i) {
     this.scenarioIndex = i;
     this.time = 0;
+    this.stopAt = null;
     this.adoptScenarioSpeed();
     this.buildSteps();
+    this.syncBoard();
     this.apply(0);
     this.syncChrome();
+    this.syncHash();
   };
 
   // setView switches the stage to another diagram. Call navigate() rather than
@@ -918,6 +1151,7 @@
     this.viewIndex = next;
     this.scenarioIndex = 0;
     this.time = 0;
+    this.stopAt = null;
     this.revealed = {};
     this.svg = null;
     this.pendingAutoplay = true;
@@ -988,6 +1222,7 @@
         }
         self.index();
         self.buildSteps();
+        self.syncBoard();
         self.apply(self.time);
         self.syncChrome();
 
@@ -1345,8 +1580,70 @@
     // time past the end would leave the clock and the scrubber disagreeing.
     var max = this.scenario().duration || 0;
     this.time = Math.min(max, Math.max(0, ms));
+    // A pending presenter stop belonged to the step that was playing; jumping
+    // somewhere else abandons it rather than stopping the new run early.
+    this.stopAt = null;
     this.apply(this.time);
     this.syncChrome();
+  };
+
+  // --- presenter mode ---------------------------------------------------
+  //
+  // A demo is not a video. Talking over a diagram means playing one beat,
+  // stopping, saying what happened, and then playing the next — so in presenter
+  // mode Space plays exactly the next step and pauses at its end.
+  //
+  // The whole mechanism is `stopAt`: a moment in timeline milliseconds that
+  // loopFrame checks. Because it lives in the same domain as the clock, the
+  // speed multiplier, `seek`, deep links and the scrubber all keep working
+  // without knowing presenter mode exists.
+
+  Player.prototype.setPresenter = function (on) {
+    this.present = !!on;
+    this.root.classList.toggle('dgm-present', this.present);
+    this.presentBtn.textContent = this.present ? 'Exit' : 'Present';
+    this.presentBtn.classList.toggle('is-on', this.present);
+    this.presentBtn.title = this.present
+      ? 'Leave presenter mode'
+      : 'Step through one beat at a time';
+
+    // Either direction stops the clock. Entering, so the first Space plays the
+    // first step rather than being spent halting a run already under way;
+    // leaving, so a step that was mid-flight does not carry on to the end of
+    // the scenario the moment its stop is dropped.
+    this.stopAt = null;
+    this.pause();
+  };
+
+  // advanceStep plays the next beat and stops at its end.
+  //
+  // "Next" is the first step that has not finished: from the start of a step
+  // that means the step itself, from its end the one after, and from the middle
+  // it means replaying the one you are inside — which is what someone reaching
+  // for Space in the middle of a sentence actually wants.
+  Player.prototype.advanceStep = function () {
+    var steps = this.scenario().steps;
+    for (var i = 0; i < steps.length; i++) {
+      if (steps[i].end <= this.time + 1) continue;
+      this.pause();
+      this.seek(steps[i].start); // clears stopAt, so it is set after
+      this.stopAt = steps[i].end;
+      this.play();
+      return;
+    }
+    // Past the last step there is nothing to advance into.
+  };
+
+  // prevStep goes back to the start of a beat and waits there, so Space then
+  // replays it. Backing up and playing again is one mechanism, not two.
+  Player.prototype.prevStep = function () {
+    var steps = this.scenario().steps;
+    var target = 0;
+    for (var i = 0; i < steps.length; i++) {
+      if (steps[i].start < this.time - 1) target = steps[i].start;
+    }
+    this.pause();
+    this.seek(target);
   };
 
   Player.prototype.nextStep = function (dir) {
@@ -1406,7 +1703,10 @@
   Player.prototype.maybeAutoplay = function () {
     var sc = this.scenario();
     if (this.playing || !sc.autoplay || !sc.duration) return;
-    if (prefersReducedMotion()) return;
+    // Presenting means the room waits for the presenter, so the page must not
+    // start without one — the same reasoning as reduced motion, arrived at from
+    // the other direction.
+    if (this.present || prefersReducedMotion()) return;
     this.play();
   };
 
@@ -1431,6 +1731,18 @@
         self.time += (ts - self.lastFrame) * self.speed;
       }
       self.lastFrame = ts;
+
+      // The presenter stop is checked before the end-of-scenario one, so the
+      // last step of a looping scenario stops where it was told to instead of
+      // wrapping round underneath the presenter.
+      if (self.stopAt !== null && self.time >= self.stopAt) {
+        self.time = self.stopAt;
+        self.stopAt = null;
+        self.apply(self.time);
+        self.syncChrome();
+        self.pause();
+        return;
+      }
 
       if (self.time >= sc.duration) {
         if (sc.loop) {
@@ -1514,6 +1826,10 @@
 
       for (var k = 0; k < step.tracks.length; k++) {
         var tr = step.tracks[k];
+        // A scene is sticky and so is read outside this scan entirely: it has
+        // to survive past its own step, and it paints a panel rather than a
+        // diagram element, so it must not fall through to the node states.
+        if (tr.kind === 'scene') continue;
         if (t < tr.start || t > tr.end) continue;
         var span = Math.max(1, tr.end - tr.start);
         var p = (t - tr.start) / span;
@@ -1588,6 +1904,7 @@
     this.applyFlows(wantFlow);
     this.applyNotes(wantNote);
     this.applyPills(standing.pills);
+    this.applyBoard(this.activeScene(t, sc));
   };
 
   // applyFocus marks everything outside the focus set. The track names only

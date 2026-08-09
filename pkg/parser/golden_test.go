@@ -124,6 +124,13 @@ func renderParse(res *Result, bag *diag.Bag) string {
 		}
 	}
 
+	for _, sb := range res.Document.Storyboards {
+		fmt.Fprintf(&b, "\nstoryboard %q\n", sb.Title)
+		for _, f := range sb.Frames {
+			fmt.Fprintf(&b, "  frame %-12s img=%-28q caption=%q\n", f.Name, f.Img, f.Caption)
+		}
+	}
+
 	if bindings := res.Document.Interactions; len(bindings) > 0 {
 		b.WriteString("\ninteract:\n")
 		for _, bd := range bindings {

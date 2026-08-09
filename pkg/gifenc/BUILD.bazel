@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "gifenc",
+    srcs = ["gifenc.go"],
+    importpath = "github.com/tejaspanse/cinegram/pkg/gifenc",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "gifenc_test",
+    srcs = ["gifenc_test.go"],
+    embed = [":gifenc"],
+)

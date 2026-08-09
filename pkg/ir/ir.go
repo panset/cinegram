@@ -17,6 +17,11 @@ package ir
 //
 // Version 2 introduced Views: a timeline holds a set of diagrams that clicks
 // navigate between, where version 1 held exactly one.
+//
+// Later additions — the storyboard panel, scenario outcomes — are omitempty and
+// purely additive, and the runtime that reads this JSON is emitted into the
+// same page as the JSON itself, so an older renderer never meets a newer
+// timeline. Nothing since has needed a version bump.
 const Version = 2
 
 // Timeline is the complete compiled output for a source file and every
@@ -37,6 +42,11 @@ type View struct {
 	Edges     []Edge     `json:"edges"`
 	Scenarios []Scenario `json:"scenarios"`
 	Bindings  []Binding  `json:"bindings,omitempty"`
+
+	// Storyboard is what the human sees while this diagram animates. Every
+	// declared frame is carried, referenced or not, so a `scene` in any
+	// scenario of this view resolves against one list.
+	Storyboard *Storyboard `json:"storyboard,omitempty"`
 
 	// Hidden lists elements that start concealed because a reveal binding
 	// points at them. It is derived during compilation, not authored: being
@@ -60,6 +70,25 @@ type Binding struct {
 
 	Label string `json:"label,omitempty"`
 	Style string `json:"style,omitempty"`
+}
+
+// Storyboard is the side-stage panel: the screens a person would be looking at
+// while the diagram animates.
+type Storyboard struct {
+	Title  string  `json:"title,omitempty"`
+	Frames []Frame `json:"frames"`
+}
+
+// Frame is one thing the storyboard panel can show.
+//
+// Image is a self-contained `data:` URI rather than a path, because the page
+// has to work from the filesystem and under a webview CSP — the loader reads
+// the file and inlines it, and this stays as free of the filesystem as the rest
+// of the timeline. It is empty for a caption-only frame.
+type Frame struct {
+	ID      string `json:"id"`
+	Caption string `json:"caption,omitempty"`
+	Image   string `json:"image,omitempty"`
 }
 
 // Diagram carries the static structure, including the Mermaid source a
@@ -106,7 +135,14 @@ type Scenario struct {
 	Speed    float64 `json:"speed"`
 	Loop     bool    `json:"loop"`
 	Autoplay bool    `json:"autoplay"`
-	Steps    []Step  `json:"steps"`
+
+	// Outcome is how this walkthrough ended: empty when unstated, "ok", or
+	// "fail". It uses the same closed vocabulary as a flow's Status, and for
+	// the same reason — a renderer marks a failure in the scenario picker
+	// rather than merely recolouring its name.
+	Outcome string `json:"outcome,omitempty"`
+
+	Steps []Step `json:"steps"`
 
 	// Persistent holds state that outlives the step that set it: a badge, a
 	// gauge reading, a standing state class.
@@ -154,6 +190,12 @@ const (
 	// means its contents — is the renderer's job, because it is the side that
 	// knows the containment tree it already has in View.Groups.
 	TrackFocus TrackKind = "focus"
+
+	// TrackScene names a storyboard frame in Target rather than a diagram
+	// element. The renderer shows the latest scene track whose Start is at or
+	// before t — stickily, because what a person is looking at does not vanish
+	// when a step ends — which keeps a seek identical to having played there.
+	TrackScene TrackKind = "scene"
 
 	// Persistent kinds, found in Scenario.Persistent rather than Step.Tracks.
 	//
