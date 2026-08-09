@@ -163,13 +163,17 @@
     });
 
     var map = {};
+    var claimed = {};
     for (var i = 0; i < columns.length; i++) {
       var col = columns[i];
       var id = byLabel[col.label];
-      // Order is the fallback when a label was not matched — two actors may
-      // legitimately share a display name.
-      if (!id && view.nodes[i]) id = view.nodes[i].id;
-      if (!id) continue;
+      // Order is the fallback when a label was not matched, or when the label
+      // points at an id another column already took — `participant A as B`
+      // followed by `participant B` puts the display text "B" on two columns,
+      // and without the claim check the second would steal the first's id.
+      if ((!id || claimed[id]) && view.nodes[i]) id = view.nodes[i].id;
+      if (!id || claimed[id]) continue;
+      claimed[id] = true;
 
       map[id] = wrapActor(svg, col);
       // Notes and pills anchor to the top box rather than the wrapper, whose
@@ -764,7 +768,14 @@
     var ok = false;
     try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
     if (ok) box.remove();
-    else setTimeout(function () { box.remove(); }, 8000);
+    else {
+      // The box stays selected so the reader can copy by hand — but only
+      // while they are actually using it. Leaving, or Escape, dismisses it
+      // rather than holding keyboard focus for a fixed eight seconds.
+      box.addEventListener('blur', function () { box.remove(); });
+      box.addEventListener('keyup', function (ev) { if (ev.key === 'Escape') box.remove(); });
+      setTimeout(function () { box.remove(); }, 8000);
+    }
     done(ok);
   };
 
@@ -863,7 +874,13 @@
       's=' + encodeURIComponent(this.scenario().id || ''),
       't=' + Math.round(this.time)
     ];
-    return location.origin + location.pathname + location.search + '#' + parts.join('&');
+    // Built from href rather than origin + pathname: a page opened off the
+    // filesystem (or in a sandboxed iframe) has the literal origin "null",
+    // which would produce a link starting with the word null.
+    var base = location.href;
+    var cut = base.indexOf('#');
+    if (cut >= 0) base = base.slice(0, cut);
+    return base + '#' + parts.join('&');
   };
 
   // buildPicker fills the scenario selector for the current view, hiding it
@@ -1324,7 +1341,10 @@
   };
 
   Player.prototype.seek = function (ms) {
-    this.time = Math.max(0, ms);
+    // Clamped at both ends: a shared link can carry any `t=` at all, and a
+    // time past the end would leave the clock and the scrubber disagreeing.
+    var max = this.scenario().duration || 0;
+    this.time = Math.min(max, Math.max(0, ms));
     this.apply(this.time);
     this.syncChrome();
   };
@@ -1346,18 +1366,18 @@
   // when the selected scenario changes — not on every render — so a theme
   // toggle does not throw away a rate the viewer chose with the button.
   Player.prototype.adoptScenarioSpeed = function () {
-    // A rate the reader chose outranks the author's default — they set it while
-    // watching this kind of content and meant it to stick, the same way a video
-    // player remembers playback speed. Only the button writes this key, so an
-    // untouched player still starts wherever the scenario said.
-    var saved = parseFloat(prefGet('dgm.speed'));
-    if (!isNaN(saved) && saved > 0) {
-      this.speed = saved;
-      this.syncSpeed();
-      return;
-    }
+    // An authored rate outranks the remembered one: the saved key is written
+    // by the speed button on ANY diagram on this origin, and letting it shadow
+    // a scenario that explicitly declares `speed:` would mean one 0.25x click
+    // on some other diagram permanently overrides every author's pacing. A
+    // scenario speed of 1 is indistinguishable from "not declared", so the
+    // remembered rate fills exactly that gap.
     var s = this.scenario().speed;
-    this.speed = (typeof s === 'number' && s > 0) ? s : 1;
+    var declared = (typeof s === 'number' && s > 0 && s !== 1) ? s : 0;
+    var saved = parseFloat(prefGet('dgm.speed'));
+    if (declared) this.speed = declared;
+    else if (!isNaN(saved) && saved > 0) this.speed = saved;
+    else this.speed = 1;
     this.syncSpeed();
   };
 
@@ -1456,7 +1476,7 @@
   // it sixty times a second would have a screen reader announce the same
   // sentence continuously for the length of the step.
   Player.prototype.syncCaption = function (step) {
-    var key = step ? step.id + ' ' + (step.name || '') + ' ' + (step.desc || '') : '';
+    var key = step ? step.id + '\x00' + (step.name || '') + '\x00' + (step.desc || '') : '';
     if (key === this.captionKey) return;
     this.captionKey = key;
 
@@ -1528,6 +1548,19 @@
       if (was && was.cls.indexOf('hidden') === 0) continue;
       wantNode[id] = was ? nodeState(was.cls + ' waypoint', was.color)
                          : nodeState('waypoint', '');
+    }
+
+    // An edge into a hidden node conceals itself, exactly as reveal's
+    // applyHidden does for collapsed elements — an arrow pointing at nothing
+    // reads as a rendering bug. An open flow keeps its edge: the flow decides
+    // what its own path looks like.
+    var ve = this.view().edges;
+    for (var e = 0; e < ve.length; e++) {
+      var ed = ve[e];
+      if (wantEdge[ed.id]) continue;
+      var fromHidden = wantNode[ed.from] && wantNode[ed.from].cls.indexOf('hidden') === 0;
+      var toHidden = wantNode[ed.to] && wantNode[ed.to].cls.indexOf('hidden') === 0;
+      if (fromHidden || toHidden) wantEdge[ed.id] = nodeState('hidden', '');
     }
 
     // Persistent state is scenario-scoped, so it is read from its own list
@@ -1636,25 +1669,39 @@
     var states = {};  // target -> {name, color}
     var list = sc.persistent || [];
 
+    // One winner per slot. The compiler writes one badge per node and one
+    // reading per (node, label), but a rewrite at exactly the scenario's end
+    // produces an old window closing at the duration and a zero-width new one
+    // opening there, and the end-inclusive exception below admits both on the
+    // final frame. Tracks arrive in write order, so the later entry is the
+    // rewrite and wins its slot.
+    var slots = {};
     for (var i = 0; i < list.length; i++) {
       var tr = list[i];
       if (t < tr.start) continue;
       if (t >= tr.end && !(tr.end >= sc.duration && t >= sc.duration)) continue;
+      var slot = tr.kind === 'gauge'
+        ? 'gauge|' + tr.target + '|' + (tr.label || '')
+        : tr.kind + '|' + tr.target;
+      slots[slot] = { i: i, tr: tr };
+    }
 
-      if (tr.kind === 'set' && tr.value) {
-        states[tr.target] = { name: tr.value, color: tr.color || '' };
+    for (var slot2 in slots) {
+      var tr2 = slots[slot2].tr;
+      if (tr2.kind === 'set' && tr2.value) {
+        states[tr2.target] = { name: tr2.value, color: tr2.color || '' };
       }
-      var text = tr.kind === 'gauge' ? tr.value : tr.label;
+      var text = tr2.kind === 'gauge' ? tr2.value : tr2.label;
       if (!text) continue;
 
-      if (!pills[tr.target]) pills[tr.target] = [];
-      pills[tr.target].push({
-        key: sc.id + ':' + i,
-        kind: tr.kind,
-        label: tr.kind === 'gauge' ? tr.label : '',
+      if (!pills[tr2.target]) pills[tr2.target] = [];
+      pills[tr2.target].push({
+        key: sc.id + ':' + slots[slot2].i,
+        kind: tr2.kind,
+        label: tr2.kind === 'gauge' ? tr2.label : '',
         value: text,
-        color: tr.color || '',
-        style: tr.style || ''
+        color: tr2.color || '',
+        style: tr2.style || ''
       });
     }
     return { pills: pills, states: states };
@@ -2142,7 +2189,7 @@
   // whole class attribute on every frame that changes its state; without this
   // exemption a node would silently lose its click affordance, and a revealed
   // element would flicker back to hidden, the moment the clock touched it.
-  var STICKY = { 'dgm-clickable': true, 'dgm-collapsed': true };
+  var STICKY = { 'dgm-clickable': true, 'dgm-collapsed': true, 'dgm-actor': true };
 
   // baseClass strips the dgm-* state classes we previously added, so state
   // changes never accumulate on an element.

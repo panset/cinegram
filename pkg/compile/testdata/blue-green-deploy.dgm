@@ -1,0 +1,68 @@
+%% A blue/green deployment: how traffic moves to a new version with no gap.
+%% ---
+%% This example exists for `show`, `hide`, `wait` and `seq`. Unlike a reveal
+%% (which a click owns), show and hide are timeline state — scrub back to the
+%% first step and the green pods are gone again, because the clock owns them.
+flowchart LR
+  users[Users]
+  lb[(Load Balancer)]
+  cd[Deploy Controller]
+
+  subgraph blue[Blue — v1.4]
+    b1[Pod b1]
+    b2[Pod b2]
+  end
+
+  subgraph green[Green — v1.5]
+    g1[Pod g1]
+    g2[Pod g2]
+  end
+
+  users --> lb
+  lb --> b1
+  lb --> b2
+  lb --> g1
+  lb --> g2
+  cd --> g1
+  cd --> g2
+
+scenario "cut over to v1.5" { speed: 1.0 }
+
+  step steady "Blue serves everything" {
+    desc: "Both blue pods take the live traffic. Green does not exist yet:\nthe hide holds for this step, and its edges conceal themselves with it."
+    hide green, g1, g2
+    flow users -> lb { dur: 500ms }
+    flow lb -> b1 { label: "50%", dur: 600ms, delay: 400ms }
+    flow lb -> b2 { label: "50%", dur: 600ms, delay: 400ms }
+  }
+
+  step launch "The controller starts the green pods" {
+    desc: "One pod at a time, with a pause for each readiness probe.\nA seq chains its actions instead of starting them together."
+    show green, g1, g2
+    seq {
+      flow cd -> g1 { label: "start v1.5", dur: 500ms }
+      wait 400ms
+      flow cd -> g2 { label: "start v1.5", dur: 500ms }
+      wait 400ms
+    }
+    note cd "readiness 2/2" { side: below }
+  }
+
+  step canary "A slice of traffic tries green first" {
+    desc: "One pod, five percent. If v1.5 misbehaves, this is where it shows,\nand the blast radius is one pod's worth of requests."
+    flow lb -> g1 { label: "5%", dur: 700ms, color: "#22c55e" }
+    highlight g1 { style: active }
+  }
+
+  step cutover "Green takes the full load" {
+    desc: "The balancer flips the weights. Blue still runs — that is the point\nof blue/green: the old version idles, ready to take traffic back."
+    flow lb -> g1 { label: "50%", dur: 600ms, color: "#22c55e" }
+    flow lb -> g2 { label: "50%", dur: 600ms, color: "#22c55e" }
+    dim b1, b2
+  }
+
+  step retire "Blue drains and is stopped" {
+    desc: "Once green has held the load, blue is scaled away. Scrub backwards\nand it returns — show and hide are frames on the clock, not deletions."
+    hide blue, b1, b2
+    note lb "100% on v1.5"
+  }

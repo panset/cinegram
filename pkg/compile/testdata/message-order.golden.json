@@ -1,0 +1,137 @@
+{
+  "version": 2,
+  "root": "main",
+  "views": [
+    {
+      "id": "main",
+      "title": "order",
+      "diagram": {
+        "type": "sequenceDiagram",
+        "mermaid": "sequenceDiagram\n  participant A\n  participant B\n\n  A-\u003e\u003eB: req1\n  B--\u003e\u003eA: resp1\n  A-\u003e\u003eB: req2\n  B--\u003e\u003eA: resp2\n\n"
+      },
+      "nodes": [
+        {
+          "id": "A",
+          "label": "A",
+          "shape": "actor"
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "shape": "actor"
+        }
+      ],
+      "groups": null,
+      "edges": [
+        {
+          "id": "e0",
+          "from": "A",
+          "to": "B",
+          "label": "req1",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "B",
+          "to": "A",
+          "label": "resp1",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "A",
+          "to": "B",
+          "label": "req2",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "B",
+          "to": "A",
+          "label": "resp2",
+          "style": "dotted",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "order",
+          "duration": 400,
+          "speed": 1,
+          "loop": false,
+          "autoplay": true,
+          "steps": [
+            {
+              "id": "s1",
+              "name": "r1",
+              "start": 0,
+              "end": 100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 100,
+                  "edge": "e0",
+                  "from": "A",
+                  "to": "B"
+                }
+              ]
+            },
+            {
+              "id": "s2",
+              "name": "p1",
+              "start": 100,
+              "end": 200,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 100,
+                  "end": 200,
+                  "edge": "e1",
+                  "from": "B",
+                  "to": "A"
+                }
+              ]
+            },
+            {
+              "id": "s3",
+              "name": "r2",
+              "start": 200,
+              "end": 300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 200,
+                  "end": 300,
+                  "edge": "e2",
+                  "from": "A",
+                  "to": "B"
+                }
+              ]
+            },
+            {
+              "id": "s4",
+              "name": "p2",
+              "start": 300,
+              "end": 400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 300,
+                  "end": 400,
+                  "edge": "e3",
+                  "from": "B",
+                  "to": "A"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

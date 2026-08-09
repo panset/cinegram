@@ -159,7 +159,7 @@ func parseArgsWith(name string, args []string, extra func(*flag.FlagSet)) (input
 	if extra != nil {
 		extra(fs)
 	}
-	if err = fs.Parse(hoistFlags(args)); err != nil {
+	if err = fs.Parse(hoistFlags(args, valueFlagNames(fs))); err != nil {
 		return "", "", err
 	}
 	switch fs.NArg() {
@@ -190,20 +190,24 @@ func resolvePath(p string) string {
 	return p
 }
 
-// valueFlags are the flags that consume the following argument.
-var valueFlags = map[string]bool{
-	"-o": true, "--o": true,
-	"-format": true, "--format": true,
-	"-addr": true, "--addr": true,
-	"-at": true, "--at": true,
-	"-frames": true, "--frames": true,
-	"-scenario": true, "--scenario": true,
-	"-view": true, "--view": true,
-	"-width": true, "--width": true,
-	"-height": true, "--height": true,
+// valueFlagNames reads which flags consume the following argument straight off
+// the registered set, so a new flag can never be forgotten here: a flag is a
+// value flag unless its Value says it is boolean, which is the same test
+// flag.Parse itself applies.
+func valueFlagNames(fs *flag.FlagSet) map[string]bool {
+	type boolFlag interface{ IsBoolFlag() bool }
+	m := map[string]bool{}
+	fs.VisitAll(func(f *flag.Flag) {
+		if b, ok := f.Value.(boolFlag); ok && b.IsBoolFlag() {
+			return
+		}
+		m["-"+f.Name] = true
+		m["--"+f.Name] = true
+	})
+	return m
 }
 
-func hoistFlags(args []string) []string {
+func hoistFlags(args []string, valueFlags map[string]bool) []string {
 	var flags, positional []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -279,6 +283,9 @@ func cmdPreview(args []string, stdout, stderr io.Writer) error {
 	// --watch on its own plainly means "serve and watch": there is nothing to
 	// watch for when the output is a file written once.
 	if serve || watch {
+		if output != "" {
+			fmt.Fprintln(stderr, "diagramator: warning: -o is ignored with --serve/--watch; the page is served, not written")
+		}
 		return runServe(input, addr, watch, stderr)
 	}
 
@@ -298,7 +305,7 @@ func cmdPreview(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprintln(stderr, "diagramator: warning: no scenarios, the page will render a static diagram")
 	}
 
-	page, err := html.Render(timeline, html.Options{Title: title(timeline)})
+	page, err := html.Render(timeline, html.Options{})
 	if err != nil {
 		return err
 	}
@@ -313,25 +320,6 @@ func cmdPreview(args []string, stdout, stderr io.Writer) error {
 // input, with the extension swapped for .html.
 func defaultOutputPath(input string) string {
 	return strings.TrimSuffix(input, filepath.Ext(input)) + ".html"
-}
-
-// title names the page after the root view, falling back to its first scenario.
-func title(t *ir.Timeline) string {
-	if v := rootView(t); v != nil {
-		if v.Title != "" {
-			return v.Title
-		}
-		// Only fall back to a scenario name when it is the only one; with
-		// several, naming the page after one of them is a claim the page does
-		// not keep once the reader picks another.
-		if len(v.Scenarios) == 1 && v.Scenarios[0].Name != "" {
-			return v.Scenarios[0].Name
-		}
-		if v.ID != "" {
-			return v.ID
-		}
-	}
-	return "Diagramator"
 }
 
 func rootView(t *ir.Timeline) *ir.View {
@@ -472,7 +460,7 @@ func cmdNarrate(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	doc := narrate.Build(timeline, title(timeline))
+	doc := narrate.Build(timeline, html.DefaultTitle(timeline))
 	switch format {
 	case "md":
 		return write(output, narrate.Markdown(doc), stdout)

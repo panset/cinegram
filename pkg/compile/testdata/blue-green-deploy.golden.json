@@ -1,0 +1,344 @@
+{
+  "version": 2,
+  "root": "main",
+  "views": [
+    {
+      "id": "main",
+      "title": "cut over to v1.5",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% A blue/green deployment: how traffic moves to a new version with no gap.\n%% ---\n%% This example exists for `show`, `hide`, `wait` and `seq`. Unlike a reveal\n%% (which a click owns), show and hide are timeline state — scrub back to the\n%% first step and the green pods are gone again, because the clock owns them.\nflowchart LR\n  users[Users]\n  lb[(Load Balancer)]\n  cd[Deploy Controller]\n  subgraph blue[Blue — v1.4]\n    b1[Pod b1]\n    b2[Pod b2]\n  end\n  subgraph green[Green — v1.5]\n    g1[Pod g1]\n    g2[Pod g2]\n  end\n  users --\u003e lb\n  lb --\u003e b1\n  lb --\u003e b2\n  lb --\u003e g1\n  lb --\u003e g2\n  cd --\u003e g1\n  cd --\u003e g2\n"
+      },
+      "nodes": [
+        {
+          "id": "users",
+          "label": "Users",
+          "shape": "rect"
+        },
+        {
+          "id": "lb",
+          "label": "Load Balancer",
+          "shape": "cylinder"
+        },
+        {
+          "id": "cd",
+          "label": "Deploy Controller",
+          "shape": "rect"
+        },
+        {
+          "id": "b1",
+          "label": "Pod b1",
+          "shape": "rect",
+          "group": "blue"
+        },
+        {
+          "id": "b2",
+          "label": "Pod b2",
+          "shape": "rect",
+          "group": "blue"
+        },
+        {
+          "id": "g1",
+          "label": "Pod g1",
+          "shape": "rect",
+          "group": "green"
+        },
+        {
+          "id": "g2",
+          "label": "Pod g2",
+          "shape": "rect",
+          "group": "green"
+        }
+      ],
+      "groups": [
+        {
+          "id": "blue",
+          "label": "Blue — v1.4",
+          "children": [
+            "b1",
+            "b2"
+          ]
+        },
+        {
+          "id": "green",
+          "label": "Green — v1.5",
+          "children": [
+            "g1",
+            "g2"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "users",
+          "to": "lb",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "lb",
+          "to": "b1",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "lb",
+          "to": "b2",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "lb",
+          "to": "g1",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "lb",
+          "to": "g2",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "cd",
+          "to": "g1",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e6",
+          "from": "cd",
+          "to": "g2",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "cut over to v1.5",
+          "duration": 4900,
+          "speed": 1,
+          "loop": false,
+          "autoplay": true,
+          "steps": [
+            {
+              "id": "steady",
+              "name": "Blue serves everything",
+              "desc": "Both blue pods take the live traffic. Green does not exist yet:\nthe hide holds for this step, and its edges conceal themselves with it.",
+              "start": 0,
+              "end": 1000,
+              "tracks": [
+                {
+                  "kind": "hide",
+                  "start": 0,
+                  "end": 1000,
+                  "target": "green"
+                },
+                {
+                  "kind": "hide",
+                  "start": 0,
+                  "end": 1000,
+                  "target": "g1"
+                },
+                {
+                  "kind": "hide",
+                  "start": 0,
+                  "end": 1000,
+                  "target": "g2"
+                },
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 500,
+                  "edge": "e0",
+                  "from": "users",
+                  "to": "lb"
+                },
+                {
+                  "kind": "flow",
+                  "start": 400,
+                  "end": 1000,
+                  "edge": "e1",
+                  "from": "lb",
+                  "to": "b1",
+                  "label": "50%"
+                },
+                {
+                  "kind": "flow",
+                  "start": 400,
+                  "end": 1000,
+                  "edge": "e2",
+                  "from": "lb",
+                  "to": "b2",
+                  "label": "50%"
+                }
+              ]
+            },
+            {
+              "id": "launch",
+              "name": "The controller starts the green pods",
+              "desc": "One pod at a time, with a pause for each readiness probe.\nA seq chains its actions instead of starting them together.",
+              "start": 1000,
+              "end": 2800,
+              "tracks": [
+                {
+                  "kind": "show",
+                  "start": 1000,
+                  "end": 2800,
+                  "target": "green"
+                },
+                {
+                  "kind": "show",
+                  "start": 1000,
+                  "end": 2800,
+                  "target": "g1"
+                },
+                {
+                  "kind": "show",
+                  "start": 1000,
+                  "end": 2800,
+                  "target": "g2"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1000,
+                  "end": 1500,
+                  "edge": "e5",
+                  "from": "cd",
+                  "to": "g1",
+                  "label": "start v1.5"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1900,
+                  "end": 2400,
+                  "edge": "e6",
+                  "from": "cd",
+                  "to": "g2",
+                  "label": "start v1.5"
+                },
+                {
+                  "kind": "note",
+                  "start": 1000,
+                  "end": 2800,
+                  "target": "cd",
+                  "text": "readiness 2/2",
+                  "side": "below"
+                }
+              ]
+            },
+            {
+              "id": "canary",
+              "name": "A slice of traffic tries green first",
+              "desc": "One pod, five percent. If v1.5 misbehaves, this is where it shows,\nand the blast radius is one pod's worth of requests.",
+              "start": 2800,
+              "end": 3500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2800,
+                  "end": 3500,
+                  "edge": "e3",
+                  "from": "lb",
+                  "to": "g1",
+                  "label": "5%",
+                  "color": "#22c55e"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 2800,
+                  "end": 3500,
+                  "target": "g1",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "cutover",
+              "name": "Green takes the full load",
+              "desc": "The balancer flips the weights. Blue still runs — that is the point\nof blue/green: the old version idles, ready to take traffic back.",
+              "start": 3500,
+              "end": 4100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3500,
+                  "end": 4100,
+                  "edge": "e3",
+                  "from": "lb",
+                  "to": "g1",
+                  "label": "50%",
+                  "color": "#22c55e"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3500,
+                  "end": 4100,
+                  "edge": "e4",
+                  "from": "lb",
+                  "to": "g2",
+                  "label": "50%",
+                  "color": "#22c55e"
+                },
+                {
+                  "kind": "dim",
+                  "start": 3500,
+                  "end": 4100,
+                  "target": "b1"
+                },
+                {
+                  "kind": "dim",
+                  "start": 3500,
+                  "end": 4100,
+                  "target": "b2"
+                }
+              ]
+            },
+            {
+              "id": "retire",
+              "name": "Blue drains and is stopped",
+              "desc": "Once green has held the load, blue is scaled away. Scrub backwards\nand it returns — show and hide are frames on the clock, not deletions.",
+              "start": 4100,
+              "end": 4900,
+              "tracks": [
+                {
+                  "kind": "hide",
+                  "start": 4100,
+                  "end": 4900,
+                  "target": "blue"
+                },
+                {
+                  "kind": "hide",
+                  "start": 4100,
+                  "end": 4900,
+                  "target": "b1"
+                },
+                {
+                  "kind": "hide",
+                  "start": 4100,
+                  "end": 4900,
+                  "target": "b2"
+                },
+                {
+                  "kind": "note",
+                  "start": 4100,
+                  "end": 4900,
+                  "target": "lb",
+                  "text": "100% on v1.5"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -362,6 +362,12 @@ and a seek resets them. Reveal is interaction state that persists until the
 viewer leaves the view. Being the target of a reveal is what makes an element
 start hidden — there is no separate declaration.
 
+`examples/blue-green-deploy.dgm` is the timeline side of that distinction: the
+green pods are hidden while blue serves, appear when the controller starts them
+(a `seq` chains the launches, a `wait` stands in for each readiness probe), and
+scrubbing backwards removes them again. Edges into a hidden node conceal
+themselves with it.
+
 ## Sharing a moment
 
 "Look at *this* step" is most of why anyone sends a diagram to a colleague, and
@@ -503,10 +509,13 @@ Every clickable element is reachable by `Tab` and activates with `Enter` or
 
 Theme and speed persist in `localStorage`. The theme follows your system until
 you press the button, and then stops — an explicit choice is exactly the thing
-that should not be overridden later. A speed you chose outranks a scenario's
-`speed` for the same reason; untouched, the scenario's own rate still wins. The
-speed button cycles `0.25 → 0.5 → 1 → 1.5 → 2` and its label always shows the
-rate actually in effect.
+that should not be overridden later. The remembered speed is scoped the other
+way: it is one key for every diagram on the origin, so a scenario that declares
+its own `speed` keeps it — an author's pacing should not be overridden by a
+0.25x you picked on some other diagram last week. The remembered rate applies
+to scenarios that leave `speed` unset. The speed button cycles
+`0.25 → 0.5 → 1 → 1.5 → 2` and its label always shows the rate actually in
+effect.
 
 With `prefers-reduced-motion: reduce`, nothing autoplays, the decorative
 animation stops, and the help says so — stepping through with the arrow keys is

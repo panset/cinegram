@@ -36,7 +36,7 @@ type Options struct {
 func Render(t *ir.Timeline, opts Options) ([]byte, error) {
 	title := opts.Title
 	if title == "" {
-		title = defaultTitle(t)
+		title = DefaultTitle(t)
 	}
 
 	payload, err := json.Marshal(struct {
@@ -78,9 +78,10 @@ func Render(t *ir.Timeline, opts Options) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// defaultTitle names the page after the view it opens on, since that is what
-// the reader sees first.
-func defaultTitle(t *ir.Timeline) string {
+// DefaultTitle names a timeline after the view it opens on, since that is what
+// the reader sees first. Render uses it when Options.Title is empty; it is
+// exported for callers that need the same name outside a page, such as narrate.
+func DefaultTitle(t *ir.Timeline) string {
 	for _, v := range t.Views {
 		if v.ID != t.Root {
 			continue

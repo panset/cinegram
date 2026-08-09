@@ -41,7 +41,10 @@ func checkUnreferenced(doc *ast.Document, t *symbol.Table, b *diag.Bag) {
 	}
 	for _, bd := range doc.Interactions {
 		seen[bd.Source.Name] = true
-		if bd.Kind == ast.BindReveal || bd.Kind == ast.BindView {
+		// Only reveal targets are diagram elements. A view binding's target is
+		// a view alias — a different namespace — and marking it here would let
+		// a node that happens to share the alias's name escape the warning.
+		if bd.Kind == ast.BindReveal {
 			for _, tgt := range bd.Targets {
 				seen[tgt.Name] = true
 			}

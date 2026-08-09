@@ -1,0 +1,14 @@
+sequenceDiagram
+  participant A
+  participant B
+
+  A->>B: req1
+  B-->>A: resp1
+  A->>B: req2
+  B-->>A: resp2
+
+scenario "order" { }
+  step s1 "r1" { flow A -> B { dur: 100ms } }
+  step s2 "p1" { flow B -> A { dur: 100ms } }
+  step s3 "r2" { flow A -> B { dur: 100ms } }
+  step s4 "p2" { flow B -> A { dur: 100ms } }

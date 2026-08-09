@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	stdhtml "html"
 	"io"
 	"net"
 	"net/http"
@@ -89,10 +91,18 @@ func (s *server) handlePage(w http.ResponseWriter, r *http.Request) {
 	page, err := s.page()
 	if err != nil {
 		// A broken source should show the error in the browser rather than an
-		// empty page: the reload loop means this is the fastest way to read it.
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		// empty page — and, when watching, the error page carries the reload
+		// script too, or fixing the file would leave the browser stranded on
+		// the error with nothing listening for the recovery.
+		body := []byte("<!doctype html><meta charset=\"utf-8\"><title>diagramator</title><pre>diagramator: " +
+			stdhtml.EscapeString(err.Error()) + "</pre>")
+		if s.watch {
+			body = injectReload(body)
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "diagramator: %v\n", err)
+		w.Write(body)
 		return
 	}
 
@@ -121,7 +131,7 @@ func (s *server) page() ([]byte, error) {
 		}
 	}
 
-	page, err := html.Render(timeline, html.Options{Title: title(timeline)})
+	page, err := html.Render(timeline, html.Options{})
 	if err != nil {
 		return nil, err
 	}
@@ -156,8 +166,14 @@ func (s *server) poll() bool {
 		now, err := s.stat(path)
 		if err != nil {
 			// A file that vanished counts as a change: it is usually an editor
-			// writing through a rename, and the next build will say so.
-			changed = true
+			// writing through a rename, and the next build will say so. The
+			// zero stamp remembers that the absence has already fired, so a
+			// file that stays missing bumps the generation once, not every
+			// poll — and its return reads as one more change.
+			if !was.IsZero() {
+				s.stamps[path] = time.Time{}
+				changed = true
+			}
 			continue
 		}
 		if !now.Equal(was) {
@@ -215,7 +231,7 @@ const reloadScript = `<script>
 
 func injectReload(page []byte) []byte {
 	marker := []byte("</body>")
-	i := lastIndex(page, marker)
+	i := bytes.LastIndex(page, marker)
 	if i < 0 {
 		return append(page, []byte(reloadScript)...)
 	}
@@ -224,15 +240,6 @@ func injectReload(page []byte) []byte {
 	out = append(out, []byte(reloadScript)...)
 	out = append(out, page[i:]...)
 	return out
-}
-
-func lastIndex(hay, needle []byte) int {
-	for i := len(hay) - len(needle); i >= 0; i-- {
-		if string(hay[i:i+len(needle)]) == string(needle) {
-			return i
-		}
-	}
-	return -1
 }
 
 // serve runs the server until interrupted. It returns the listener's address so

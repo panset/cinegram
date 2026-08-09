@@ -50,13 +50,13 @@ var timingAttrs = map[string]string{
 var actionAttrs = map[ast.ActionKind]map[string]string{
 	ast.ActionFlow: extendAttrs(timingAttrs, map[string]string{
 		"color": "string", "ease": "ease", "status": "status",
-		"repeat": "float", "bidi": "bool", "msg": "float",
+		"repeat": "count", "bidi": "bool", "msg": "count",
 	}),
 	ast.ActionHighlight: extendAttrs(timingAttrs, map[string]string{
 		"color": "string",
 	}),
 	ast.ActionPulse: extendAttrs(timingAttrs, map[string]string{
-		"color": "string", "repeat": "float",
+		"color": "string", "repeat": "count",
 	}),
 	ast.ActionNote: extendAttrs(timingAttrs, map[string]string{
 		"side": "side",
@@ -141,6 +141,15 @@ func checkAttrs(attrs ast.Attrs, allowed map[string]string, what string, b *diag
 			_, err = units.ParseMillis(v.Raw)
 		case "float":
 			_, err = units.ParseFloat(v.Raw)
+		case "count":
+			// A count selects or repeats — `msg: 2.7` truncating to message 2
+			// would silently animate the wrong arrow, so fractions are errors.
+			var f float64
+			f, err = units.ParseFloat(v.Raw)
+			if err == nil && (f < 1 || f != float64(int(f))) {
+				b.ErrorHintf(v.At, "use a whole number, counting from 1",
+					"attribute %q: %q is not a positive whole number", k, v.Raw)
+			}
 		case "bool":
 			_, err = units.ParseBool(v.Raw)
 		case "ease":

@@ -456,16 +456,25 @@ func occurrence(a ast.Action, from, to string, table *symbol.Table, seen hopCoun
 	if table.CountEdges(from, to) < 2 {
 		return 1
 	}
-	if a.Attrs.Has("msg") {
-		return attrInt(a.Attrs, "msg", 1, bag)
-	}
 
-	// Keyed unordered, because the two directions resolve against the same
-	// pool once FindEdgeN has decided which direction it is matching.
+	// The counter is keyed per pool, and the pool is directional: FindEdgeN
+	// exhausts same-direction edges before reversed ones, so when the diagram
+	// draws arrows both ways between a pair, `a -> b` and `b -> a` consume
+	// from disjoint pools and must not share a count. When only one direction
+	// is drawn, both spellings resolve against that pool and the key agrees.
 	key := [2]string{from, to}
-	if to < from {
+	if forward, _ := table.EdgesBetween(from, to); len(forward) == 0 {
 		key = [2]string{to, from}
 	}
+
+	if a.Attrs.Has("msg") {
+		n := attrInt(a.Attrs, "msg", 1, bag)
+		// An explicit pick also moves the cursor, so the implicit flows that
+		// follow continue after it instead of replaying from the start.
+		seen[key] = n
+		return n
+	}
+
 	seen[key]++
 	return seen[key]
 }
