@@ -217,7 +217,9 @@ async function runExport(source, out, view, scenario) {
   if (outcome.error || outcome.code !== 0) {
     const message = outcome.error
       ? binary.describeFailure(found, outcome.error)
-      : outcome.summary || 'Recording failed. See the Cinegram output for what the recorder said.';
+      : describeSkew(found, outcome.stderr) ||
+        outcome.summary ||
+        'Recording failed. See the Cinegram output for what the recorder said.';
     show(await vscode.window.showErrorMessage(message, 'Show Output'));
     return;
   }
@@ -290,7 +292,12 @@ function spawnRecorder(found, args, progress, token) {
     child.on('error', (err) => resolve({ error: err }));
     child.on('close', (code) => {
       if (pending) onLine(pending);
-      resolve({ code: code, cancelled: cancelled, summary: summarise(lines) });
+      resolve({
+        code: code,
+        cancelled: cancelled,
+        summary: summarise(lines),
+        stderr: lines.join('\n')
+      });
     });
 
     token.onCancellationRequested(() => {
@@ -337,6 +344,45 @@ function recorderEnv() {
   if (chrome) env.CINEGRAM_CHROME = chrome;
   if (ffmpeg) env.CINEGRAM_FFMPEG = ffmpeg;
   return env;
+}
+
+/**
+ * The one failure the extension does *not* pass through verbatim.
+ *
+ * Everywhere else the CLI's own message is better than anything rewritten here
+ * — it names CINEGRAM_CHROME, it suggests recording a GIF instead. But a binary
+ * older than the extension answers an unknown flag with Go's flag package
+ * dumping four hundred characters of usage text, which says nothing about the
+ * actual problem and does not fit in a notification. The cause is always the
+ * same and always has the same fix, so it is worth recognising by name.
+ *
+ * Matched generally rather than on `-progress` alone: the next flag this
+ * extension learns to pass will fail exactly the same way against a binary that
+ * predates it. `found.source` is included because it says *which* binary to go
+ * and rebuild — the whole point when several are on the machine.
+ */
+function describeSkew(found, stderr) {
+  const text = String(stderr || '');
+
+  const flag = /flag provided but not defined: -+([\w-]+)/.exec(text);
+  if (flag) {
+    return (
+      'The cinegram binary (' + found.source + ') is older than this extension: ' +
+      'it does not understand --' + flag[1] + '. ' +
+      'Rebuild it with `bazel build //cmd/cinegram`, or point `cinegram.path` at a current one.'
+    );
+  }
+
+  const command = /unknown command "([^"]+)"/.exec(text);
+  if (command) {
+    return (
+      'The cinegram binary (' + found.source + ') has no `' + command[1] + '` command, ' +
+      'so it predates recording. Rebuild it with `bazel build //cmd/cinegram`, ' +
+      'or point `cinegram.path` at a current one.'
+    );
+  }
+
+  return '';
 }
 
 /**
