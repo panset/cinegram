@@ -364,6 +364,30 @@ bezel, no window chrome, no drawing tools — a frame is an image you wrote and 
 caption, which is what keeps the feature bounded: a screenshot of an email is as
 valid a frame as a login form.
 
+**Where a scene sits inside its step matters as much as which step it is in.**
+A `scene` is an action like any other, so on its own it fires the instant the
+step begins — but a screen changes when an arrow *lands*. Put it in a `seq`
+after the hop that causes it and it fires there:
+
+```
+step redirect "The IdP sends back a code" {
+  seq {
+    flow IdP -> U { dur: 700ms }
+    scene app_waiting      %% the redirect lands; the address bar changes
+    flow U -> A { dur: 600ms }
+  }
+}
+```
+
+A scene consumes none of the chain, so it means "here" without stretching the
+step, and it keeps meaning it when a hop's duration changes. `at:` and `delay:`
+work too — `scene x { at: 1100ms }` — but they are arithmetic you have to redo
+by hand later. Several scenes in one step is normal: the panel changes and the
+diagram barely moves, which for an authentication hop is the honest picture.
+
+A step that *ends* on a new screen needs a `dur` long enough to look at it,
+since a scene on the last instant of a scenario flashes for one frame and stops.
+
 **A scene is sticky.** At any moment the panel shows the last scene to have
 started, not the scene belonging to the current step. That is what lets six
 steps of server-side verification sit under one motionless "Signing you in…"

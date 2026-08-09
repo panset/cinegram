@@ -605,6 +605,81 @@ scenario "orphan" { variant: "nothing named this" }
 	}
 }
 
+// TestSceneInASeqCostsNoTime is what makes "the screen changes when the arrow
+// lands" expressible without arithmetic: a scene inside a seq fires where the
+// chain has reached and consumes none of it, so the hops around it keep their
+// durations and adding a scene never inserts a silent pause.
+func TestSceneInASeqCostsNoTime(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+  b --> c
+
+storyboard {
+  frame one { caption: "one" }
+  frame two { caption: "two" }
+}
+
+scenario "x"
+  step s "chained" {
+    seq {
+      flow a -> b { dur: 300ms }
+      scene one
+      flow b -> c { dur: 400ms }
+      scene two
+    }
+  }
+`
+	tl := compileSource(t, src)
+	sc := tl.Views[0].Scenarios[0]
+
+	if sc.Duration != 700 {
+		t.Errorf("duration = %d, want 300+400 with the scenes costing nothing", sc.Duration)
+	}
+
+	scenes := map[string]int{}
+	for _, tr := range sc.Steps[0].Tracks {
+		if tr.Kind == ir.TrackScene {
+			scenes[tr.Target] = tr.Start
+		}
+	}
+	if scenes["one"] != 300 {
+		t.Errorf("scene one starts at %d, want 300 — where the first hop lands", scenes["one"])
+	}
+	if scenes["two"] != 700 {
+		t.Errorf("scene two starts at %d, want 700 — where the second hop lands", scenes["two"])
+	}
+}
+
+// TestSceneTakesAnOffset covers the other way to place one: `at`/`delay` work on
+// a scene exactly as on any other action, and a scene pushed past the actions
+// around it stretches the step rather than escaping it.
+func TestSceneTakesAnOffset(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+storyboard {
+  frame late { caption: "late" }
+}
+
+scenario "x"
+  step s "offset" {
+    flow a -> b { dur: 400ms }
+    scene late { at: 900ms }
+  }
+`
+	tl := compileSource(t, src)
+	step := tl.Views[0].Scenarios[0].Steps[0]
+
+	if step.End != 900 {
+		t.Errorf("step span = %d, want 900 — the scene's offset sizes the step", step.End)
+	}
+	for _, tr := range step.Tracks {
+		if tr.Kind == ir.TrackScene && tr.Start != 900 {
+			t.Errorf("scene starts at %d, want its 900ms offset", tr.Start)
+		}
+	}
+}
+
 // TestRevealHidesGroupsTransitively pins the rule that revealing a subgraph
 // conceals everything inside it. Hiding the frame while its members stayed
 // drawn would look broken, and the renderer must not have to work that out.

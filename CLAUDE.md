@@ -133,6 +133,10 @@ Timing rules live entirely in `pkg/compile`:
   the latest scene track with `Start <= t` rather than the ones open at t. That
   stickiness is what makes the panel hold a screen across the steps where
   nothing the user can see changes.
+- A `scene` inside a `seq` costs **zero** of the chain (`seqSpan`), like a
+  persistent action: it fires where the chain has reached and the panel then
+  holds, so `seq { flow a -> b; scene x }` means "the screen changes when the
+  arrow lands" without the author computing an `at:`.
 - `scenario … { variant: "base", until: <step> }` is spliced in
   `resolveVariants` **before** any timing runs, so the merged scenario is an
   ordinary `ast.Scenario` and every rule above applies to it unchanged.

@@ -492,11 +492,19 @@ func intrinsic(a ast.Action, bag *diag.Bag) int {
 // seqSpan is how much of a seq's timeline a child consumes.
 //
 // A stateful action inside a seq has no step span to inherit, so it takes the
-// default rather than collapsing to zero. A persistent action is the exception:
-// it fires at an instant and its effect is not bounded by the seq at all, so
-// giving it a slice of the chain would insert a silent pause.
+// default rather than collapsing to zero. Two kinds are the exception, for the
+// same reason: they fire at an instant and what they write is not bounded by
+// the seq at all, so giving either a slice of the chain would insert a silent
+// pause with nothing in it.
+//
+// A persistent action is the obvious one. A `scene` is the other: it flips the
+// storyboard panel and the panel then holds until something replaces it. That
+// makes `seq { flow a -> b; scene x }` mean "show x when the chain gets here",
+// which is the natural way to say "the screen changes when the arrow lands" —
+// and, unlike computing an `at:` by hand, it stays correct when a hop's
+// duration changes.
 func seqSpan(child ast.Action, bag *diag.Bag) int {
-	if isPersistent(child.Kind) {
+	if isPersistent(child.Kind) || child.Kind == ast.ActionScene {
 		return 0
 	}
 	if d := intrinsic(child, bag); d != 0 {

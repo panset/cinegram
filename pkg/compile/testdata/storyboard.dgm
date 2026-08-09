@@ -29,9 +29,14 @@ scenario "sign in"
     scene signin
   }
 
+  %% Inside the seq, so the screen changes when the arrow lands rather than
+  %% when the step begins — and the scene takes none of the chain, so the step
+  %% is still exactly as long as its one hop.
   step redirect "The app hands off to the provider" {
-    flow app -> idp { dur: 600ms }
-    scene idp_form
+    seq {
+      flow app -> idp { dur: 600ms }
+      scene idp_form
+    }
   }
 
   step wait "Nothing on screen changes while the token is verified" {
