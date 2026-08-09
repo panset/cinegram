@@ -248,9 +248,17 @@ orphans its browsers. (Go's default `SIGTERM` skips deferred functions, so a
 cancelled record leaves one `cinegram-record-*` temp directory behind. That is
 knowingly traded for not adding signal handling to the CLI.)
 
-The extension never rewrites the CLI's failure messages. `findChrome` and
-`findFFmpeg` already name `CINEGRAM_CHROME` and `CINEGRAM_FFMPEG` and suggest
-recording a GIF instead; a message rewritten in JavaScript could only say less.
+The extension rewrites the CLI's failure messages in exactly one case, and the
+exception is worth keeping narrow. `findChrome` and `findFFmpeg` already name
+`CINEGRAM_CHROME` and `CINEGRAM_FFMPEG` and suggest recording a GIF instead; a
+message rewritten in JavaScript could only say less. But a binary **older than
+the extension** answers an unknown flag with Go's flag package printing the
+whole usage text, which says nothing about the real problem and does not fit in
+a notification — so `describeSkew` in `src/record.js` recognises
+`flag provided but not defined` and `unknown command`, names the binary via
+`binary.resolve().source`, and says to rebuild. That skew is routine in dev
+mode, where the binary comes from `<workspace>/bazel-bin/` and a `git pull`
+updates the extension without rebuilding it.
 
 **`src/animationEditor.js` re-renders on save, never on keystroke.** It is a
 `CustomTextEditorProvider` at `priority: "option"` — the text editor stays the

@@ -40,6 +40,9 @@ const running = new Map();
 /** Capture fills the bar to here; encoding holds it there until the file lands. */
 const CAPTURE_SHARE = 95;
 
+/** How long a cancelled recorder gets to exit on SIGTERM before SIGKILL. */
+const KILL_GRACE_MS = 2000;
+
 function register(context) {
   channel = vscode.window.createOutputChannel('Cinegram');
   context.subscriptions.push(channel);
@@ -217,7 +220,9 @@ async function runExport(source, out, view, scenario) {
   if (outcome.error || outcome.code !== 0) {
     const message = outcome.error
       ? binary.describeFailure(found, outcome.error)
-      : outcome.summary || 'Recording failed. See the Cinegram output for what the recorder said.';
+      : describeSkew(found, outcome.stderr) ||
+        outcome.summary ||
+        'Recording failed. See the Cinegram output for what the recorder said.';
     show(await vscode.window.showErrorMessage(message, 'Show Output'));
     return;
   }
@@ -290,7 +295,12 @@ function spawnRecorder(found, args, progress, token) {
     child.on('error', (err) => resolve({ error: err }));
     child.on('close', (code) => {
       if (pending) onLine(pending);
-      resolve({ code: code, cancelled: cancelled, summary: summarise(lines) });
+      resolve({
+        code: code,
+        cancelled: cancelled,
+        summary: summarise(lines),
+        stderr: lines.join('\n')
+      });
     });
 
     token.onCancellationRequested(() => {
@@ -311,21 +321,41 @@ function spawnRecorder(found, args, progress, token) {
  */
 function killTree(child) {
   if (!child.pid) return;
-  try {
-    if (process.platform === 'win32') {
-      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
-    } else {
-      process.kill(-child.pid, 'SIGTERM');
-    }
-  } catch (e) {
-    // The group may already be gone, or never have become one. Either way the
-    // child itself is still worth a try.
-    try {
-      child.kill('SIGTERM');
-    } catch (e2) {
-      /* nothing left to do */
-    }
+
+  if (process.platform === 'win32') {
+    spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
+    return;
   }
+
+  const signal = (sig) => {
+    try {
+      process.kill(-child.pid, sig);
+      return true;
+    } catch (e) {
+      // The group may already be gone, or never have become one. Either way
+      // the child itself is still worth a try.
+      try {
+        child.kill(sig);
+      } catch (e2) {
+        /* nothing left to do */
+      }
+      return false;
+    }
+  };
+
+  signal('SIGTERM');
+
+  // SIGTERM is the polite ask, and Chrome does not always take it — a headless
+  // browser wedged badly enough to have blown the capture timeout is exactly
+  // the one least likely to answer. Anything still standing after the grace
+  // period is not going to shut down on its own, and a leaked headless Chrome
+  // holds hundreds of megabytes for as long as the machine is up.
+  const followUp = setTimeout(() => {
+    if (child.exitCode === null && child.signalCode === null) signal('SIGKILL');
+  }, KILL_GRACE_MS);
+  // Do not hold the extension host's event loop open for this.
+  if (followUp.unref) followUp.unref();
+  child.once('close', () => clearTimeout(followUp));
 }
 
 /** The two path settings, passed the way the CLI already reads them. */
@@ -340,6 +370,45 @@ function recorderEnv() {
 }
 
 /**
+ * The one failure the extension does *not* pass through verbatim.
+ *
+ * Everywhere else the CLI's own message is better than anything rewritten here
+ * — it names CINEGRAM_CHROME, it suggests recording a GIF instead. But a binary
+ * older than the extension answers an unknown flag with Go's flag package
+ * dumping four hundred characters of usage text, which says nothing about the
+ * actual problem and does not fit in a notification. The cause is always the
+ * same and always has the same fix, so it is worth recognising by name.
+ *
+ * Matched generally rather than on `-progress` alone: the next flag this
+ * extension learns to pass will fail exactly the same way against a binary that
+ * predates it. `found.source` is included because it says *which* binary to go
+ * and rebuild — the whole point when several are on the machine.
+ */
+function describeSkew(found, stderr) {
+  const text = String(stderr || '');
+
+  const flag = /flag provided but not defined: -+([\w-]+)/.exec(text);
+  if (flag) {
+    return (
+      'The cinegram binary (' + found.source + ') is older than this extension: ' +
+      'it does not understand --' + flag[1] + '. ' +
+      'Rebuild it with `bazel build //cmd/cinegram`, or point `cinegram.path` at a current one.'
+    );
+  }
+
+  const command = /unknown command "([^"]+)"/.exec(text);
+  if (command) {
+    return (
+      'The cinegram binary (' + found.source + ') has no `' + command[1] + '` command, ' +
+      'so it predates recording. Rebuild it with `bazel build //cmd/cinegram`, ' +
+      'or point `cinegram.path` at a current one.'
+    );
+  }
+
+  return '';
+}
+
+/**
  * The first thing worth reading out of the recorder's stderr.
  *
  * `record`'s own messages are multi-line on purpose — the ffmpeg one names the
@@ -350,7 +419,15 @@ function recorderEnv() {
 function summarise(lines) {
   const said = lines
     .map((l) => l.trim())
-    .filter((l) => l && !/^recording /.test(l) && !/^wrote /.test(l));
+    .filter(
+      (l) =>
+        l &&
+        !/^recording /.test(l) &&
+        !/^wrote /.test(l) &&
+        // A retry that was survived is not the failure; a retry that was not is
+        // already restated by the "after N attempts" error the CLI ends with.
+        !/ failed, retrying \(/.test(l)
+    );
   if (!said.length) return '';
   const text = said.join(' ');
   return text.length > 400 ? text.slice(0, 397) + '…' : text;

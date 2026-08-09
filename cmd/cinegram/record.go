@@ -37,6 +37,16 @@ const defaultFPS = 12
 // captureWorkers caps how many browsers run at once. Each is a fresh Chrome
 // with its own virtual-time budget, which is what makes the frames
 // deterministic; the ceiling is there because they are not cheap.
+// captureAttempts is how many times one frame is shot before the run gives up.
+//
+// A frame is an independent, deterministic screenshot, so retrying it is always
+// safe — and worth it, because the failure this guards against is not a broken
+// diagram but a starved browser. Four Chromes contending on a busy machine can
+// push one past the timeout in `shoot` while the same frame captures in a few
+// seconds on its own, and without a retry that single straggler discards every
+// frame already captured and minutes of work with them.
+const captureAttempts = 3
+
 func captureWorkers() int {
 	if n := runtime.NumCPU(); n < 4 {
 		if n < 1 {
@@ -169,7 +179,8 @@ func runRecord(opt recordOptions, stderr io.Writer) error {
 	fmt.Fprintf(stderr, "recording %s (%s, %dms) as %d frames at %dfps\n",
 		opt.input, scenarioID, duration, len(times), opt.fps)
 
-	paths, err := captureFrames(chrome, base, viewID, scenarioID, dir, times, opt, progressReporter(opt, stderr))
+	paths, err := captureFrames(chrome, base, viewID, scenarioID, dir, times, opt,
+		progressReporter(opt, stderr), stderr)
 	if err != nil {
 		return err
 	}
@@ -239,7 +250,7 @@ func frameTimes(duration, fps int) []int {
 // finished and how many there are in total. It counts completions rather than
 // indices because the pool finishes frames out of order, and a progress bar
 // that went backwards would be worse than none.
-func captureFrames(chrome, base, viewID, scenarioID, dir string, times []int, opt recordOptions, report func(done, total int)) ([]string, error) {
+func captureFrames(chrome, base, viewID, scenarioID, dir string, times []int, opt recordOptions, report func(done, total int), stderr io.Writer) ([]string, error) {
 	paths := make([]string, len(times))
 	for i := range times {
 		paths[i] = framePath(dir, i+1)
@@ -268,10 +279,27 @@ func captureFrames(chrome, base, viewID, scenarioID, dir string, times []int, op
 			// `?embed` strips the page furniture, so the recording is the
 			// diagram and its narration rather than a screenshot of a toolbar.
 			url := frameURL(base, viewID, scenarioID, times[i], true)
-			if err := shoot(chrome, url, paths[i], opt.width, opt.height); err != nil {
+
+			var err error
+			for attempt := 1; attempt <= captureAttempts; attempt++ {
+				if err = shoot(chrome, url, paths[i], opt.width, opt.height); err == nil {
+					break
+				}
+				if attempt < captureAttempts {
+					// Said out loud, because a retry is the difference between
+					// a recording that takes twice as long and one that looks
+					// hung. Under the mutex: several workers share this writer.
+					mu.Lock()
+					fmt.Fprintf(stderr, "frame %d (%dms) failed, retrying (attempt %d of %d): %v\n",
+						i+1, times[i], attempt+1, captureAttempts, err)
+					mu.Unlock()
+				}
+			}
+			if err != nil {
 				mu.Lock()
 				if firstErr == nil {
-					firstErr = fmt.Errorf("frame %d (%dms): %w", i+1, times[i], err)
+					firstErr = fmt.Errorf("frame %d (%dms), after %d attempts: %w",
+						i+1, times[i], captureAttempts, err)
 				}
 				mu.Unlock()
 				return
