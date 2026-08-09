@@ -304,9 +304,26 @@
   // Player
   // ---------------------------------------------------------------------
 
-  function Player(root, timeline) {
+  // opts says how the player is hosted, for the cases a page cannot express in
+  // its URL. The standalone page passes nothing and every default below is what
+  // it has always done; a host that puts several players in one document — the
+  // VS Code Markdown preview puts one per ```dgm block — turns off the things
+  // that are singular per page:
+  //
+  //   inline    strip the page chrome down to the stage, transport and caption
+  //   keys      'document' (default) or 'scoped', which listens on this.root
+  //             only and acts only while focus is inside it
+  //   hash      false to leave location.hash alone entirely, navigating and
+  //             going back within the player instead
+  //   theme     'light' | 'dark' to follow the host instead of the system
+  //   autoplay  false to open at rest
+  //
+  // Anything a host does not set keeps the page behaviour, so this stays one
+  // renderer rather than two that have to be kept in step.
+  function Player(root, timeline, opts) {
     this.root = root;
     this.timeline = timeline;
+    this.opts = opts || {};
     this.viewIndex = 0;
     this.scenarioIndex = 0;
     this.time = 0;
@@ -317,7 +334,10 @@
     // Set when a view is entered and cleared by the render that consumes it, so
     // autoplay fires once per view rather than on every re-render (a theme
     // toggle re-renders too, and must not restart the animation).
-    this.pendingAutoplay = true;
+    //
+    // A diagram embedded in a document opens at rest: several of them starting
+    // to move the moment the page renders is noise, not information.
+    this.pendingAutoplay = this.opts.autoplay !== false;
     this.raf = null;
     this.lastFrame = 0;
     this.nodeState = {};
@@ -336,7 +356,14 @@
     // system. Storing the *absence* of a choice separately is what lets the
     // page track a system theme that changes while it is open, and stop the
     // moment the reader says otherwise.
-    this.themePref = prefGet('dgm.theme');
+    //
+    // A host that has its own theme states it, and then it is not a preference
+    // to remember or a system setting to follow: an editor's light/dark is
+    // already the reader's answered question.
+    this.hostTheme = this.opts.theme === 'dark' || this.opts.theme === 'light'
+      ? this.opts.theme
+      : null;
+    this.themePref = this.hostTheme || prefGet('dgm.theme');
     this.theme = this.themePref || (systemDark() ? 'dark' : 'light');
 
     // Stage transform. Reset per view: a zoom that made sense for one diagram
@@ -422,7 +449,10 @@
 
     // `dgm-authoring` marks the controls that belong to building a diagram
     // rather than showing one; presenter mode hides exactly that set.
-    this.playBtn = button('Play', 'dgm-btn dgm-btn-primary dgm-authoring', function () { self.toggle(); });
+    // dgm-play names the one control no mode can do without: inline strips the
+    // bar down to it by name rather than by position, so adding a button here
+    // later cannot quietly change what a document shows.
+    this.playBtn = button('Play', 'dgm-btn dgm-btn-primary dgm-authoring dgm-play', function () { self.toggle(); });
     controls.appendChild(this.playBtn);
     controls.appendChild(button('Restart', 'dgm-btn dgm-authoring', function () { self.seek(0); }));
 
@@ -524,33 +554,59 @@
 
     // Follow the system theme until the reader overrides it. Without this a
     // page left open across a scheduled light/dark switch keeps the old one.
-    try {
-      var mq = matchMedia('(prefers-color-scheme: dark)');
-      var follow = function (ev) {
-        if (self.themePref) return;
-        self.theme = ev.matches ? 'dark' : 'light';
-        self.themeBtn.textContent = self.theme === 'dark' ? 'Light' : 'Dark';
-        document.documentElement.setAttribute('data-theme', self.theme);
-        self.render();
-      };
-      if (mq.addEventListener) mq.addEventListener('change', follow);
-      else if (mq.addListener) mq.addListener(follow);
-    } catch (e) { /* no matchMedia: the initial theme stands */ }
+    //
+    // A host that states a theme is already tracking its own, and following the
+    // OS underneath it would make an editor in forced-light show a dark diagram.
+    if (!this.hostTheme) {
+      try {
+        var mq = matchMedia('(prefers-color-scheme: dark)');
+        var follow = function (ev) {
+          if (self.themePref) return;
+          self.theme = ev.matches ? 'dark' : 'light';
+          self.themeBtn.textContent = self.theme === 'dark' ? 'Light' : 'Dark';
+          document.documentElement.setAttribute('data-theme', self.theme);
+          self.render();
+        };
+        if (mq.addEventListener) mq.addEventListener('change', follow);
+        else if (mq.addListener) mq.addListener(follow);
+      } catch (e) { /* no matchMedia: the initial theme stands */ }
+    }
 
     // One document-level handler for the whole page: the player swaps views
     // rather than being replaced, so these never stack up.
-    document.addEventListener('keydown', function (ev) { self.onKey(ev); });
+    //
+    // They would stack up across *players*, though, and a document holding
+    // three diagrams holds three of them — each one calling preventDefault on
+    // Space, so the page could no longer scroll. A scoped player listens on its
+    // own element and answers only when the reader is looking at it.
+    if (this.opts.keys === 'scoped') {
+      if (!this.root.hasAttribute('tabindex')) this.root.setAttribute('tabindex', '0');
+      this.root.addEventListener('keydown', function (ev) { self.onKey(ev); });
+    } else {
+      document.addEventListener('keydown', function (ev) { self.onKey(ev); });
+    }
 
     // The hash is the single source of truth for which view is showing, and
     // every navigation goes through it. That is what keeps the Back button
     // and the browser's own history from ever disagreeing.
-    window.addEventListener('hashchange', function () { self.applyHash(); });
+    //
+    // There is only one address, so only one player can own it. Embedded in a
+    // document the player owns none of it: navigation happens in the player and
+    // the URL is left to whatever else is on the page.
+    if (this.usesHash()) {
+      window.addEventListener('hashchange', function () { self.applyHash(); });
+    }
 
     // Embed mode drops the chrome around the diagram but not the diagram's own
     // controls: an iframe in a doc page wants the stage, the narration and the
     // scrubber, and has its own heading and navigation already.
-    if (isEmbedded()) this.root.classList.add('dgm-embed');
-    this.setPresenter(isPresenter());
+    if (isEmbedded(this.opts)) this.root.classList.add('dgm-embed');
+    // Inline goes one step further back: embed hides the whole bar, and a
+    // diagram in a document still needs somewhere to press Play. The class
+    // brings the bar back holding only what a reader — rather than an author —
+    // has any use for.
+    if (this.opts.inline) this.root.classList.add('dgm-inline');
+    this.setPresenter(isPresenter(this.opts));
 
     this.viewIndex = Math.max(0, this.viewIndexOf(this.hashView()));
     this.buildPicker();
@@ -558,7 +614,7 @@
 
     // Read before the first render so a deep link's scenario is the one that
     // gets built, rather than being swapped a frame later.
-    var deep = parseHash();
+    var deep = this.readHash();
     if (deep.s) {
       var i = this.scenarioIndexOf(deep.s);
       if (i >= 0) {
@@ -837,6 +893,12 @@
     var self = this;
 
     this.stage.addEventListener('wheel', function (ev) {
+      // On a page of its own the stage is the thing being scrolled over, so a
+      // wheel means zoom. Inside a document it is not: the reader is scrolling
+      // past, and swallowing that would strand them on the diagram. Ctrl or ⌘
+      // is the same modifier a map asks for, and the same one the browser's own
+      // pinch-zoom arrives with.
+      if (self.opts.inline && !ev.ctrlKey && !ev.metaKey) return;
       ev.preventDefault();
       var factor = Math.exp(-ev.deltaY * 0.0015);
       self.zoomAt(ev.clientX, ev.clientY, factor);
@@ -925,14 +987,23 @@
 
   // isEmbedded reads the query string rather than the hash, so it survives the
   // hash being rewritten by navigation.
-  function isEmbedded() {
+  //
+  // A host that mounts the player itself has no URL to say it with, so opts
+  // answers first: inline implies embedded, since inline is embed with a
+  // transport put back.
+  function isEmbedded(opts) {
+    if (opts && (opts.embed || opts.inline)) return true;
     return /(^|[?&])embed(=|&|$)/.test(location.search);
   }
 
   // isPresenter is the same trick for `?present`: a flag that says how the page
   // should behave, kept out of the hash so navigating between views cannot
   // silently drop it.
-  function isPresenter() {
+  function isPresenter(opts) {
+    if (opts && opts.present) return true;
+    // A detached player must not read the host's query string either: `?present`
+    // meant for the page around it is not an instruction to a diagram inside it.
+    if (opts && opts.hash === false) return false;
     return /(^|[?&])present(=|&|$)/.test(location.search);
   }
 
@@ -997,9 +1068,45 @@
     return out;
   }
 
+  // setTheme switches the palette from outside.
+  //
+  // A page discovers its theme, by asking the system or remembering a choice. A
+  // host does not have to be asked: an editor that has just gone light knows,
+  // and nothing else on the page will tell the player. Without this a diagram
+  // embedded in a document keeps the palette it was mounted with for as long as
+  // its element survives, which is until the block's own text changes.
+  Player.prototype.setTheme = function (kind) {
+    if (kind !== 'dark' && kind !== 'light') return;
+    if (this.theme === kind) return;
+
+    this.theme = kind;
+    this.themePref = kind;
+    if (this.hostTheme) this.hostTheme = kind;
+    if (this.themeBtn) this.themeBtn.textContent = kind === 'dark' ? 'Light' : 'Dark';
+    document.documentElement.setAttribute('data-theme', kind);
+    // mermaid's theme is chosen per render, so the diagram has to be redrawn
+    // rather than merely restyled.
+    this.render();
+  };
+
+  // usesHash reports whether this player owns the address bar.
+  //
+  // Exactly one player on a page can, so a host that mounts several says no and
+  // gets the same navigation kept inside each player instead.
+  Player.prototype.usesHash = function () { return this.opts.hash !== false; };
+
+  // readHash is parseHash for a player that may not own the address.
+  //
+  // A detached player must read no fragment at all rather than the host's own —
+  // a Markdown preview puts scroll anchors there, and a player treating one as
+  // a view id would jump somewhere the reader never asked to go.
+  Player.prototype.readHash = function () {
+    return this.usesHash() ? parseHash() : {};
+  };
+
   // hashView is the view id the current URL selects, defaulting to the root.
   Player.prototype.hashView = function () {
-    var id = parseHash().v;
+    var id = this.readHash().v;
     if (id && this.viewIndexOf(id) >= 0) return id;
     return this.timeline.root;
   };
@@ -1011,15 +1118,22 @@
   // A link that also names a scenario and a time lands paused at that moment,
   // which is the whole point of being able to share one.
   Player.prototype.applyHash = function () {
-    var want = parseHash();
-    var id = this.hashView();
-
-    if (id !== this.view().id) {
-      if (this.stack[this.stack.length - 1] === id) this.stack.pop();
-      else this.stack.push(this.view().id);
-      this.setView(id);
-    }
+    var want = this.readHash();
+    this.enter(this.hashView());
     this.applyDeepLink(want);
+  };
+
+  // enter moves to a view and keeps the back stack in step: returning to the
+  // view we came from pops it, anything else pushes the view being left.
+  //
+  // Split out of applyHash because a detached player performs the same move
+  // without a URL to read it from — the stack is the part that is really doing
+  // the work, and the hash was only ever how the page spelled it.
+  Player.prototype.enter = function (id) {
+    if (id === this.view().id) return;
+    if (this.stack[this.stack.length - 1] === id) this.stack.pop();
+    else this.stack.push(this.view().id);
+    this.setView(id);
   };
 
   // applyDeepLink honours the scenario and time a long-form hash carries.
@@ -1061,6 +1175,12 @@
   // the work, so a click and a browser history move follow the same path.
   Player.prototype.navigate = function (id) {
     if (this.viewIndexOf(id) < 0 || id === this.view().id) return;
+    if (!this.usesHash()) {
+      // No address to move, so make the move directly. Back still works: it is
+      // the stack, not the history, that remembers where the reader came from.
+      this.enter(id);
+      return;
+    }
     location.hash = id === this.timeline.root ? '' : '#' + encodeURIComponent(id);
   };
 
@@ -1100,6 +1220,7 @@
   // No `t`: the moment is what Copy link is for, and a hash that froze the time
   // at the instant of the pick would send anyone reloading to a stopped clock.
   Player.prototype.syncHash = function () {
+    if (!this.usesHash()) return;
     var want = '#' + this.hashParts().join('&');
     if (want === location.hash) return;
     try {
@@ -1168,7 +1289,14 @@
   // back retraces one step. Going through history rather than straight to the
   // view keeps the forward button working.
   Player.prototype.back = function () {
-    if (this.stack.length) history.back();
+    if (!this.stack.length) return;
+    // A detached player must not touch the host's history — going back in a
+    // Markdown preview would leave the document, not the diagram.
+    if (!this.usesHash()) {
+      this.enter(this.stack[this.stack.length - 1]);
+      return;
+    }
+    history.back();
   };
 
   Player.prototype.syncNav = function () {
@@ -2619,9 +2747,42 @@
     return (ms / 1000).toFixed(1) + 's';
   }
 
+  // normalize fills in the list-valued fields a timeline is entitled to omit.
+  //
+  // Go marshals a nil slice as `null`, so a flowchart with no subgraph arrives
+  // with `groups: null` and a step whose actions all draw nothing arrives with
+  // `tracks: null`. The compiler now emits `[]` for both, but the runtime is
+  // handed timelines from elsewhere too — a webview, a hand-written fixture, a
+  // file compiled by an older binary — and one missing list should not take the
+  // whole page down with a TypeError. Done once here rather than as a `|| []`
+  // at each of the twenty-odd reads, which is a guard that only has to be
+  // forgotten once.
+  function normalize(timeline) {
+    var t = timeline || {};
+    t.views = t.views || [];
+    t.views.forEach(function (v) {
+      v.nodes = v.nodes || [];
+      v.groups = v.groups || [];
+      v.edges = v.edges || [];
+      v.bindings = v.bindings || [];
+      v.hidden = v.hidden || [];
+      v.scenarios = v.scenarios || [];
+      v.scenarios.forEach(function (sc) {
+        sc.steps = sc.steps || [];
+        sc.persistent = sc.persistent || [];
+        sc.steps.forEach(function (st) { st.tracks = st.tracks || []; });
+      });
+      if (v.storyboard) v.storyboard.frames = v.storyboard.frames || [];
+    });
+    return t;
+  }
+
   window.Cinegram = {
-    mount: function (root, timeline) {
-      return new Player(root, timeline);
+    // opts is optional and documented on Player above. The page passes none;
+    // an editor host embedding several players in one document passes
+    // { inline: true, keys: 'scoped', hash: false, autoplay: false, theme }.
+    mount: function (root, timeline, opts) {
+      return new Player(root, normalize(timeline), opts);
     }
   };
 })();

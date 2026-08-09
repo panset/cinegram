@@ -54,7 +54,12 @@ func Render(t *ir.Timeline, opts Options) ([]byte, error) {
 	fmt.Fprintf(&b, "<title>%s</title>\n", html.EscapeString(title))
 	b.WriteString("<style>\n")
 	b.WriteString(runtimeCSS)
-	b.WriteString("\n</style>\n</head>\n<body>\n")
+	// dgm-standalone is what tells the stylesheet it owns the document: the page
+	// fills the window and paints its own background. The same sheet is loaded
+	// by hosts that put a diagram inside a page they already own — the VS Code
+	// Markdown preview contributes it next to the editor's own styles — and
+	// there the class is absent, so those rules never fire.
+	b.WriteString("\n</style>\n</head>\n<body class=\"dgm-standalone\">\n")
 	b.WriteString("<div id=\"cinegram\"></div>\n")
 
 	b.WriteString("<script>\n")

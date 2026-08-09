@@ -57,7 +57,13 @@
   }
 }
 
-body {
+/* Everything that claims the page is scoped to .dgm-standalone, which only the
+   emitted page sets on <body>. This stylesheet is also loaded whole into hosts
+   that own the document around the diagram — the VS Code Markdown preview
+   contributes it alongside the editor's own — and a bare `body` rule there would
+   restyle the reader's prose to match the diagram. The tokens above are safe to
+   share; laying out the page is not. */
+body.dgm-standalone {
   margin: 0;
   background: var(--dgm-bg);
   color: var(--dgm-fg);
@@ -67,12 +73,21 @@ body {
 .dgm {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  max-width: 1400px;
-  margin: 0 auto;
   padding: 16px;
   box-sizing: border-box;
   gap: 12px;
+  /* Not inherited from the host: the runtime's own sizing is in px throughout,
+     and an editor's prose font would leave the controls at the wrong scale. */
+  font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--dgm-fg);
+}
+
+/* Filling the window is the standalone page's job. Embedded, the diagram is one
+   element among others and takes the height its content asks for. */
+.dgm-standalone .dgm {
+  min-height: 100vh;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 /* --- chrome ------------------------------------------------------------- */
@@ -158,6 +173,37 @@ body {
 .dgm-embed.dgm-has-board .dgm-body {
   grid-template-columns: minmax(0, 1fr) minmax(200px, 320px);
 }
+
+/* Inline mode: one diagram among the paragraphs of a document, rather than a
+   page of its own. It builds on embed — the step list and the page furniture are
+   already gone — and puts back only the two things a reader cannot do without:
+   somewhere to press Play, and a way back out of a diagram they drilled into.
+   Everything else in the bar belongs to authoring a diagram, not reading one.
+
+   Selecting what stays, rather than what goes, is deliberate: a control added to
+   the bar later should have to earn its place in a document explicitly. */
+.dgm-inline {
+  border: 1px solid var(--dgm-border);
+  border-radius: 10px;
+  background: var(--dgm-bg);
+  padding: 10px 12px;
+  gap: 8px;
+}
+
+.dgm-inline .dgm-bar { display: flex; }
+.dgm-inline .dgm-title { display: none; }
+.dgm-inline .dgm-controls > * { display: none; }
+.dgm-inline .dgm-controls > .dgm-play,
+.dgm-inline .dgm-controls > .dgm-select { display: inline-block; }
+
+/* Back and the scenario picker are left to the runtime, which already hides
+   each until it has something to offer — Back until the reader has drilled into
+   something, the picker until there is more than one scenario. Both do it by
+   writing element.style, which beats the rules above, so a document shows them
+   only when they mean something. The breadcrumb stays for the same reason: it
+   renders empty until there is a trail to describe. */
+
+.dgm-inline .dgm-stage { min-height: 180px; }
 
 /* Presenter mode. The room is looking at the stage and the presenter is doing
    the narrating, so the step list, the scrubber and most of the transport go

@@ -50,6 +50,30 @@ func TestPageIsSelfContained(t *testing.T) {
 	}
 }
 
+// TestPageClaimsTheDocument pins the other half of the arrangement that lets one
+// stylesheet serve both hosts.
+//
+// runtime.css scopes everything that lays out a whole page — the body
+// background, the full-viewport height — behind .dgm-standalone, so that a host
+// which contributes the sheet into a document it already owns does not have its
+// prose restyled to match the diagram. The emitted page is that host's opposite
+// number: it must actually say so, or it loses its own layout.
+func TestPageClaimsTheDocument(t *testing.T) {
+	page, err := Render(sample(), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(page), `<body class="dgm-standalone">`) {
+		t.Error("the page must mark itself standalone, or runtime.css lays out nothing")
+	}
+	if !strings.Contains(string(runtimeCSS), ".dgm-standalone") {
+		t.Error("runtime.css no longer scopes its page rules; the class the page sets now means nothing")
+	}
+	if strings.Contains(string(runtimeCSS), "\nbody {") {
+		t.Error("runtime.css styles a bare body again, which would restyle any host that loads it")
+	}
+}
+
 // TestScriptPayloadCannotEscape checks that diagram text containing a closing
 // script tag is neutralised rather than breaking out of the script element.
 func TestScriptPayloadCannotEscape(t *testing.T) {
