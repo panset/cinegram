@@ -57,7 +57,6 @@ var contentTypes = map[string]string{
 	".gif":  "image/gif",
 	".svg":  "image/svg+xml",
 	".txt":  "text/plain",
-	"":      "application/octet-stream", // the binary, which has no extension
 	".exe":  "application/octet-stream",
 }
 
@@ -409,8 +408,19 @@ func add(z *zip.Writer, name string, data []byte, mode fs.FileMode) error {
 
 func contentTypesXML(files []entry) ([]byte, error) {
 	seen := map[string]bool{}
+	// An extensionless file (the binary) cannot be a Default — the gallery's
+	// OPC parser rejects an empty Extension attribute with an XmlException,
+	// even though VS Code's own installer accepts it — so it is declared by
+	// full part name instead.
+	var overrides []string
 	for _, e := range files {
-		seen[strings.ToLower(path.Ext(e.archive))] = true
+		ext := strings.ToLower(path.Ext(e.archive))
+		if ext == "" {
+			overrides = append(overrides, fmt.Sprintf(`  <Override PartName="/%s" ContentType="application/octet-stream"/>`,
+				e.archive))
+			continue
+		}
+		seen[ext] = true
 	}
 	seen[".xml"] = true
 	seen[".vsixmanifest"] = true
@@ -426,15 +436,13 @@ func contentTypesXML(files []entry) ([]byte, error) {
 		case !ok:
 			return nil, fmt.Errorf("no content type declared for %q files; add one to contentTypes in cmd/vsix", ext)
 		}
-		// An extensionless file is declared as the empty Extension, which the
-		// format allows and which is how the binary gets through.
 		defaults = append(defaults, fmt.Sprintf(`  <Default Extension="%s" ContentType="%s"/>`,
 			strings.TrimPrefix(ext, "."), ct))
 	}
 
 	return []byte(xml.Header +
 		"<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n" +
-		strings.Join(defaults, "\n") +
+		strings.Join(append(defaults, overrides...), "\n") +
 		"\n</Types>\n"), nil
 }
 
