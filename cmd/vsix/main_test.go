@@ -200,6 +200,27 @@ func TestContentTypesRejectsAnUndeclaredExtension(t *testing.T) {
 	}
 }
 
+// TestContentTypesDeclaresExtensionlessFilesByPartName pins the OPC shape the
+// Marketplace requires: the gallery's parser throws an XmlException on a
+// Default with an empty Extension, so the binary must arrive as an Override.
+func TestContentTypesDeclaresExtensionlessFilesByPartName(t *testing.T) {
+	types, err := contentTypesXML([]entry{
+		{archive: "extension/bin/linux-x64/cinegram"},
+		{archive: "extension/package.json"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(types)
+	want := `<Override PartName="/extension/bin/linux-x64/cinegram" ContentType="application/octet-stream"/>`
+	if !strings.Contains(got, want) {
+		t.Errorf("content types should declare the binary by part name:\n%s", got)
+	}
+	if strings.Contains(got, `Extension=""`) {
+		t.Errorf("content types must not declare an empty Default Extension:\n%s", got)
+	}
+}
+
 // TestPackageContents walks a whole package: what gets in, what stays out, and
 // that everything the manifest points at is really there.
 func TestPackageContents(t *testing.T) {
