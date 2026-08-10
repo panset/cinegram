@@ -4,7 +4,10 @@
   "description": "Animated architecture diagrams in the Markdown preview, from ```dgm blocks.",
   "version": "0.1.0",
   "publisher": "cinegram",
-  "license": "SEE LICENSE IN ../../README.md",
+  "license": "MIT",
+  "icon": "icon.png",
+  "preview": true,
+  "pricing": "Free",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -12,12 +15,43 @@
     "Programming Languages",
     "Visualization"
   ],
+  "keywords": [
+    "diagram",
+    "mermaid",
+    "animation",
+    "architecture",
+    "flowchart",
+    "sequence diagram",
+    "markdown",
+    "gif"
+  ],
+  "galleryBanner": {
+    "color": "#12161F",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/panset/cinegram.git",
+    "directory": "editors/vscode"
+  },
+  "homepage": "https://github.com/panset/cinegram/tree/main/editors/vscode#readme",
+  "bugs": {
+    "url": "https://github.com/panset/cinegram/issues"
+  },
+  "qna": "https://github.com/panset/cinegram/issues",
   "activationEvents": [],
   "main": "./src/extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": false,
       "description": "Rendering a diagram runs the cinegram binary, which a workspace can point at through cinegram.path."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Rendering a diagram spawns a native binary, which needs the file on a real filesystem."
     }
   },
   "contributes": {

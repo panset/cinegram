@@ -29,6 +29,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -53,6 +54,7 @@ var contentTypes = map[string]string{
 	".css":  "text/css",
 	".md":   "text/markdown",
 	".png":  "image/png",
+	".gif":  "image/gif",
 	".svg":  "image/svg+xml",
 	".txt":  "text/plain",
 	"":      "application/octet-stream", // the binary, which has no extension
@@ -118,10 +120,16 @@ func run() error {
 		return err
 	}
 
+	present := map[string]bool{}
+	for _, e := range files {
+		present[e.archive] = true
+	}
+	warnListing(manifest, present)
+
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return err
 	}
-	if err := write(out, files, manifest, target, types); err != nil {
+	if err := write(out, files, manifest, target, types, present); err != nil {
 		return err
 	}
 
@@ -140,7 +148,12 @@ type entry struct {
 	mode    fs.FileMode
 }
 
-// manifest is the handful of package.json fields the vsixmanifest repeats.
+// manifest is the package.json fields the vsixmanifest repeats.
+//
+// The first block is the package's identity, which install needs. The rest is
+// the Marketplace listing — the icon, the categories, the links down the side
+// of the page. None of it changes what the extension does, and all of it is
+// the difference between a listing and a listing nobody installs from.
 type manifest struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"displayName"`
@@ -150,7 +163,57 @@ type manifest struct {
 	Engines     struct {
 		VSCode string `json:"vscode"`
 	} `json:"engines"`
+
+	Icon          string   `json:"icon"`
+	Preview       bool     `json:"preview"`
+	Pricing       string   `json:"pricing"`
+	Categories    []string `json:"categories"`
+	Keywords      []string `json:"keywords"`
+	ExtensionKind []string `json:"extensionKind"`
+	Homepage      string   `json:"homepage"`
+	GalleryBanner struct {
+		Color string `json:"color"`
+		Theme string `json:"theme"`
+	} `json:"galleryBanner"`
+	Repository repository `json:"repository"`
+	Bugs       struct {
+		URL string `json:"url"`
+	} `json:"bugs"`
+	QnA         json.RawMessage `json:"qna"`
+	Contributes struct {
+		Languages []struct {
+			Extensions []string `json:"extensions"`
+		} `json:"languages"`
+	} `json:"contributes"`
 }
+
+// repository is `{"url": …}` in this package.json, but npm also allows the bare
+// string form, and a manifest that fails to parse over that would be a puzzling
+// way to find out.
+type repository struct {
+	URL string
+}
+
+func (r *repository) UnmarshalJSON(data []byte) error {
+	var s string
+	if json.Unmarshal(data, &s) == nil {
+		r.URL = s
+		return nil
+	}
+	var obj struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return err
+	}
+	r.URL = obj.URL
+	return nil
+}
+
+// nameRE is what the Marketplace accepts as an extension name. Catching it here
+// costs nothing; finding out at publish time costs a version number, because a
+// version once published cannot be reused.
+var nameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9\-]*$`)
 
 func readManifest(p string) (*manifest, error) {
 	data, err := os.ReadFile(p)
@@ -161,12 +224,65 @@ func readManifest(p string) (*manifest, error) {
 	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", p, err)
 	}
-	for field, value := range map[string]string{"name": m.Name, "version": m.Version, "publisher": m.Publisher} {
-		if value == "" {
-			return nil, fmt.Errorf("%s is missing %q, which the package identity needs", p, field)
+	for _, field := range []struct{ name, value string }{
+		{"name", m.Name},
+		{"version", m.Version},
+		{"publisher", m.Publisher},
+	} {
+		if field.value == "" {
+			return nil, fmt.Errorf("%s is missing %q, which the package identity needs", p, field.name)
 		}
 	}
+	if !nameRE.MatchString(m.Name) {
+		return nil, fmt.Errorf("%s has name %q; the Marketplace allows only lowercase letters, digits and dashes", p, m.Name)
+	}
+	if !nameRE.MatchString(m.Publisher) {
+		return nil, fmt.Errorf("%s has publisher %q; the Marketplace allows only lowercase letters, digits and dashes", p, m.Publisher)
+	}
 	return &m, nil
+}
+
+// listingAssets are the four files the Marketplace renders a listing from. Each
+// is optional in the format and each is a visible hole in the page when it is
+// missing, so an absent one is a warning rather than an error — packaging a
+// build to try locally should not require a changelog.
+var listingAssets = []struct{ assetType, file, why string }{
+	{"Microsoft.VisualStudio.Services.Content.Details", "README.md", "the Marketplace page will have no body"},
+	{"Microsoft.VisualStudio.Services.Content.Changelog", "CHANGELOG.md", "the Changelog tab will be empty"},
+	{"Microsoft.VisualStudio.Services.Content.License", "LICENSE.txt", "the License tab will be empty"},
+}
+
+// qnaLink reads the `qna` field, which npm allows to be a URL, the string
+// "marketplace", or false. Only the first two produce anything here.
+func (m *manifest) qnaLink() (url string, disabled bool) {
+	if len(m.QnA) == 0 {
+		return "", false
+	}
+	var b bool
+	if json.Unmarshal(m.QnA, &b) == nil {
+		return "", !b
+	}
+	var s string
+	if json.Unmarshal(m.QnA, &s) == nil && s != "marketplace" {
+		return s, false
+	}
+	return "", false
+}
+
+// sourceURL normalises whatever `repository.url` holds into the https URL the
+// Marketplace links to: npm accepts `git+https://…`, `git@host:owner/repo.git`
+// and a bare path, and the gallery renders the link verbatim.
+func sourceURL(raw string) string {
+	s := strings.TrimSpace(raw)
+	s = strings.TrimPrefix(s, "git+")
+	if rest, ok := strings.CutPrefix(s, "git@"); ok {
+		s = "https://" + strings.Replace(rest, ":", "/", 1)
+	}
+	s = strings.TrimSuffix(s, ".git")
+	if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
+		return ""
+	}
+	return s
 }
 
 // skip lists what never belongs in a package.
@@ -222,7 +338,37 @@ func collect(dir string) ([]entry, error) {
 	return out, nil
 }
 
-func write(out string, files []entry, m *manifest, target string, types []byte) error {
+// warnListing reports what the Marketplace page will be missing.
+//
+// None of this stops a package installing, which is exactly why it is worth
+// saying out loud: a .vsix with no icon and no README installs perfectly and
+// lists as a blank grey square with no description under it.
+func warnListing(m *manifest, present map[string]bool) {
+	var problems []string
+	for _, a := range listingAssets {
+		if !present[path.Join("extension", a.file)] {
+			problems = append(problems, fmt.Sprintf("no %s in the extension: %s", a.file, a.why))
+		}
+	}
+	switch {
+	case m.Icon == "":
+		problems = append(problems, `no "icon" in package.json: the listing will show a blank tile`)
+	case !present[path.Join("extension", m.Icon)]:
+		problems = append(problems, fmt.Sprintf(
+			"%s is named by \"icon\" in package.json but is not in the package: the listing will show a blank tile", m.Icon))
+	}
+	if len(m.Categories) == 0 {
+		problems = append(problems, `no "categories" in package.json: the listing will not be filed under anything`)
+	}
+	if sourceURL(m.Repository.URL) == "" {
+		problems = append(problems, `no usable "repository" in package.json: the listing will have no Repository link`)
+	}
+	for _, s := range problems {
+		fmt.Fprintf(os.Stderr, "vsix: warning: %s\n", s)
+	}
+}
+
+func write(out string, files []entry, m *manifest, target string, types []byte, present map[string]bool) error {
 	f, err := os.Create(out)
 	if err != nil {
 		return err
@@ -234,7 +380,7 @@ func write(out string, files []entry, m *manifest, target string, types []byte) 
 	if err := add(z, "[Content_Types].xml", types, 0o644); err != nil {
 		return err
 	}
-	if err := add(z, "extension.vsixmanifest", vsixManifest(m, target), 0o644); err != nil {
+	if err := add(z, "extension.vsixmanifest", vsixManifest(m, target, present), 0o644); err != nil {
 		return err
 	}
 
@@ -292,7 +438,13 @@ func contentTypesXML(files []entry) ([]byte, error) {
 		"\n</Types>\n"), nil
 }
 
-func vsixManifest(m *manifest, target string) []byte {
+// vsixManifest renders extension.vsixmanifest.
+//
+// `present` is the set of archive paths actually going into the package, and it
+// gates every Asset element: an Asset naming a file the ZIP does not contain is
+// rejected on install, which turns a missing changelog into a broken package
+// rather than a missing tab.
+func vsixManifest(m *manifest, target string, present map[string]bool) []byte {
 	platform := ""
 	if target != "" {
 		platform = fmt.Sprintf(" TargetPlatform=%q", target)
@@ -301,30 +453,145 @@ func vsixManifest(m *manifest, target string) []byte {
 	if display == "" {
 		display = m.Name
 	}
+	flags := "Public"
+	if m.Preview {
+		flags = "Public Preview"
+	}
 
-	return []byte(xml.Header + fmt.Sprintf(`<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
-  <Metadata>
-    <Identity Language="en-US" Id="%s" Version="%s" Publisher="%s"%s/>
-    <DisplayName>%s</DisplayName>
-    <Description xml:space="preserve">%s</Description>
-    <Tags></Tags>
-    <GalleryFlags>Public</GalleryFlags>
-    <Properties>
-      <Property Id="Microsoft.VisualStudio.Code.Engine" Value="%s"/>
-      <Property Id="Microsoft.VisualStudio.Code.ExtensionDependencies" Value=""/>
-      <Property Id="Microsoft.VisualStudio.Code.ExtensionPack" Value=""/>
-      <Property Id="Microsoft.VisualStudio.Code.ExtensionKind" Value="workspace"/>
-    </Properties>
-  </Metadata>
-  <Installation>
-    <InstallationTarget Id="Microsoft.VisualStudio.Code"/>
-  </Installation>
-  <Dependencies/>
-  <Assets>
-    <Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="extension/package.json" Addressable="true"/>
-  </Assets>
-</PackageManifest>
-`, esc(m.Name), esc(m.Version), esc(m.Publisher), platform, esc(display), esc(m.Description), esc(m.Engines.VSCode)))
+	var b strings.Builder
+	b.WriteString(xml.Header)
+	b.WriteString(`<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">` + "\n")
+	b.WriteString("  <Metadata>\n")
+	fmt.Fprintf(&b, "    <Identity Language=\"en-US\" Id=\"%s\" Version=\"%s\" Publisher=\"%s\"%s/>\n",
+		esc(m.Name), esc(m.Version), esc(m.Publisher), platform)
+	fmt.Fprintf(&b, "    <DisplayName>%s</DisplayName>\n", esc(display))
+	fmt.Fprintf(&b, "    <Description xml:space=\"preserve\">%s</Description>\n", esc(m.Description))
+	fmt.Fprintf(&b, "    <Tags>%s</Tags>\n", esc(strings.Join(tags(m), ",")))
+	fmt.Fprintf(&b, "    <Categories>%s</Categories>\n", esc(strings.Join(m.Categories, ",")))
+	fmt.Fprintf(&b, "    <GalleryFlags>%s</GalleryFlags>\n", flags)
+	if m.Icon != "" && present[path.Join("extension", m.Icon)] {
+		fmt.Fprintf(&b, "    <Icon>extension/%s</Icon>\n", esc(filepath.ToSlash(m.Icon)))
+	}
+	if present["extension/LICENSE.txt"] {
+		b.WriteString("    <License>extension/LICENSE.txt</License>\n")
+	}
+
+	b.WriteString("    <Properties>\n")
+	for _, p := range properties(m) {
+		fmt.Fprintf(&b, "      <Property Id=\"%s\" Value=\"%s\"/>\n", p[0], esc(p[1]))
+	}
+	b.WriteString("    </Properties>\n")
+	b.WriteString("  </Metadata>\n")
+	b.WriteString("  <Installation>\n    <InstallationTarget Id=\"Microsoft.VisualStudio.Code\"/>\n  </Installation>\n")
+	b.WriteString("  <Dependencies/>\n")
+
+	b.WriteString("  <Assets>\n")
+	b.WriteString("    <Asset Type=\"Microsoft.VisualStudio.Code.Manifest\" Path=\"extension/package.json\" Addressable=\"true\"/>\n")
+	for _, a := range listingAssets {
+		if present[path.Join("extension", a.file)] {
+			fmt.Fprintf(&b, "    <Asset Type=\"%s\" Path=\"extension/%s\" Addressable=\"true\"/>\n", a.assetType, a.file)
+		}
+	}
+	if m.Icon != "" && present[path.Join("extension", m.Icon)] {
+		fmt.Fprintf(&b, "    <Asset Type=\"Microsoft.VisualStudio.Services.Icons.Default\" Path=\"extension/%s\" Addressable=\"true\"/>\n",
+			esc(filepath.ToSlash(m.Icon)))
+	}
+	b.WriteString("  </Assets>\n")
+	b.WriteString("</PackageManifest>\n")
+	return []byte(b.String())
+}
+
+// tags are what the Marketplace searches on. The keywords and categories are the
+// obvious half; the `__ext_` entries are the other one — they are how VS Code
+// offers an extension to someone who has just opened a file it handles, which
+// for a language nobody has heard of is the only discovery path there is.
+func tags(m *manifest) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(s string) {
+		if s = strings.TrimSpace(s); s != "" && !seen[strings.ToLower(s)] {
+			seen[strings.ToLower(s)] = true
+			out = append(out, s)
+		}
+	}
+	for _, k := range m.Keywords {
+		add(k)
+	}
+	for _, c := range m.Categories {
+		add(c)
+	}
+	for _, lang := range m.Contributes.Languages {
+		for _, ext := range lang.Extensions {
+			add("__ext_" + strings.TrimPrefix(ext, "."))
+		}
+	}
+	return out
+}
+
+// properties are the Metadata/Properties entries, in the order vsce writes them.
+func properties(m *manifest) [][2]string {
+	kind := "workspace"
+	if len(m.ExtensionKind) > 0 {
+		kind = strings.Join(m.ExtensionKind, ",")
+	}
+	out := [][2]string{
+		{"Microsoft.VisualStudio.Code.Engine", m.Engines.VSCode},
+		{"Microsoft.VisualStudio.Code.ExtensionDependencies", ""},
+		{"Microsoft.VisualStudio.Code.ExtensionPack", ""},
+		{"Microsoft.VisualStudio.Code.ExtensionKind", kind},
+		{"Microsoft.VisualStudio.Code.LocalizedLanguages", ""},
+	}
+
+	source := sourceURL(m.Repository.URL)
+	learn := m.Homepage
+	if learn == "" {
+		learn = source
+	}
+	for _, link := range [][2]string{
+		{"Microsoft.VisualStudio.Services.Links.Source", source},
+		{"Microsoft.VisualStudio.Services.Links.Getstarted", source},
+		{"Microsoft.VisualStudio.Services.Links.GitHub", githubURL(source)},
+		{"Microsoft.VisualStudio.Services.Links.Support", m.Bugs.URL},
+		{"Microsoft.VisualStudio.Services.Links.Learn", learn},
+	} {
+		if link[1] != "" {
+			out = append(out, link)
+		}
+	}
+
+	if m.GalleryBanner.Color != "" {
+		theme := m.GalleryBanner.Theme
+		if theme == "" {
+			theme = "dark"
+		}
+		out = append(out,
+			[2]string{"Microsoft.VisualStudio.Services.Branding.Color", m.GalleryBanner.Color},
+			[2]string{"Microsoft.VisualStudio.Services.Branding.Theme", theme},
+		)
+	}
+
+	// The README is written for GitHub and rendered by the gallery; without this
+	// the gallery falls back to a stricter dialect and the tables come out flat.
+	out = append(out, [2]string{"Microsoft.VisualStudio.Services.GitHubFlavoredMarkdown", "true"})
+
+	if m.Pricing != "" {
+		out = append(out, [2]string{"Microsoft.VisualStudio.Services.Content.Pricing", m.Pricing})
+	}
+	if url, disabled := m.qnaLink(); disabled {
+		out = append(out, [2]string{"Microsoft.VisualStudio.Code.EnableMarketplaceQnA", "false"})
+	} else if url != "" {
+		out = append(out, [2]string{"Microsoft.VisualStudio.Services.CustomerQnALink", url})
+	}
+	return out
+}
+
+// githubURL is the Source link again, but only when it really is GitHub — the
+// gallery renders this one with a GitHub mark beside it.
+func githubURL(source string) string {
+	if strings.HasPrefix(source, "https://github.com/") {
+		return source
+	}
+	return ""
 }
 
 func esc(s string) string {
