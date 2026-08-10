@@ -11,10 +11,12 @@ The extension is plain JavaScript with no dependencies and no build step, so a
 symlink is the whole install:
 
 ```sh
-ln -s "$PWD/editors/vscode" ~/.vscode/extensions/cinegram.cinegram-0.1.0
+ln -s "$PWD/editors/vscode" ~/.vscode/extensions/tejaspanse.cinegram-0.1.0
 ```
 
-Then **Developer: Reload Window** in VS Code.
+Then **Developer: Reload Window** in VS Code. That folder name is not arbitrary:
+VS Code reads it as `<publisher>.<name>-<version>`, so it has to match
+`package.json` or the extension is ignored.
 
 It needs the `cinegram` binary, which it looks for in this order:
 
@@ -145,9 +147,17 @@ square.
 
 ### Before the first release
 
-- The **publisher ID** in `package.json` must be one that exists and that your
-  Azure DevOps account owns. Create it at
-  <https://marketplace.visualstudio.com/manage/createpublisher>.
+- The **publisher ID `tejaspanse`** has to exist and be owned by the Azure
+  DevOps account doing the upload. Create it once at
+  <https://marketplace.visualstudio.com/manage/createpublisher>; it is the
+  `publisher` field in `package.json`, and together with `name` it fixes the
+  extension's identity as **`tejaspanse.cinegram`** — the string people install
+  by, which cannot be changed afterwards without republishing under a new one.
+  The listing then lives at
+  <https://marketplace.visualstudio.com/items?itemName=tejaspanse.cinegram>.
+- **A Personal Access Token** for that account, scoped to *Marketplace →
+  Manage*, over the **all accessible organizations** scope. `vsce login
+  tejaspanse` stores it; `vsce publish` will otherwise ask on every run.
 - The **repository must be public**, or the README's images 404 on the gallery
   page: the Marketplace renders the README from inside the package but fetches
   images over the network, which is why every URL in it is absolute.

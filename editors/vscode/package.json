@@ -3,7 +3,7 @@
   "displayName": "Cinegram",
   "description": "Animated architecture diagrams in the Markdown preview, from ```dgm blocks.",
   "version": "0.1.0",
-  "publisher": "cinegram",
+  "publisher": "tejaspanse",
   "license": "MIT",
   "icon": "icon.png",
   "preview": true,
