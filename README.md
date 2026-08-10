@@ -821,3 +821,19 @@ highlighting, a preview panel, an *Open With… → Cinegram Animation* editor, 
 
 Not built yet: `architecture-beta` and the other Mermaid diagram types (the
 registry seam exists for them), and WASM builds.
+
+## The VS Code extension
+
+`editors/vscode/README.md` is the Marketplace listing and is written for someone
+installing the extension. Building, packaging and publishing it are in
+[`editors/vscode/CONTRIBUTING.md`](editors/vscode/CONTRIBUTING.md).
+
+A `.vsix` is a ZIP with an XML manifest, so `cmd/vsix` builds one with
+`archive/zip` and nothing else — no `vsce`, no npm, no lockfile. Each package
+carries the `cinegram` binary for one platform, because the extension shells out
+to the compiler rather than reimplementing any of it, and VS Code installs the
+package matching the machine.
+
+## License
+
+[MIT](LICENSE).

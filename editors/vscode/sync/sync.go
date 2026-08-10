@@ -23,6 +23,7 @@ var synced = [][2]string{
 	{"pkg/emit/html/assets/runtime.js", "editors/vscode/media/runtime.js"},
 	{"pkg/emit/html/assets/runtime.css", "editors/vscode/media/runtime.css"},
 	{"pkg/emit/html/assets/mermaid.min.js", "editors/vscode/media/mermaid.min.js"},
+	{"LICENSE", "editors/vscode/LICENSE.txt"},
 }
 
 func main() {

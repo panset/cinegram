@@ -228,8 +228,23 @@ the extension does not own.
 
 The three browser assets are duplicated into `editors/vscode/media/` because
 `go:embed` cannot reach out of its package and `previewScripts` cannot reach out
-of the extension. `bazel test //editors/vscode:assets_test` is what keeps the
-copies honest; `bazel run //editors/vscode:sync_assets` updates them.
+of the extension; `LICENSE.txt` is a fourth copy, because a `.vsix` contains
+nothing from outside the extension folder. `bazel test
+//editors/vscode:assets_test` is what keeps the copies honest; `bazel run
+//editors/vscode:sync_assets` updates them. Both lists live in `sync/sync.go`
+and `assets_test.go` and are deliberately not shared — a test that imported its
+expectations from the thing it checks would pass either way.
+
+**`editors/vscode/README.md` is the Marketplace listing, not developer
+documentation.** The gallery renders it as the page body, so it is written for
+someone who has just installed the extension, and every URL in it is absolute —
+the Marketplace serves the README from inside the package but fetches images
+over the network, so a relative path 404s. Everything about building,
+packaging, publishing and how the extension works internally lives in
+`editors/vscode/CONTRIBUTING.md` instead. `cmd/vsix` warns on stderr about
+anything the listing will be missing, because none of it stops a package
+installing: a `.vsix` with no icon and no README installs perfectly and lists as
+a blank grey square.
 
 **Export is `spawn`, compile is `execFileSync`, and that asymmetry is the
 design, not an inconsistency to clean up.** `src/compile.js` is synchronous

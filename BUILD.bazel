@@ -2,3 +2,8 @@ load("@gazelle//:def.bzl", "gazelle")
 
 # gazelle:prefix github.com/tejaspanse/cinegram
 gazelle(name = "gazelle")
+
+# The canonical licence. The VS Code extension keeps a copy, because a .vsix
+# holds nothing outside the extension folder; //editors/vscode:assets_test is
+# what keeps the two equal.
+exports_files(["LICENSE"])
