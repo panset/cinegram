@@ -10,13 +10,13 @@
   <rect x="120" y="60" width="240" height="212" rx="12" fill="#ffffff" stroke="#dfe3e8"/>
   <rect x="222" y="80" width="36" height="36" rx="18" fill="#7c3aed"/>
   <text x="240" y="104" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="17" font-weight="700" fill="#ffffff">I</text>
-  <text x="240" y="138" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14" font-weight="600" fill="#1c2024">Sign in</text>
+  <text x="240" y="138" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14" font-weight="600" fill="#1c2024">Authhub - Sign In</text>
 
-  <text x="144" y="164" font-family="ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#6b7480">Email</text>
-  <rect x="144" y="170" width="192" height="28" rx="7" fill="#ffffff" stroke="#dfe3e8"/>
-  <text x="154" y="188" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#1c2024">ada@acme.example</text>
-
-  <text x="144" y="216" font-family="ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#6b7480">Password</text>
-  <rect x="144" y="222" width="192" height="28" rx="7" fill="#ffffff" stroke="#7c3aed"/>
-  <text x="154" y="241" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" letter-spacing="2" fill="#6b7480">••••••••••</text>
+  <!-- Abstracted credential entry: a lock glyph stands for "email and
+       password are typed here" without drawing an actual fillable form. -->
+  <rect x="152" y="168" width="176" height="76" rx="10" fill="#f6f7f9" stroke="#dfe3e8"/>
+  <rect x="222" y="190" width="36" height="26" rx="5" fill="#ffffff" stroke="#7c3aed" stroke-width="2"/>
+  <path d="M230 190v-8a10 10 0 0 1 20 0v8" fill="none" stroke="#7c3aed" stroke-width="2"/>
+  <circle cx="240" cy="202" r="2.5" fill="#7c3aed"/>
+  <text x="240" y="232" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#6b7480">Credentials entered here</text>
 </svg>
