@@ -2,3 +2,4 @@ bazel-*
 *.html
 !testdata/**/*.html
 .DS_Store
+dist/

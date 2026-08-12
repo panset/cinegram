@@ -19,10 +19,15 @@ import (
 )
 
 // synced lists every file the extension keeps a copy of, canonical path first.
+//
+// The licence is here for the same reason the browser assets are: a .vsix holds
+// nothing outside the extension folder, and the Marketplace shows the licence
+// from inside the package. The repository's own LICENSE stays canonical.
 var synced = []struct{ canonical, copy string }{
 	{"pkg/emit/html/assets/runtime.js", "editors/vscode/media/runtime.js"},
 	{"pkg/emit/html/assets/runtime.css", "editors/vscode/media/runtime.css"},
 	{"pkg/emit/html/assets/mermaid.min.js", "editors/vscode/media/mermaid.min.js"},
+	{"LICENSE", "editors/vscode/LICENSE.txt"},
 }
 
 // TestAssetsAreInSync fails when the extension's copies have fallen behind.

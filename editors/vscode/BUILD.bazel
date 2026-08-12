@@ -14,7 +14,9 @@ go_test(
     name = "assets_test",
     srcs = ["assets_test.go"],
     data = [
+        "LICENSE.txt",
         ":media",
+        "//:LICENSE",
         "//pkg/emit/html:browser_assets",
     ],
 )
