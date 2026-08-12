@@ -1,0 +1,57 @@
+# Pushing a tag `v*` qualifies the commit with the full Bazel test suite,
+# cross-builds the standalone CLI for every supported platform, and publishes
+# a GitHub release. The asset names (cinegram-<os>-<arch>) are a contract:
+# the authoring skill in skills/cinegram/ downloads
+# releases/latest/download/cinegram-$TARGET, so renaming one breaks installs.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # bazelisk reads .bazelversion, so CI builds with the same Bazel as dev.
+      - uses: bazelbuild/setup-bazelisk@v3
+
+      - name: Qualify
+        run: bazel test //...
+
+      - name: Build release binaries
+        run: |
+          mkdir -p dist
+          build() {
+            bazel build //cmd/cinegram --platforms=@rules_go//go/toolchain:"$1"
+            cp "bazel-bin/cmd/cinegram/cinegram_/cinegram$3" "dist/cinegram-$2$3"
+          }
+          build darwin_arm64  darwin-arm64
+          build darwin_amd64  darwin-x64
+          build linux_amd64   linux-x64
+          build linux_arm64   linux-arm64
+          build windows_amd64 win32-x64 .exe
+          cd dist && sha256sum cinegram-* > SHA256SUMS
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "cinegram ${GITHUB_REF_NAME#v}" \
+            --verify-tag \
+            --notes "Standalone \`cinegram\` CLI — statically linked, no dependencies. Qualified by \`bazel test //...\` at this tag.
+
+          Install (macOS/Linux):
+          \`\`\`sh
+          TARGET=\"\$(uname -s | tr A-Z a-z)-\$(uname -m | sed -e s/x86_64/x64/ -e s/aarch64/arm64/)\"
+          curl -fsSL \"https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/cinegram-\$TARGET\" -o /usr/local/bin/cinegram && chmod +x /usr/local/bin/cinegram
+          \`\`\`
+
+          GIF recording needs nothing else installed; PNG frames need a Chrome/Chromium (\$CINEGRAM_CHROME); mp4/webm need ffmpeg." \
+            dist/*

@@ -1,0 +1,16 @@
+---
+description: >
+  Author, edit, preview or record Cinegram .dgm files — animated, narrated
+  Mermaid diagrams. Apply when the user wants to animate a Mermaid diagram
+  (flowchart or sequenceDiagram), add an animated walkthrough to a diagram,
+  or work with a .dgm file.
+globs: ["**/*.dgm"]
+alwaysApply: false
+---
+
+Follow the Cinegram authoring skill at `.cursor/skills/cinegram/SKILL.md`:
+read it in full, then read `.cursor/skills/cinegram/references/language.md`
+before writing any `.dgm` content. Key rules: never modify the user's Mermaid
+source (animation blocks are appended after it), and always run
+`cinegram lint <file> --format=json` and fix every diagnostic before showing
+the result.
