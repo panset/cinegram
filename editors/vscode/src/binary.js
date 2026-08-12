@@ -22,9 +22,11 @@ function reset() {
 }
 
 /**
- * Returns { path, source } for the binary to run, or null if none was found.
- * `source` names which rule matched, so the error message can say what was
- * tried rather than only that it failed.
+ * Returns { path, source, kind } for the binary to run, or null if none was
+ * found. `source` names which rule matched, so the error message can say what
+ * was tried rather than only that it failed; `kind` is the same answer as a
+ * token ('setting' | 'bundled' | 'workspace' | 'path'), for messages that
+ * branch on it.
  */
 function resolve() {
   if (cached !== null) return cached;
@@ -38,23 +40,23 @@ function search() {
     // An explicit path that does not exist is a mistake worth reporting rather
     // than silently falling through to a different binary than the one asked
     // for — which would be far more confusing than an error.
-    return { path: configured, source: 'the cinegram.path setting', verified: isExecutable(configured) };
+    return { path: configured, source: 'the cinegram.path setting', kind: 'setting', verified: isExecutable(configured) };
   }
 
   const bundled = bundledPath();
   if (bundled && isExecutable(bundled)) {
-    return { path: bundled, source: 'the copy bundled with the extension', verified: true };
+    return { path: bundled, source: 'the copy bundled with the extension', kind: 'bundled', verified: true };
   }
 
   for (const folder of vscode.workspace.workspaceFolders || []) {
     const built = path.join(folder.uri.fsPath, 'bazel-bin', 'cmd', 'cinegram', 'cinegram_', exe('cinegram'));
     if (isExecutable(built)) {
-      return { path: built, source: 'the Bazel build in this workspace', verified: true };
+      return { path: built, source: 'the Bazel build in this workspace', kind: 'workspace', verified: true };
     }
   }
 
   // Last resort, and unverifiable without running it: let the spawn decide.
-  return { path: exe('cinegram'), source: 'your PATH', verified: false };
+  return { path: exe('cinegram'), source: 'your PATH', kind: 'path', verified: false };
 }
 
 /**

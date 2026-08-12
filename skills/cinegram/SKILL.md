@@ -54,6 +54,12 @@ Try these in order; use the first that works. Verify with `cinegram version`
    `https://marketplace.visualstudio.com/_apis/public/gallery/publishers/tejaspanse/vsextensions/cinegram/<version>/vspackage?targetPlatform=$TARGET`
    with `curl --compressed`, `unzip` it, and use `extension/bin/*/cinegram`.
 
+A binary that exists but is stale can update itself: `cinegram upgrade
+--check` reports whether a newer release exists (exit 1 when one does), and
+`cinegram upgrade` replaces the binary in place with the checksum-verified
+latest release. The one exception is a workspace Bazel build, which `upgrade`
+refuses — rebuild that with `bazel build //cmd/cinegram` instead.
+
 Below, `cinegram` means whichever path you found. It is a single static
 binary with no dependencies; GIF recording needs nothing else installed
 (mp4/webm need ffmpeg, PNG frames and GIF need a Chrome/Chromium on `PATH`

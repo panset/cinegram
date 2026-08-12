@@ -1,5 +1,9 @@
 load("@rules_go//go:def.bzl", "go_binary", "go_cross_binary", "go_library", "go_test")
 
+# The version constant, read by //editors/vscode:assets_test to check it
+# agrees with the extension manifest and changelog.
+exports_files(["version.go"])
+
 go_library(
     name = "cinegram_lib",
     srcs = [
@@ -7,6 +11,8 @@ go_library(
         "main.go",
         "record.go",
         "serve.go",
+        "upgrade.go",
+        "version.go",
     ],
     importpath = "github.com/tejaspanse/cinegram/cmd/cinegram",
     visibility = ["//visibility:private"],
@@ -60,6 +66,7 @@ go_test(
         "main_test.go",
         "record_test.go",
         "serve_test.go",
+        "upgrade_test.go",
     ],
     embed = [":cinegram_lib"],
     deps = [

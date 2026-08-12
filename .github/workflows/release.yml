@@ -1,8 +1,23 @@
-# Pushing a tag `v*` qualifies the commit with the full Bazel test suite,
-# cross-builds the standalone CLI for every supported platform, and publishes
-# a GitHub release. The asset names (cinegram-<os>-<arch>) are a contract:
-# the authoring skill in skills/cinegram/ downloads
-# releases/latest/download/cinegram-$TARGET, so renaming one breaks installs.
+# Pushing a tag `v*` releases cinegram. The shape is qualify → channels →
+# verify, and the shape is the contract (see RELEASING.md):
+#
+#   qualify   builds and tests every deliverable once, then hands them to the
+#             channel jobs as workflow artifacts.
+#   smoke     runs the actual shipped binaries on real macOS/Linux/Windows
+#             runners — unit tests passing while a cross-compiled binary is
+#             broken is exactly the failure this catches.
+#   channel-* each distribution channel is one job that consumes the qualified
+#             artifacts and never rebuilds. Adding a way to ship cinegram
+#             (a playground, a package manager) means adding one job here
+#             with `needs: smoke`. Channel jobs are independent, so a failed
+#             one can be re-run from the Actions UI without re-releasing.
+#   verify    installs from the published release exactly the way the skill
+#             in skills/cinegram/ does, proving the install contract end to
+#             end.
+#
+# The asset names (cinegram-<os>-<arch>) are a contract: the skill downloads
+# releases/latest/download/cinegram-$TARGET and `cinegram upgrade` downloads
+# the same names, so renaming one breaks installs everywhere at once.
 name: release
 
 on:
@@ -10,10 +25,13 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release
 
 jobs:
-  release:
+  qualify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,31 +39,125 @@ jobs:
       # bazelisk reads .bazelversion, so CI builds with the same Bazel as dev.
       - uses: bazelbuild/setup-bazelisk@v3
 
+      # The tag must be the version the source claims. package.json and the
+      # changelog agreeing with version.go is //editors/vscode:assets_test's
+      # job, which the suite below runs; this step ties the knot to the tag.
+      - name: Gate — tag matches the source version
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          if ! grep -Fq "const version = \"$V\"" cmd/cinegram/version.go; then
+            echo "::error::tag $GITHUB_REF_NAME does not match cmd/cinegram/version.go — bump the version everywhere first (see RELEASING.md)"
+            exit 1
+          fi
+
       - name: Qualify
         run: bazel test //...
 
       - name: Build release binaries
         run: |
+          targets="darwin-arm64 darwin-x64 linux-x64 linux-arm64 win32-x64"
+          bazel build $(for t in $targets; do echo "//cmd/cinegram:cinegram_$t"; done)
           mkdir -p dist
-          build() {
-            bazel build //cmd/cinegram --platforms=@rules_go//go/toolchain:"$1"
-            cp "bazel-bin/cmd/cinegram/cinegram_/cinegram$3" "dist/cinegram-$2$3"
-          }
-          build darwin_arm64  darwin-arm64
-          build darwin_amd64  darwin-x64
-          build linux_amd64   linux-x64
-          build linux_arm64   linux-arm64
-          build windows_amd64 win32-x64 .exe
-          cd dist && sha256sum cinegram-* > SHA256SUMS
+          for t in $targets; do
+            ext=""
+            [ "$t" = "win32-x64" ] && ext=".exe"
+            cp "$(bazel cquery --output=files "//cmd/cinegram:cinegram_$t")" "dist/cinegram-$t$ext"
+          done
+          (cd dist && sha256sum cinegram-* > SHA256SUMS)
 
-      - name: Publish
+      - name: Build extension packages
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          bazel build //cmd/vsix
+          VSIX="$(bazel cquery --output=files //cmd/vsix)"
+          mkdir -p dist-vsix
+          for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
+            "$VSIX" --target "$t" --binary "dist/cinegram-$t" \
+              --extension-dir editors/vscode --out "dist-vsix/cinegram-$V-$t.vsix"
+          done
+          "$VSIX" --target win32-x64 --binary dist/cinegram-win32-x64.exe \
+            --extension-dir editors/vscode --out "dist-vsix/cinegram-$V-win32-x64.vsix"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: dist-vsix/
+          if-no-files-found: error
+
+  # The binaries above were cross-compiled on one Linux machine; this is where
+  # each one meets its actual platform. The record step is deliberate: it
+  # exercises the headless-Chrome capture path, the most environment-dependent
+  # thing cinegram does.
+  smoke:
+    needs: qualify
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+            chrome: /usr/bin/google-chrome
+          - os: macos-14
+            target: darwin-arm64
+            chrome: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+          - os: windows-latest
+            target: win32-x64
+            suffix: .exe
+            chrome: C:\Program Files\Google\Chrome\Application\chrome.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4 # for examples/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Smoke-test the shipped binary
+        shell: bash
+        env:
+          CINEGRAM_CHROME: ${{ matrix.chrome }}
+        run: |
+          BIN="dist/cinegram-${{ matrix.target }}${{ matrix.suffix }}"
+          chmod +x "$BIN"
+          V="${GITHUB_REF_NAME#v}"
+          test "$("$BIN" version)" = "cinegram $V"
+          "$BIN" lint examples/k8s-request.dgm
+          "$BIN" compile examples/k8s-request.dgm -o smoke.json
+          "$BIN" preview examples/k8s-request.dgm -o smoke.html
+          "$BIN" record examples/payment-checkout.dgm -o smoke.gif --fps 2
+          test -s smoke.gif
+
+  channel-github-binaries:
+    needs: smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix
+          path: dist-vsix
+
+      - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
             --title "cinegram ${GITHUB_REF_NAME#v}" \
             --verify-tag \
-            --notes "Standalone \`cinegram\` CLI — statically linked, no dependencies. Qualified by \`bazel test //...\` at this tag.
+            --notes "Standalone \`cinegram\` CLI — statically linked, no dependencies. Qualified by \`bazel test //...\` and per-platform smoke tests at this tag.
 
           Install (macOS/Linux):
           \`\`\`sh
@@ -53,5 +165,58 @@ jobs:
           curl -fsSL \"https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/cinegram-\$TARGET\" -o /usr/local/bin/cinegram && chmod +x /usr/local/bin/cinegram
           \`\`\`
 
+          Already installed? \`cinegram upgrade\` replaces the binary in place.
+
+          The \`.vsix\` files are the VS Code extension, one per platform, for installing without the Marketplace (*Extensions: Install from VSIX…*).
+
           GIF recording needs nothing else installed; PNG frames need a Chrome/Chromium (\$CINEGRAM_CHROME); mp4/webm need ffmpeg." \
-            dist/*
+            dist/* dist-vsix/*
+
+  channel-vscode-marketplace:
+    needs: smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix
+          path: dist-vsix
+
+      # The same REST call for every platform package: the gallery keys on
+      # the TargetPlatform baked into each .vsix. api-version 7.1-preview.2 is
+      # required — preview.1 only accepts a JSON body.
+      - name: Publish to the VS Code Marketplace
+        env:
+          MARKETPLACE_PAT: ${{ secrets.MARKETPLACE_PAT }}
+        run: |
+          if [ -z "$MARKETPLACE_PAT" ]; then
+            echo "::error::the MARKETPLACE_PAT secret is missing or empty — mint one and store it per RELEASING.md"
+            exit 1
+          fi
+          for f in dist-vsix/*.vsix; do
+            echo "publishing $f"
+            curl -sS --fail-with-body -X PUT \
+              -H "Content-Type: application/octet-stream" \
+              -u ":$MARKETPLACE_PAT" \
+              --data-binary "@$f" \
+              "https://marketplace.visualstudio.com/_apis/gallery/publishers/tejaspanse/extensions/cinegram?extensionType=vsix&api-version=7.1-preview.2"
+            echo
+          done
+
+  # Install from the published release exactly the way skills/cinegram/SKILL.md
+  # tells an agent to, so the one path users actually take is the one tested.
+  # The retry is for /latest/ propagation right after publishing.
+  verify:
+    needs: channel-github-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install as the skill does
+        run: |
+          TARGET="$(uname -s | tr A-Z a-z)-$(uname -m | sed -e s/x86_64/x64/ -e s/aarch64/arm64/)"
+          for i in $(seq 1 10); do
+            curl -fsSL "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/cinegram-$TARGET" -o cinegram && break
+            echo "release not yet visible at /latest/ (attempt $i)"
+            sleep 15
+          done
+          chmod +x cinegram
+          test "$(./cinegram version)" = "cinegram ${GITHUB_REF_NAME#v}"
+          ./cinegram upgrade --check

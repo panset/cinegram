@@ -306,6 +306,20 @@ payload delivered by `postMessage` plus the snapshot/restore dance
   identical entries because several passes read the same attribute.
 - Warnings never fail a build; errors exit 1.
 
+## Releasing
+
+Everything ships from one `v*` tag — binaries on GitHub Releases, the VS Code
+extension on the Marketplace — and **`RELEASING.md` is the procedure and the
+contracts.** The short version: the version lives in three places
+(`cmd/cinegram/version.go`, the extension `package.json`, the extension
+changelog) kept equal by `//editors/vscode:assets_test`; the release workflow
+is qualify → one job per distribution channel → verify; the asset names
+`cinegram-<os>-<arch>` and the `releases/latest/download/` URL are contracts
+that `skills/cinegram/SKILL.md` and `cinegram upgrade` both download by.
+Anything that adds a way users obtain cinegram — a playground, a package
+manager — must follow "Adding a distribution channel" in `RELEASING.md`
+rather than publishing on its own.
+
 ## Verifying animation changes
 
 Bazel tests cover the parser, compiler and emitters, but not the browser

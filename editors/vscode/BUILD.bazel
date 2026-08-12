@@ -12,11 +12,17 @@ filegroup(
 # gazelle:ignore
 go_test(
     name = "assets_test",
-    srcs = ["assets_test.go"],
+    srcs = [
+        "assets_test.go",
+        "version_test.go",
+    ],
     data = [
+        "CHANGELOG.md",
         "LICENSE.txt",
+        "package.json",
         ":media",
         "//:LICENSE",
+        "//cmd/cinegram:version.go",
         "//pkg/emit/html:browser_assets",
     ],
 )
