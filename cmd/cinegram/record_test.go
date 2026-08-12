@@ -123,7 +123,9 @@ func TestVideoCommandLine(t *testing.T) {
 	dir := t.TempDir()
 	argvFile := filepath.Join(dir, "argv")
 	stub := filepath.Join(dir, "fake-ffmpeg")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + argvFile + "\ntouch \"${@: -1}\"\n"
+	// `for last; do :; done` is the POSIX way to take the last argument —
+	// `${@: -1}` is a bash-ism, and /bin/sh is dash on Linux CI.
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + argvFile + "\nfor last; do :; done\ntouch \"$last\"\n"
 	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
