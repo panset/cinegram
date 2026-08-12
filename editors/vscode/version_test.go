@@ -11,13 +11,15 @@ import (
 	"path/filepath"
 	"regexp"
 	"testing"
+
+	"github.com/tejaspanse/cinegram/internal/repotest"
 )
 
 var cliVersionRE = regexp.MustCompile(`const version = "([^"]+)"`)
 var changelogVersionRE = regexp.MustCompile(`(?m)^## \[(\d+\.\d+\.\d+)\]`)
 
 func TestVersionsAgree(t *testing.T) {
-	root := repoRoot(t)
+	root := repotest.Root(t, "cmd/cinegram/version.go")
 
 	cli := matchIn(t, root, "cmd/cinegram/version.go", cliVersionRE)
 
