@@ -40,6 +40,8 @@ bazel run //site:sync
 
 `//site:site_test` fails while `docs/` is stale. The sweep only touches
 `docs/demos/`; a hand-placed top-level file there (a `CNAME`, say) survives.
+The full publish workflow — what gets a page, how the index blurb is chosen —
+is `skills/publish-site/SKILL.md`.
 
 Formatting — `gofmt` exists only inside the hermetic SDK, and Bazel does not
 check it, so run it manually before finishing:
