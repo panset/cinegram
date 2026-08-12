@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cinegram demos</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f8fafc; --card: #ffffff; --ink: #0f172a; --muted: #475569;
+  --line: #e2e8f0; --accent: #2563eb;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0b1120; --card: #101a33; --ink: #e2e8f0; --muted: #94a3b8;
+          --line: #1e293b; --accent: #60a5fa; }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 44rem; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
+h1 { margin: 0; font-size: 1.7rem; }
+.tagline { margin: .35rem 0 0; color: var(--muted); }
+.repo { margin: .75rem 0 0; font-size: .9rem; }
+a { color: var(--accent); }
+ul.demos { list-style: none; margin: 2.25rem 0 0; padding: 0; }
+ul.demos li {
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 1rem 1.15rem; margin: .8rem 0;
+}
+ul.demos a.title { font-weight: 600; font-size: 1.05rem; text-decoration: none; }
+ul.demos a.title:hover { text-decoration: underline; }
+.source { color: var(--muted); font-size: .8rem; font-family: ui-monospace, monospace; margin-left: .5rem; }
+.blurb { margin: .3rem 0 0; color: var(--muted); font-size: .92rem; }
+footer { margin-top: 3rem; color: var(--muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+<main>
+<h1>Cinegram</h1>
+<p class="tagline">Mermaid draws the system; Cinegram plays the story.</p>
+<p class="repo">Animated, explorable architecture diagrams. Every page below is one
+self-contained HTML file compiled from a <code>.dgm</code> source in
+<a href="https://github.com/tejaspanse/cinegram">the repository</a>&rsquo;s
+<code>examples/</code> directory.</p>
+<ul class="demos">
+<li>
+<a class="title" href="demos/blue-green-deploy.html">cut over to v1.5</a><span class="source">blue-green-deploy.dgm</span>
+<p class="blurb">A blue/green deployment: how traffic moves to a new version with no gap.</p>
+</li>
+<li>
+<a class="title" href="demos/data-platform.html">a row&#39;s journey</a><span class="source">data-platform.dgm</span>
+<p class="blurb">A data platform, deliberately too big for one screen.</p>
+</li>
+<li>
+<a class="title" href="demos/deploy-pipeline.html">ship a release</a><span class="source">deploy-pipeline.dgm</span>
+<p class="blurb">A commit&#39;s journey from a laptop to production, and back again when the error budget says otherwise. It exercises the attributes the compiler emits and the runtime honours: scenario `speed` and `autoplay`, per-action `color`, and `ease` on the promotion hops.</p>
+</li>
+<li>
+<a class="title" href="demos/incident-triage.html">the cascade</a><span class="source">incident-triage.dgm</span>
+<p class="blurb">A service map for the twenty minutes when it matters.</p>
+</li>
+<li>
+<a class="title" href="demos/k8s-request.html">GET /api/orders</a><span class="source">k8s-request.dgm</span>
+<p class="blurb">API request path through a Kubernetes cluster. Strip the scenario block and this is ordinary Mermaid.</p>
+</li>
+<li>
+<a class="title" href="demos/layered-arch.html">a priced order request</a><span class="source">layered-arch.dgm</span>
+<p class="blurb">A layered service, walked one layer at a time.</p>
+</li>
+<li>
+<a class="title" href="demos/oauth-login.html">authorization code flow</a><span class="source">oauth-login.dgm</span>
+<p class="blurb">OAuth 2.0 authorization code flow, told as an explorable explanation.</p>
+</li>
+<li>
+<a class="title" href="demos/oidc-login.html">sign in with an external IdP</a><span class="source">oidc-login.dgm</span>
+<p class="blurb">An OIDC login through authapiservice, as the shared engine actually runs it.</p>
+</li>
+<li>
+<a class="title" href="demos/payment-checkout.html">payment-checkout</a><span class="source">payment-checkout.dgm</span>
+<p class="blurb">Checkout, told twice. The first scenario is the path everyone draws; the second is the one that actually costs money, and it is the reason `status` exists as a first-class attribute rather than a colour convention.</p>
+</li>
+<li>
+<a class="title" href="demos/raft-election.html">leader failure and re-election</a><span class="source">raft-election.dgm</span>
+<p class="blurb">Raft leader election in a five-node cluster.</p>
+</li>
+<li>
+<a class="title" href="demos/websocket-handshake.html">the upgrade</a><span class="source">websocket-handshake.dgm</span>
+<p class="blurb">A WebSocket upgrade, as a sequenceDiagram.</p>
+</li>
+</ul>
+<footer>Generated from the examples by <code>bazel run //site:sync</code>;
+the site is committed, not built &mdash; no CI involved.</footer>
+</main>
+</body>
+</html>

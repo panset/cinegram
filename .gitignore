@@ -1,5 +1,10 @@
 bazel-*
 *.html
 !testdata/**/*.html
+# The GitHub Pages site is a committed artifact; //site:site_test keeps it
+# fresh. Only the exact files the generator writes are un-ignored, so a stray
+# preview written into docs/ stays invisible to git.
+!docs/index.html
+!docs/demos/*.html
 .DS_Store
 dist/

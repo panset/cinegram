@@ -7,3 +7,24 @@ gazelle(name = "gazelle")
 # holds nothing outside the extension folder; //editors/vscode:assets_test is
 # what keeps the two equal.
 exports_files(["LICENSE"])
+
+# The sources and the committed artifacts of the GitHub Pages site.
+# //site:site_test regenerates the former and diffs against the latter, so a
+# commit that changes an example without re-running `bazel run //site:sync`
+# fails the build.
+filegroup(
+    name = "examples",
+    srcs = glob(["examples/**"]),
+    visibility = ["//site:__pkg__"],
+)
+
+filegroup(
+    name = "docs",
+    srcs = glob(
+        ["docs/**"],
+        # Empty until the first `bazel run //site:sync` has run; the test
+        # reports that state itself, more helpfully than a glob error would.
+        allow_empty = True,
+    ),
+    visibility = ["//site:__pkg__"],
+)

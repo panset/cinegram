@@ -30,11 +30,22 @@ bazel run //pkg/parser:parser_test   -- -update
 bazel run //pkg/compile:compile_test -- -update
 ```
 
+**`docs/` is the committed GitHub Pages site — regenerate it, never edit it.**
+Pages serves it straight from `main` with no CI build, so after changing
+anything under `examples/` or in the render pipeline:
+
+```sh
+bazel run //site:sync
+```
+
+`//site:site_test` fails while `docs/` is stale. The sweep only touches
+`docs/demos/`; a hand-placed top-level file there (a `CNAME`, say) survives.
+
 Formatting — `gofmt` exists only inside the hermetic SDK, and Bazel does not
 check it, so run it manually before finishing:
 
 ```sh
-"$(find "$(bazel info output_base)/external" -name gofmt -type f | head -1)" -w ./cmd ./pkg
+"$(find "$(bazel info output_base)/external" -name gofmt -type f | head -1)" -w ./cmd ./pkg ./site
 ```
 
 Exercise the CLI (relative paths work; the binary resolves them against
