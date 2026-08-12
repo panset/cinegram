@@ -25,6 +25,7 @@ go_test(
         "//cmd/cinegram:version.go",
         "//pkg/emit/html:browser_assets",
     ],
+    deps = ["//internal/repotest"],
 )
 
 # The fix for what assets_test reports. Aliased here so that the command the

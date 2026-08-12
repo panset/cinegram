@@ -15,6 +15,9 @@ bazel run //cmd/cinegram -- preview examples/k8s-request.dgm -o /tmp/k8s.html
 open /tmp/k8s.html
 ```
 
+Or skip the build entirely: every example is playable at
+<https://tejaspanse.github.io/cinegram/>.
+
 ## The language
 
 A `.dgm` file is a Mermaid diagram followed by one or more `scenario` blocks,
@@ -796,6 +799,14 @@ bazel run //pkg/compile:compile_test -- -update
 There are no third-party Go dependencies, and the intent is to keep it that
 way: a hand-rolled lexer and recursive-descent parser need nothing beyond the
 standard library.
+
+The demo site at <https://tejaspanse.github.io/cinegram/> is the same story
+one level up: GitHub Pages serves `docs/` straight from `main` (Settings →
+Pages → deploy from branch, `/docs` folder — a one-time repository setting),
+so there is no CI build anywhere. `docs/` holds one committed, self-contained
+page per example plus an index; `bazel run //site:sync` regenerates it, and
+`//site:site_test` fails the build whenever the committed copy has fallen
+behind the examples or the renderer.
 
 `pkg/emit/html/assets/` holds the vendored `mermaid.min.js` plus the runtime's
 `runtime.js` and `runtime.css`. They live inside the package because `go:embed`
