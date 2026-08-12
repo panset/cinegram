@@ -11,36 +11,27 @@ can fetch the `cinegram` binary by itself from the project's
 [GitHub releases](https://github.com/panset/cinegram/releases) — a single
 static binary per platform, no package manager, no repo clone.
 
-## Install — Claude Code
+## Install
 
-Personal (all projects):
-
-```sh
-mkdir -p ~/.claude/skills/cinegram/references
-curl -fsSL https://raw.githubusercontent.com/panset/cinegram/main/skills/cinegram/SKILL.md \
-  -o ~/.claude/skills/cinegram/SKILL.md
-curl -fsSL https://raw.githubusercontent.com/panset/cinegram/main/skills/cinegram/references/language.md \
-  -o ~/.claude/skills/cinegram/references/language.md
-```
-
-Per project: same two files under `<project>/.claude/skills/cinegram/` —
-commit them and the whole team's agents pick the skill up.
-
-Then just ask: *"animate this mermaid diagram: …"*.
-
-## Install — Cursor
-
-Put the same two files in the project and add the pointer rule:
+Claude Code (personal, all projects):
 
 ```sh
-mkdir -p .cursor/skills/cinegram/references .cursor/rules
-curl -fsSL https://raw.githubusercontent.com/panset/cinegram/main/skills/cinegram/SKILL.md \
-  -o .cursor/skills/cinegram/SKILL.md
-curl -fsSL https://raw.githubusercontent.com/panset/cinegram/main/skills/cinegram/references/language.md \
-  -o .cursor/skills/cinegram/references/language.md
-curl -fsSL https://raw.githubusercontent.com/panset/cinegram/main/skills/cinegram/cinegram.mdc \
-  -o .cursor/rules/cinegram.mdc
+curl -fsSL https://raw.githubusercontent.com/panset/cinegram/main/skills/cinegram/install.sh | sh
 ```
+
+Cursor (per project — run from the project root):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/panset/cinegram/main/skills/cinegram/install.sh | sh -s -- cursor
+```
+
+Then just ask: *"animate this mermaid diagram: …"*. (In the very session
+that installed it, add "read the installed SKILL.md and follow it" — new
+skills are discovered at session start.)
+
+To share the skill with a project's whole team instead, commit `SKILL.md`
+and `references/language.md` under `<project>/.claude/skills/cinegram/`
+(Claude Code) or keep the `.cursor/` files the installer wrote (Cursor).
 
 ## What's in the folder
 
@@ -49,3 +40,4 @@ curl -fsSL https://raw.githubusercontent.com/panset/cinegram/main/skills/cinegra
 | `SKILL.md` | The workflow: find or install the binary, author, lint until clean, preview, narrate. |
 | `references/language.md` | The complete `.dgm` language reference the agent reads before writing. |
 | `cinegram.mdc` | A Cursor rule that routes diagram-animation requests to the skill. |
+| `install.sh` | The one-line installer above (`sh install.sh [claude|cursor]`). |
