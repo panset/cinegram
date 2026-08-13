@@ -317,6 +317,9 @@
   //             going back within the player instead
   //   theme     'light' | 'dark' to follow the host instead of the system
   //   autoplay  false to open at rest
+  //   reel      true for the vertical story mode the standalone page enters
+  //             with `?reel`: tap plays one step, a segmented bar replaces
+  //             the scrubber, and the page opens at rest
   //
   // Anything a host does not set keeps the page behaviour, so this stays one
   // renderer rather than two that have to be kept in step.
@@ -377,6 +380,14 @@
     // this.time, so the speed multiplier composes with it for free.
     this.present = false;
     this.stopAt = null;
+
+    // Auto-follow camera state (reel mode only). camOverride is user-state
+    // like `revealed`, not clock-state: a manual gesture takes the wheel, a
+    // double-click hands it back, and a seek changes neither. camKeys caches
+    // the per-step pose keyframes; null means "rebuild from the DOM".
+    this.camOverride = false;
+    this.camKeys = null;
+    this._camMoved = false;
 
     this.build();
   }
@@ -500,6 +511,14 @@
     bar.appendChild(controls);
     this.root.appendChild(bar);
 
+    // The reel's segmented progress bar: one segment per step, story-style.
+    // Built for every host and shown only under .dgm-reel, so the shared
+    // stylesheet costs other hosts nothing. aria-hidden because the caption
+    // is the live region and digits 1–9 remain the accessible step jump.
+    this.reelbar = el('div', 'dgm-reelbar');
+    this.reelbar.setAttribute('aria-hidden', 'true');
+    this.root.appendChild(this.reelbar);
+
     this.warning = el('div', 'dgm-warning');
     this.warning.style.display = 'none';
     this.root.appendChild(this.warning);
@@ -510,6 +529,17 @@
     this.stage.appendChild(this.overlay);
     body.appendChild(this.stage);
     this.bindStageGestures();
+
+    // Camera keyframes bake the stage size in, so a resize invalidates them.
+    // Same inline pattern as the window pointer listeners above this; it
+    // joins Player.dispose when that exists.
+    window.addEventListener('resize', function () {
+      self.camKeys = null;
+      if (self.reel && !self.camOverride && self.svg) {
+        self.apply(self.time);
+        self.syncChips();
+      }
+    });
 
     // The storyboard sits between the stage and the step list: what the human
     // sees, beside what the system does. It is built once and hidden when the
@@ -609,6 +639,11 @@
     // brings the bar back holding only what a reader — rather than an author —
     // has any use for.
     if (this.opts.inline) this.root.classList.add('dgm-inline');
+    // Reel is a page state like embed, not a toggle like presenter: it is
+    // entered by URL and left by leaving the page, so it is a class and a
+    // flag rather than anything setPresenter-shaped.
+    this.reel = isReel(this.opts);
+    if (this.reel) this.root.classList.add('dgm-reel');
     this.setPresenter(isPresenter(this.opts));
 
     this.viewIndex = Math.max(0, this.viewIndexOf(this.hashView()));
@@ -666,15 +701,15 @@
       return;
     }
 
-    // In presenter mode the transport is one step at a time: Space plays the
-    // next beat and stops at its end, rather than starting a run the presenter
-    // then has to catch.
-    if (this.present && (ev.key === ' ' || ev.key === 'ArrowRight')) {
+    // In presenter mode — and in a reel, which shares its one-beat transport —
+    // Space plays the next beat and stops at its end, rather than starting a
+    // run the presenter then has to catch.
+    if (this.stepwise() && (ev.key === ' ' || ev.key === 'ArrowRight')) {
       ev.preventDefault();
       this.advanceStep();
       return;
     }
-    if (this.present && ev.key === 'ArrowLeft') {
+    if (this.stepwise() && ev.key === 'ArrowLeft') {
       ev.preventDefault();
       this.prevStep();
       return;
@@ -903,11 +938,19 @@
       // pinch-zoom arrives with.
       if (self.opts.inline && !ev.ctrlKey && !ev.metaKey) return;
       ev.preventDefault();
+      // A manual zoom in a reel takes the wheel from the auto-follow camera.
+      if (self.reel) self.camOverride = true;
       var factor = Math.exp(-ev.deltaY * 0.0015);
       self.zoomAt(ev.clientX, ev.clientY, factor);
     }, { passive: false });
 
-    this.stage.addEventListener('dblclick', function () { self.resetZoom(); });
+    this.stage.addEventListener('dblclick', function () {
+      // In a reel, a double-click hands the framing back to the camera; the
+      // resetZoom below re-applies the frame, and the camera reposes in the
+      // same apply pass now that the override is gone.
+      if (self.reel) self.camOverride = false;
+      self.resetZoom();
+    });
 
     var dragging = false, moved = false, lastX = 0, lastY = 0;
 
@@ -926,6 +969,7 @@
       // the node still activates.
       if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
       moved = true;
+      if (self.reel) self.camOverride = true;
       lastX = ev.clientX;
       lastY = ev.clientY;
       self.panX += dx;
@@ -940,16 +984,26 @@
 
     this.stage.addEventListener('click', function (ev) {
       // Swallow the click that ends a drag, so panning across a node does not
-      // also drill into it.
-      if (moved) { ev.stopPropagation(); ev.preventDefault(); moved = false; }
+      // also drill into it. stopImmediatePropagation, not stopPropagation:
+      // when the drag ends on the stage element itself, the advance listener
+      // below is on the *same* node, and stopPropagation would not stop it —
+      // a pan across a reel's roomy stage would also advance a step.
+      if (moved) { ev.stopImmediatePropagation(); ev.preventDefault(); moved = false; }
     }, true);
 
-    // Presenting from a lectern means a clicker, and a clicker sends a click.
-    // A click on a bound element stops propagating before it gets here, so
-    // drilling into a view still wins over advancing.
+    // Presenting from a lectern means a clicker, and a clicker sends a click;
+    // a reel on a phone means a tap, and a tap sends one too. A click on a
+    // bound element stops propagating before it gets here, so drilling into a
+    // view still wins over advancing.
     this.stage.addEventListener('click', function () {
-      if (self.present) self.advanceStep();
+      if (self.stepwise()) self.advanceStep();
     });
+  };
+
+  // Presenter mode and reel mode share the one-beat transport: Space, →, and
+  // a stage click all mean "play exactly the next step, then stop".
+  Player.prototype.stepwise = function () {
+    return this.present || this.reel;
   };
 
   Player.prototype.zoomAt = function (clientX, clientY, factor) {
@@ -973,7 +1027,10 @@
     this.applyTransform();
   };
 
-  Player.prototype.applyTransform = function () {
+  // setTransform is the style write alone. The camera calls it from inside
+  // apply(), where re-entering apply() would recurse; every other caller wants
+  // applyTransform below, which also relays out the overlays.
+  Player.prototype.setTransform = function () {
     if (this.holder) {
       this.holder.style.transformOrigin = '0 0';
       this.holder.style.transform =
@@ -982,10 +1039,178 @@
     if (this.zoomBtn) {
       this.zoomBtn.classList.toggle('is-on', this.zoom !== 1 || this.panX !== 0 || this.panY !== 0);
     }
+  };
+
+  Player.prototype.applyTransform = function () {
+    this.setTransform();
     // Overlay content is positioned from client rects, which the transform has
     // just changed, so it has to be laid out again.
     this.apply(this.time);
     this.syncChips();
+  };
+
+  // --- auto-follow camera (reel mode) ------------------------------------
+  //
+  // The camera frames each step's action: one pose per step, precomputed from
+  // the timeline, with a short glide at each step boundary. The pose is a
+  // remap of the clock, evaluated at t, never integrated between frames — so
+  // scrubbing to a moment shows exactly what playing to it would, and a frame
+  // `record` photographs mid-glide is pixel-identical to live playback. That
+  // is the same doctrine as flow easing, and it is why there is no CSS
+  // transition on the holder and never should be.
+  //
+  // Persistent set/gauge state does not steer the camera: it is scenario-
+  // scoped background fact, not the step's action.
+
+  var CAM_MARGIN = 0.85; // headroom around the framed rect
+  var CAM_MAX = 2.5;     // an automatic move should never reach ZOOM_MAX
+  var CAM_SNAP = 0.02;   // a computed zoom this close to fit holds fit
+  var CAM_TRANS = 500;   // ms; capped at half the step so short beats glide too
+
+  // cameraKeys measures one target rect per step in holder-local CSS px and
+  // turns each into a pose. Client rects are used deliberately: they already
+  // compose mermaid's inner transforms and the SVG's CSS scaling, so dividing
+  // out our own holder transform is the whole coordinate story.
+  Player.prototype.cameraKeys = function () {
+    if (!this.holder || !this.svg) return null;
+    var sc = this.scenario();
+    var stageR = this.stage.getBoundingClientRect();
+    var holderR = this.holder.getBoundingClientRect();
+    if (!stageR.width || !stageR.height) return null;
+
+    // The holder's untransformed layout offset inside the stage: its origin
+    // corner sits at o + pan under any current transform.
+    var o = { x: holderR.left - this.panX - stageR.left,
+              y: holderR.top - this.panY - stageR.top };
+    var W = stageR.width, H = stageR.height;
+    var fit = { cx: W / 2 - o.x, cy: H / 2 - o.y, z: 1 };
+
+    var self = this;
+    var zoom = this.zoom;
+    function localRect(el) {
+      var r = el.getBoundingClientRect();
+      if (!r.width && !r.height) return null;
+      return { x: (r.left - holderR.left) / zoom, y: (r.top - holderR.top) / zoom,
+               w: r.width / zoom, h: r.height / zoom };
+    }
+    function anchor(id) {
+      return (self.anchors && self.anchors[id]) || self.elementFor(id);
+    }
+    function union(a, b) {
+      if (!b) return a;
+      if (!a) return b;
+      var x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+      return { x: x, y: y,
+               w: Math.max(a.x + a.w, b.x + b.w) - x,
+               h: Math.max(a.y + a.h, b.y + b.h) - y };
+    }
+
+    // A step's `focus` tracks alone define its rect when present — that is
+    // the authored "look here". Otherwise every spatial target contributes.
+    // In sequence mode a flow uses the message path alone: it already spans
+    // the two lifelines, and unioning the top-anchored actor boxes would pin
+    // the camera to the top of the page.
+    function rectOf(step) {
+      var rect = null, focused = false, i, tr;
+      for (i = 0; i < step.tracks.length; i++) {
+        tr = step.tracks[i];
+        if (tr.kind === 'focus' && tr.target) {
+          if (!focused) { rect = null; focused = true; }
+          var f = anchor(tr.target);
+          if (f) rect = union(rect, localRect(f));
+        }
+      }
+      if (focused) return rect;
+      for (i = 0; i < step.tracks.length; i++) {
+        tr = step.tracks[i];
+        if (tr.kind === 'scene') continue;
+        if (tr.kind === 'flow') {
+          var e = tr.edge && self.edges[tr.edge];
+          if (e && e.path) rect = union(rect, localRect(e.path));
+          if (!self.sequence) {
+            var from = tr.from && anchor(tr.from);
+            var to = tr.to && anchor(tr.to);
+            if (from) rect = union(rect, localRect(from));
+            if (to) rect = union(rect, localRect(to));
+          }
+        } else if (tr.target) {
+          var el = anchor(tr.target);
+          if (el) rect = union(rect, localRect(el));
+        }
+      }
+      return rect;
+    }
+
+    var poses = [];
+    var prev = fit;
+    for (var s = 0; s < sc.steps.length; s++) {
+      var rect = rectOf(sc.steps[s]);
+      if (!rect) {
+        // No spatial targets (a storyboard beat, say): hold the previous
+        // pose. The shared reference is what lets cameraApply skip the glide.
+        poses.push(prev);
+        continue;
+      }
+      var zT = CAM_MARGIN * Math.min(W / Math.max(1, rect.w), H / Math.max(1, rect.h));
+      var z = clamp(zT, 1, CAM_MAX);
+      var pose = z <= 1 + CAM_SNAP
+        ? fit
+        : { cx: rect.x + rect.w / 2, cy: rect.y + rect.h / 2, z: z };
+      poses.push(pose);
+      prev = pose;
+    }
+
+    this.camKeys = { o: o, W: W, H: H, poses: poses };
+    return this.camKeys;
+  };
+
+  // cameraApply evaluates the pose at t and writes the transform. It is
+  // called from inside apply(), so it must never call applyTransform — the
+  // style write alone is enough, because everything positioned from client
+  // rects is laid out later in the same apply() pass (chips excepted, which
+  // apply() refreshes when _camMoved says the camera wrote).
+  Player.prototype.cameraApply = function (t) {
+    var K = this.camKeys || this.cameraKeys();
+    if (!K || !K.poses.length) return;
+    var steps = this.scenario().steps;
+
+    var i = 0;
+    for (var s = 0; s < steps.length; s++) {
+      if (steps[s].start <= t) i = s; else break;
+    }
+
+    var cur = K.poses[i];
+    var pose = cur;
+    var prevP = i > 0 ? K.poses[i - 1] : cur;
+    if (prevP !== cur) {
+      var w = prefersReducedMotion()
+        ? 0
+        : Math.min(CAM_TRANS, (steps[i].end - steps[i].start) / 2);
+      var u = w > 0 ? clamp((t - steps[i].start) / w, 0, 1) : 1;
+      if (u < 1) {
+        // Cosine in-out; zoom interpolates in log space so an equal-ratio
+        // move reads uniform instead of lurching at the wide end.
+        var e = (1 - Math.cos(Math.PI * u)) / 2;
+        pose = {
+          z: Math.exp((1 - e) * Math.log(prevP.z) + e * Math.log(cur.z)),
+          cx: prevP.cx + e * (cur.cx - prevP.cx),
+          cy: prevP.cy + e * (cur.cy - prevP.cy)
+        };
+      }
+    }
+
+    var z = pose.z;
+    var panX = K.W / 2 - K.o.x - z * pose.cx;
+    var panY = K.H / 2 - K.o.y - z * pose.cy;
+    if (Math.abs(z - this.zoom) < 1e-4 &&
+        Math.abs(panX - this.panX) < 1e-4 &&
+        Math.abs(panY - this.panY) < 1e-4) return;
+
+    this.zoom = z;
+    this.panX = panX;
+    this.panY = panY;
+    this.setTransform();
+    this._camMoved = true;
   };
 
   // isEmbedded reads the query string rather than the hash, so it survives the
@@ -1008,6 +1233,13 @@
     // meant for the page around it is not an instruction to a diagram inside it.
     if (opts && opts.hash === false) return false;
     return /(^|[?&])present(=|&|$)/.test(location.search);
+  }
+
+  // isReel is the same trick again for `?reel`, with the same two guards.
+  function isReel(opts) {
+    if (opts && opts.reel) return true;
+    if (opts && opts.hash === false) return false;
+    return /(^|[?&])reel(=|&|$)/.test(location.search);
   }
 
   // copyLink puts the deep link on the clipboard and says so on the button
@@ -1285,10 +1517,13 @@
     this.revealed = {};
     this.svg = null;
     this.pendingAutoplay = true;
-    // A zoom that framed one diagram means nothing over the next.
+    // A zoom that framed one diagram means nothing over the next — and
+    // neither does a manual override of the camera.
     this.zoom = 1;
     this.panX = 0;
     this.panY = 0;
+    this.camOverride = false;
+    this.camKeys = null;
 
     this.buildPicker();
     this.adoptScenarioSpeed();
@@ -1365,7 +1600,8 @@
 
         // Autoplay waits for a successful render: starting the clock over a
         // diagram mermaid failed to draw would just run it out invisibly.
-        if (self.pendingAutoplay) {
+        // A reel never autoplays — it opens at rest and each tap is a beat.
+        if (self.pendingAutoplay && !self.reel) {
           self.pendingAutoplay = false;
           self.maybeAutoplay();
         }
@@ -1655,10 +1891,15 @@
 
     this.scrub.max = String(sc.duration || 0);
     this.buildScrubMarks(sc);
+    this.buildReelBar(sc);
 
     // The caption belongs to whichever scenario is showing, so a switch has to
     // let it redraw even if the new step happens to carry the same id.
     this.captionKey = null;
+
+    // Camera keyframes are per (view, scenario, layout); this runs on every
+    // render and scenario switch, which covers all three.
+    this.camKeys = null;
   };
 
   // buildScrubMarks lays a tick over the scrubber at each step boundary. They
@@ -1683,6 +1924,24 @@
       });
       self.marks.appendChild(tick);
     });
+  };
+
+  // buildReelBar lays one equal-width segment per step, Instagram-style: the
+  // bar answers "how many beats, which one am I on", not "how long is each" —
+  // proportional widths would render a 300ms hop as an invisible sliver.
+  // The fill inside the active segment is written by syncChrome as a plain
+  // width with no transition, so it is a pure function of the clock and a
+  // frame photographed at any paused millisecond is exact.
+  Player.prototype.buildReelBar = function (sc) {
+    this.reelbar.innerHTML = '';
+    this.reelFills = [];
+    for (var i = 0; i < sc.steps.length; i++) {
+      var seg = el('div', 'dgm-reelbar-seg');
+      var fill = el('div', 'dgm-reelbar-fill');
+      seg.appendChild(fill);
+      this.reelbar.appendChild(seg);
+      this.reelFills.push(fill);
+    }
   };
 
   function firstLine(s) {
@@ -1927,6 +2186,17 @@
       kids[i].classList.toggle('is-done', !!done);
       kids[i].setAttribute('aria-current', active ? 'step' : 'false');
     }
+
+    // The reel bar's fills ride the same loop shape: done segments read
+    // full, future ones empty, the active one fills with its step.
+    var fills = this.reelFills || [];
+    for (var j = 0; j < fills.length; j++) {
+      var s = sc.steps[j];
+      if (!s) continue;
+      fills[j].style.width =
+        (100 * clamp((this.time - s.start) / ((s.end - s.start) || 1), 0, 1)) + '%';
+    }
+
     this.syncCaption(current);
   };
 
@@ -1961,6 +2231,10 @@
 
   Player.prototype.apply = function (t) {
     if (!this.svg) return;
+    // The camera writes the transform before anything is measured: notes,
+    // pills and particles are all positioned from client rects later in this
+    // same pass, so they see the framing they will be photographed under.
+    if (this.reel && !this.camOverride) this.cameraApply(t);
     var sc = this.scenario();
 
     var wantNode = {};   // node id -> {cls, color, key}
@@ -2055,6 +2329,13 @@
     this.applyNotes(wantNote);
     this.applyPills(standing.pills);
     this.applyBoard(this.activeScene(t, sc));
+
+    // Chips are the one overlay positioned outside apply(); when the camera
+    // wrote the transform this pass, they have to follow it.
+    if (this._camMoved) {
+      this._camMoved = false;
+      this.syncChips();
+    }
   };
 
   // applyFocus marks everything outside the focus set. The track names only
@@ -2617,6 +2898,15 @@
         div = el('div', 'dgm-note');
         div.textContent = tr.text;
         this.overlay.appendChild(div);
+        // Pin the width the note measures with the whole stage to itself.
+        // An absolutely positioned box re-wraps against whatever room its
+        // left edge leaves, so an unpinned note placed near the right edge
+        // ends up taller than the box that was measured before placing it —
+        // and escapes the stage clamp. Every record frame is a fresh page,
+        // so recordings always take this first-placement path.
+        var natural = div.getBoundingClientRect();
+        div.style.width = Math.min(Math.ceil(natural.width),
+          Math.max(120, Math.floor(this.stage.clientWidth * 0.75))) + 'px';
         this.notes[key] = div;
       }
 

@@ -219,6 +219,27 @@ func TestFrameSpacing(t *testing.T) {
 	}
 }
 
+// TestFrameURL pins the query-before-fragment ordering, which is load-bearing:
+// the runtime reads its page-mode flags from location.search and the moment
+// from the hash, and a hash that started first would swallow the query. This is
+// the seam record and frame both address the page through, for every mode.
+func TestFrameURL(t *testing.T) {
+	cases := []struct {
+		query string
+		want  string
+	}{
+		{"", "http://h/#v=main&s=s0&t=1620"},
+		{"?embed", "http://h/?embed#v=main&s=s0&t=1620"},
+		{"?reel", "http://h/?reel#v=main&s=s0&t=1620"},
+	}
+	for _, c := range cases {
+		got := frameURL("http://h/", "main", "s0", 1620, c.query)
+		if got != c.want {
+			t.Errorf("frameURL(%q) = %q, want %q", c.query, got, c.want)
+		}
+	}
+}
+
 // TestCaptureNeedsAnOutput checks both forms refuse to guess where to write.
 func TestCaptureNeedsAnOutput(t *testing.T) {
 	if _, err := captureTargets(captureOptions{frames: 1}, 1000); err == nil {

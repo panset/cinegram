@@ -123,6 +123,7 @@ reading the `.dgm`.
 | Interactive page (works from `file://`, self-contained, shareable) | `cinegram preview out.dgm -o out.html` |
 | GIF for a PR / README (needs Chrome only) | `cinegram record out.dgm -o out.gif --fps 10` |
 | Video | `cinegram record out.dgm -o out.mp4` (or `.webm`; needs ffmpeg) |
+| Vertical story clip for LinkedIn/Shorts/Slack (9:16, big captions, auto-follow camera) | `cinegram record out.dgm --reel -o out.mp4` (mp4 preferred at this size; `?reel` on the HTML page is the live version) |
 | One scenario / one sub-view | add `--scenario s1` / `--view <id>` to `record`/`frame` |
 | Still of one moment | `cinegram frame out.dgm --at 1620ms -o still.png` |
 | Plain Mermaid back out | `cinegram mermaid out.dgm` |

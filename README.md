@@ -478,6 +478,36 @@ Nothing about the timeline changes: the stop is a moment in the same
 milliseconds the clock already runs in, so the speed button, deep links and
 `CINEGRAM_PLAYER.seek()` all keep working.
 
+## Reels
+
+`?reel` turns the page into a vertical story — the diagram as something you
+tap through on a phone. The chrome goes away entirely; an Instagram-style
+segmented bar says how many beats the story has and which one you are on; the
+caption narrates at arm's-length size; a tap (or Space) plays exactly the next
+step and stops, the same one-beat transport presenter mode uses. Steps map
+one-to-one onto story segments, which is the honest presentation of a
+step-structured walkthrough: the bar promises "five beats", not "ninety
+seconds".
+
+An **auto-follow camera** frames each step's action: one pose per step,
+computed from what the step's tracks touch — a `focus` names the frame
+outright, otherwise the flows, highlights and notes define it — with a short
+glide at each boundary. Drag or scroll to take the framing over; double-click
+to hand it back. The pose is a function of the clock, evaluated at the current
+moment rather than accumulated between frames, so scrubbing, deep links and
+recording all see exactly what playing does — mid-glide included.
+
+```
+cinegram record examples/oidc-login.dgm --reel -o login.mp4
+cinegram frame  examples/oidc-login.dgm --reel --at 6500ms -o beat.png
+```
+
+`--reel` shoots the `?reel` page at 1080×1920 — the portrait clip LinkedIn,
+Shorts and a phone-first Slack want — and an explicit `--width`/`--height`
+still wins, per axis. Prefer mp4 for reel-sized recordings: the GIF encoder
+holds every frame in memory, and at 1080×1920 that is ~8 MB a frame (the
+recording line says so when it applies).
+
 ## Interaction
 
 One diagram can only say so much. A cluster-level view has to either omit what
@@ -630,6 +660,7 @@ first".
 | `--format` | from the `-o` extension | `gif`, `mp4` or `webm`. |
 | `--fps` | `12` | |
 | `--width`, `--height` | `1280`, `720` | Rounded up to even, which yuv420p requires and a GIF does not mind. |
+| `--reel` | off | The `?reel` story page at 1080×1920, auto-follow camera included. Explicit dimensions still win, per axis. |
 | `--scenario`, `--view` | the first / the entry document | Which walkthrough to record. |
 | `--progress` | off | `cinegram-progress capture <i> <n>` per frame and one `cinegram-progress encode`, on stderr, for a host drawing a progress bar. Purely additive: the human-readable lines are unchanged. |
 
