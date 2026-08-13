@@ -290,12 +290,18 @@ body.dgm-standalone {
   width: auto;
 }
 
-/* The caption is the reel's narration track: reserve its height so the stage
-   does not jump when a step has a short desc, and size the prose for a
-   phone held at arm's length. */
+/* The caption is the reel's narration track, at a FIXED height — not a
+   minimum. The reel column is viewport-sized, so a caption that grew with
+   its text would resize the stage from step to step: notes would be placed
+   against the previous step's geometry, the camera's cached keyframes would
+   go stale, and a recording's stage would jump between frames. One constant
+   allotment keeps every frame's layout identical. */
 .dgm-reel .dgm-caption {
-  min-height: 96px;
+  flex: 0 0 auto;
+  height: 22vh;
+  min-height: 0;
   padding: 18px 20px;
+  overflow: hidden;
 }
 .dgm-reel .dgm-caption-name { font-size: 22px; }
 .dgm-reel .dgm-caption-desc { font-size: 1.35rem; line-height: 1.4; }
@@ -1084,6 +1090,9 @@ body.dgm-standalone {
    each other — arithmetic that needs the real box, not an offset from one. */
 .dgm-note {
   position: absolute;
+  /* border-box so the pinned width the runtime writes is the box the layout
+     measured, padding included. */
+  box-sizing: border-box;
   background: var(--dgm-fg);
   color: var(--dgm-bg);
   border-radius: 8px;
