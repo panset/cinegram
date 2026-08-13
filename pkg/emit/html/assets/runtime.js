@@ -317,6 +317,9 @@
   //             going back within the player instead
   //   theme     'light' | 'dark' to follow the host instead of the system
   //   autoplay  false to open at rest
+  //   reel      true for the vertical story mode the standalone page enters
+  //             with `?reel`: tap plays one step, a segmented bar replaces
+  //             the scrubber, and the page opens at rest
   //
   // Anything a host does not set keeps the page behaviour, so this stays one
   // renderer rather than two that have to be kept in step.
@@ -609,6 +612,11 @@
     // brings the bar back holding only what a reader — rather than an author —
     // has any use for.
     if (this.opts.inline) this.root.classList.add('dgm-inline');
+    // Reel is a page state like embed, not a toggle like presenter: it is
+    // entered by URL and left by leaving the page, so it is a class and a
+    // flag rather than anything setPresenter-shaped.
+    this.reel = isReel(this.opts);
+    if (this.reel) this.root.classList.add('dgm-reel');
     this.setPresenter(isPresenter(this.opts));
 
     this.viewIndex = Math.max(0, this.viewIndexOf(this.hashView()));
@@ -666,15 +674,15 @@
       return;
     }
 
-    // In presenter mode the transport is one step at a time: Space plays the
-    // next beat and stops at its end, rather than starting a run the presenter
-    // then has to catch.
-    if (this.present && (ev.key === ' ' || ev.key === 'ArrowRight')) {
+    // In presenter mode — and in a reel, which shares its one-beat transport —
+    // Space plays the next beat and stops at its end, rather than starting a
+    // run the presenter then has to catch.
+    if (this.stepwise() && (ev.key === ' ' || ev.key === 'ArrowRight')) {
       ev.preventDefault();
       this.advanceStep();
       return;
     }
-    if (this.present && ev.key === 'ArrowLeft') {
+    if (this.stepwise() && ev.key === 'ArrowLeft') {
       ev.preventDefault();
       this.prevStep();
       return;
@@ -940,16 +948,26 @@
 
     this.stage.addEventListener('click', function (ev) {
       // Swallow the click that ends a drag, so panning across a node does not
-      // also drill into it.
-      if (moved) { ev.stopPropagation(); ev.preventDefault(); moved = false; }
+      // also drill into it. stopImmediatePropagation, not stopPropagation:
+      // when the drag ends on the stage element itself, the advance listener
+      // below is on the *same* node, and stopPropagation would not stop it —
+      // a pan across a reel's roomy stage would also advance a step.
+      if (moved) { ev.stopImmediatePropagation(); ev.preventDefault(); moved = false; }
     }, true);
 
-    // Presenting from a lectern means a clicker, and a clicker sends a click.
-    // A click on a bound element stops propagating before it gets here, so
-    // drilling into a view still wins over advancing.
+    // Presenting from a lectern means a clicker, and a clicker sends a click;
+    // a reel on a phone means a tap, and a tap sends one too. A click on a
+    // bound element stops propagating before it gets here, so drilling into a
+    // view still wins over advancing.
     this.stage.addEventListener('click', function () {
-      if (self.present) self.advanceStep();
+      if (self.stepwise()) self.advanceStep();
     });
+  };
+
+  // Presenter mode and reel mode share the one-beat transport: Space, →, and
+  // a stage click all mean "play exactly the next step, then stop".
+  Player.prototype.stepwise = function () {
+    return this.present || this.reel;
   };
 
   Player.prototype.zoomAt = function (clientX, clientY, factor) {
@@ -1008,6 +1026,13 @@
     // meant for the page around it is not an instruction to a diagram inside it.
     if (opts && opts.hash === false) return false;
     return /(^|[?&])present(=|&|$)/.test(location.search);
+  }
+
+  // isReel is the same trick again for `?reel`, with the same two guards.
+  function isReel(opts) {
+    if (opts && opts.reel) return true;
+    if (opts && opts.hash === false) return false;
+    return /(^|[?&])reel(=|&|$)/.test(location.search);
   }
 
   // copyLink puts the deep link on the clipboard and says so on the button
@@ -1365,7 +1390,8 @@
 
         // Autoplay waits for a successful render: starting the clock over a
         // diagram mermaid failed to draw would just run it out invisibly.
-        if (self.pendingAutoplay) {
+        // A reel never autoplays — it opens at rest and each tap is a beat.
+        if (self.pendingAutoplay && !self.reel) {
           self.pendingAutoplay = false;
           self.maybeAutoplay();
         }

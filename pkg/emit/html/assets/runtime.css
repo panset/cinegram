@@ -234,6 +234,77 @@ body.dgm-standalone {
 .dgm-present .dgm-caption-name { font-size: 18px; }
 .dgm-present .dgm-caption-desc { font-size: 1.45rem; line-height: 1.45; }
 
+/* Reel mode: the diagram as a vertical story. Entered by URL (`?reel`) like
+   embed, never toggled in page; a tap plays exactly one step, the segmented
+   bar above the stage says which beat this is, and the caption does the
+   narrating at phone size. The chrome goes entirely — a reel is watched, not
+   operated — and record --reel photographs this exact layout. */
+.dgm-reel .dgm-bar,
+.dgm-reel .dgm-steps,
+.dgm-reel .dgm-foot,
+.dgm-reel .dgm-crumb { display: none; }
+
+/* One column, board or not — a 9:16 frame has no room for a side panel. The
+   board keeps its place as content (below the stage, capped) rather than
+   furniture. The three-class variant is what outranks the
+   .dgm-has-board .dgm-body rule in the layout section, same trick as embed
+   and present above. */
+.dgm-reel .dgm-body {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1 1 0;
+  min-height: 0;
+}
+.dgm-reel.dgm-has-board .dgm-body {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+/* Portrait page: cap the column at 9:16 against the viewport height and let
+   the stage take every pixel the caption and bar leave. */
+.dgm-standalone .dgm.dgm-reel {
+  max-width: min(100vw, 56.25vh);
+  height: 100vh;
+  overflow: hidden;
+}
+
+.dgm-reel .dgm-stage {
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+/* The holder needs a height of its own for the svg clamp below to mean
+   anything, and centering the diagram vertically is what a story frame
+   expects. The svg's inline height:auto (set by the runtime) plus this
+   max-height keeps a tall sequence diagram inside the shot instead of
+   cropped by the stage's overflow:hidden. */
+.dgm-reel .dgm-svg-holder {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dgm-reel .dgm-svg-holder svg {
+  max-height: 100%;
+  width: auto;
+}
+
+/* The caption is the reel's narration track: reserve its height so the stage
+   does not jump when a step has a short desc, and size the prose for a
+   phone held at arm's length. */
+.dgm-reel .dgm-caption {
+  min-height: 96px;
+  padding: 18px 20px;
+}
+.dgm-reel .dgm-caption-name { font-size: 22px; }
+.dgm-reel .dgm-caption-desc { font-size: 1.35rem; line-height: 1.4; }
+
+.dgm-reel .dgm-board-stack {
+  max-height: 22vh;
+  min-height: 120px;
+}
+
 /* Off-screen holding pen for the share link when the clipboard API is not
    available — a page opened from the filesystem is not a secure context. It has
    to be focusable and selectable, so it cannot be display:none. */
@@ -363,7 +434,8 @@ body.dgm-standalone {
   .dgm-body,
   .dgm-has-board .dgm-body,
   .dgm-embed.dgm-has-board .dgm-body,
-  .dgm-present.dgm-has-board .dgm-body {
+  .dgm-present.dgm-has-board .dgm-body,
+  .dgm-reel.dgm-has-board .dgm-body {
     grid-template-columns: minmax(0, 1fr);
   }
 }
