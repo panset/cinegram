@@ -1,0 +1,49 @@
+# The gate features pass through on their way to main: the full Bazel suite
+# plus a gofmt check (Bazel does not enforce formatting, and Go is not
+# installed outside the hermetic SDK, so this is the one place it is checked
+# automatically). The release workflow re-runs the same suite at the tag; this
+# one exists so main is never the place a break is discovered.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # bazelisk reads .bazelversion, so CI builds with the same Bazel as dev.
+      - uses: bazelbuild/setup-bazelisk@v3
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel
+          key: bazel-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel.lock') }}
+
+      - name: Test everything
+        run: bazel test //...
+
+      - name: Check formatting
+        run: |
+          GOFMT="$(find "$(bazel info output_base)/external" -name gofmt -type f | head -1)"
+          if [ -z "$GOFMT" ]; then
+            echo "::error::gofmt not found in the hermetic SDK"
+            exit 1
+          fi
+          bad="$("$GOFMT" -l ./cmd ./pkg ./internal ./site)"
+          if [ -n "$bad" ]; then
+            echo "::error::these files are not gofmt-formatted:"
+            echo "$bad"
+            exit 1
+          fi

@@ -391,8 +391,7 @@ function describeSkew(found, stderr) {
   if (flag) {
     return (
       'The cinegram binary (' + found.source + ') is older than this extension: ' +
-      'it does not understand --' + flag[1] + '. ' +
-      'Rebuild it with `bazel build //cmd/cinegram`, or point `cinegram.path` at a current one.'
+      'it does not understand --' + flag[1] + '. ' + refreshAdvice(found)
     );
   }
 
@@ -400,12 +399,27 @@ function describeSkew(found, stderr) {
   if (command) {
     return (
       'The cinegram binary (' + found.source + ') has no `' + command[1] + '` command, ' +
-      'so it predates recording. Rebuild it with `bazel build //cmd/cinegram`, ' +
-      'or point `cinegram.path` at a current one.'
+      'so it predates recording. ' + refreshAdvice(found)
     );
   }
 
   return '';
+}
+
+/**
+ * What refreshes a stale binary depends on where it came from: a workspace
+ * build wants Bazel, the bundled copy is replaced by updating the extension,
+ * and anything installed from a release can update itself.
+ */
+function refreshAdvice(found) {
+  switch (found.kind) {
+    case 'workspace':
+      return 'Rebuild it with `bazel build //cmd/cinegram`, or point `cinegram.path` at a current one.';
+    case 'bundled':
+      return 'Update the Cinegram extension to refresh it.';
+    default:
+      return 'Run `cinegram upgrade` to fetch the latest release, or point `cinegram.path` at a current one.';
+  }
 }
 
 /**

@@ -33,8 +33,6 @@ import (
 	"github.com/tejaspanse/cinegram/pkg/units"
 )
 
-const version = "0.1.0"
-
 func main() {
 	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, "cinegram:", err)
@@ -67,6 +65,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	case "version", "--version", "-v":
 		fmt.Fprintln(stdout, "cinegram", version)
 		return nil
+	case "upgrade":
+		return cmdUpgrade(rest, stdout, stderr)
 	case "help", "--help", "-h":
 		usage(stdout)
 		return nil
@@ -106,6 +106,10 @@ Usage:
   cinegram lint    <file.dgm> [--format=text|json]
                                                  report diagnostics only
   cinegram version
+  cinegram upgrade [--check]                  replace this binary with the
+                                                 latest GitHub release;
+                                                 --check only reports, exiting
+                                                 1 when one is available
 
 Warnings never fail a build; errors do.
 `)
