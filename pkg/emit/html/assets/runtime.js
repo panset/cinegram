@@ -2028,6 +2028,11 @@
   // time, so seeking to the next step's start shows everything the one being
   // cut short would have finished by.
   Player.prototype.advanceStep = function () {
+    // Moving to another beat hands the framing back to the camera: a manual
+    // zoom is per-beat inspection, and on a phone — where an accidental drag
+    // is easy and a double-click does not exist — the next tap is the only
+    // hand-back gesture a viewer will ever find.
+    if (this.reel) this.camOverride = false;
     var steps = this.scenario().steps;
     for (var i = 0; i < steps.length; i++) {
       // The millisecond of tolerance is the same one prevStep and nextStep
@@ -2046,6 +2051,8 @@
   // prevStep goes back to the start of a beat and waits there, so Space then
   // replays it. Backing up and playing again is one mechanism, not two.
   Player.prototype.prevStep = function () {
+    // Same hand-back as advanceStep: navigating beats restores the camera.
+    if (this.reel) this.camOverride = false;
     var steps = this.scenario().steps;
     var target = 0;
     for (var i = 0; i < steps.length; i++) {

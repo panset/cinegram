@@ -492,8 +492,10 @@ seconds".
 An **auto-follow camera** frames each step's action: one pose per step,
 computed from what the step's tracks touch — a `focus` names the frame
 outright, otherwise the flows, highlights and notes define it — with a short
-glide at each boundary. Drag or scroll to take the framing over; double-click
-to hand it back. The pose is a function of the clock, evaluated at the current
+glide at each boundary. Drag or scroll to take the framing over; advancing to
+the next beat hands it back — a manual zoom is per-beat inspection, and on a
+phone the next tap is the gesture you already have (double-click works too).
+The pose is a function of the clock, evaluated at the current
 moment rather than accumulated between frames, so scrubbing, deep links and
 recording all see exactly what playing does — mid-glide included.
 
