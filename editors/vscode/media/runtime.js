@@ -503,6 +503,14 @@
     bar.appendChild(controls);
     this.root.appendChild(bar);
 
+    // The reel's segmented progress bar: one segment per step, story-style.
+    // Built for every host and shown only under .dgm-reel, so the shared
+    // stylesheet costs other hosts nothing. aria-hidden because the caption
+    // is the live region and digits 1–9 remain the accessible step jump.
+    this.reelbar = el('div', 'dgm-reelbar');
+    this.reelbar.setAttribute('aria-hidden', 'true');
+    this.root.appendChild(this.reelbar);
+
     this.warning = el('div', 'dgm-warning');
     this.warning.style.display = 'none';
     this.root.appendChild(this.warning);
@@ -1681,6 +1689,7 @@
 
     this.scrub.max = String(sc.duration || 0);
     this.buildScrubMarks(sc);
+    this.buildReelBar(sc);
 
     // The caption belongs to whichever scenario is showing, so a switch has to
     // let it redraw even if the new step happens to carry the same id.
@@ -1709,6 +1718,24 @@
       });
       self.marks.appendChild(tick);
     });
+  };
+
+  // buildReelBar lays one equal-width segment per step, Instagram-style: the
+  // bar answers "how many beats, which one am I on", not "how long is each" —
+  // proportional widths would render a 300ms hop as an invisible sliver.
+  // The fill inside the active segment is written by syncChrome as a plain
+  // width with no transition, so it is a pure function of the clock and a
+  // frame photographed at any paused millisecond is exact.
+  Player.prototype.buildReelBar = function (sc) {
+    this.reelbar.innerHTML = '';
+    this.reelFills = [];
+    for (var i = 0; i < sc.steps.length; i++) {
+      var seg = el('div', 'dgm-reelbar-seg');
+      var fill = el('div', 'dgm-reelbar-fill');
+      seg.appendChild(fill);
+      this.reelbar.appendChild(seg);
+      this.reelFills.push(fill);
+    }
   };
 
   function firstLine(s) {
@@ -1953,6 +1980,17 @@
       kids[i].classList.toggle('is-done', !!done);
       kids[i].setAttribute('aria-current', active ? 'step' : 'false');
     }
+
+    // The reel bar's fills ride the same loop shape: done segments read
+    // full, future ones empty, the active one fills with its step.
+    var fills = this.reelFills || [];
+    for (var j = 0; j < fills.length; j++) {
+      var s = sc.steps[j];
+      if (!s) continue;
+      fills[j].style.width =
+        (100 * clamp((this.time - s.start) / ((s.end - s.start) || 1), 0, 1)) + '%';
+    }
+
     this.syncCaption(current);
   };
 

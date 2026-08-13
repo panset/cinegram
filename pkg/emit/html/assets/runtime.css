@@ -305,6 +305,31 @@ body.dgm-standalone {
   min-height: 120px;
 }
 
+/* The story bar. Hidden everywhere but the reel; the fill widths are inline
+   styles the clock writes, deliberately with no transition — the bar has to
+   photograph exactly at any paused millisecond. */
+.dgm-reelbar { display: none; }
+
+.dgm-reel .dgm-reelbar {
+  display: flex;
+  gap: 4px;
+  padding: 4px 2px;
+}
+
+.dgm-reelbar-seg {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--dgm-border);
+  overflow: hidden;
+}
+
+.dgm-reelbar-fill {
+  height: 100%;
+  width: 0;
+  background: var(--dgm-fg);
+}
+
 /* Off-screen holding pen for the share link when the clipboard API is not
    available — a page opened from the filesystem is not a secure context. It has
    to be focusable and selectable, so it cannot be display:none. */
