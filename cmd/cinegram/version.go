@@ -8,4 +8,4 @@ package main
 // workflow additionally refuses a tag that does not match this constant, so
 // a published binary can never claim a version other than the tag it was
 // built from. See RELEASING.md.
-const version = "0.1.0"
+const version = "0.2.0"
