@@ -57,8 +57,11 @@ Try these in order; use the first that works. Verify with `cinegram version`
 A binary that exists but is stale can update itself: `cinegram upgrade
 --check` reports whether a newer release exists (exit 1 when one does), and
 `cinegram upgrade` replaces the binary in place with the checksum-verified
-latest release. The one exception is a workspace Bazel build, which `upgrade`
-refuses — rebuild that with `bazel build //cmd/cinegram` instead.
+latest release. Two exceptions: a workspace Bazel build, which `upgrade`
+refuses — rebuild that with `bazel build //cmd/cinegram` — and a binary that
+answers `unknown command "upgrade"`, which predates 0.2.0: replace that one
+by re-running the install download above over it (the URL always fetches the
+latest release).
 
 Below, `cinegram` means whichever path you found. It is a single static
 binary with no dependencies; GIF recording needs nothing else installed
