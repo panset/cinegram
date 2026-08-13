@@ -30,11 +30,24 @@ bazel run //pkg/parser:parser_test   -- -update
 bazel run //pkg/compile:compile_test -- -update
 ```
 
+**`docs/` is the committed GitHub Pages site — regenerate it, never edit it.**
+Pages serves it straight from `main` with no CI build, so after changing
+anything under `examples/` or in the render pipeline:
+
+```sh
+bazel run //site:sync
+```
+
+`//site:site_test` fails while `docs/` is stale. The sweep only touches
+`docs/demos/`; a hand-placed top-level file there (a `CNAME`, say) survives.
+The full publish workflow — what gets a page, how the index blurb is chosen —
+is `skills/publish-site/SKILL.md`.
+
 Formatting — `gofmt` exists only inside the hermetic SDK, and Bazel does not
 check it, so run it manually before finishing:
 
 ```sh
-"$(find "$(bazel info output_base)/external" -name gofmt -type f | head -1)" -w ./cmd ./pkg
+"$(find "$(bazel info output_base)/external" -name gofmt -type f | head -1)" -w ./cmd ./pkg ./site
 ```
 
 Exercise the CLI (relative paths work; the binary resolves them against
@@ -305,6 +318,20 @@ payload delivered by `postMessage` plus the snapshot/restore dance
 - Diagnostics carry a position and usually a `Hint`; `diag.Bag` de-duplicates
   identical entries because several passes read the same attribute.
 - Warnings never fail a build; errors exit 1.
+
+## Releasing
+
+Everything ships from one `v*` tag — binaries on GitHub Releases, the VS Code
+extension on the Marketplace — and **`RELEASING.md` is the procedure and the
+contracts.** The short version: the version lives in three places
+(`cmd/cinegram/version.go`, the extension `package.json`, the extension
+changelog) kept equal by `//editors/vscode:assets_test`; the release workflow
+is qualify → one job per distribution channel → verify; the asset names
+`cinegram-<os>-<arch>` and the `releases/latest/download/` URL are contracts
+that `skills/cinegram/SKILL.md` and `cinegram upgrade` both download by.
+Anything that adds a way users obtain cinegram — a playground, a package
+manager — must follow "Adding a distribution channel" in `RELEASING.md`
+rather than publishing on its own.
 
 ## Verifying animation changes
 

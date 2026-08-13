@@ -16,6 +16,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/tejaspanse/cinegram/internal/repotest"
 )
 
 // synced lists every file the extension keeps a copy of, canonical path first.
@@ -38,7 +40,9 @@ var synced = []struct{ canonical, copy string }{
 // the binary at runtime, so it cannot drift. These three files are the
 // exception, because they are shipped rather than called.
 func TestAssetsAreInSync(t *testing.T) {
-	root := repoRoot(t)
+	// The first synced file doubles as the probe: it is in this test's data
+	// either way the test is run.
+	root := repotest.Root(t, synced[0].canonical)
 
 	for _, pair := range synced {
 		want, err := os.ReadFile(filepath.Join(root, pair.canonical))
@@ -54,39 +58,4 @@ func TestAssetsAreInSync(t *testing.T) {
 				pair.copy, len(got), len(want))
 		}
 	}
-}
-
-// repoRoot finds whichever directory the workspace-relative paths above resolve
-// against.
-//
-// Under `bazel test` that is somewhere in the runfiles tree, which mirrors the
-// workspace layout but contains only declared data — no MODULE.bazel to look
-// for. Under `bazel run` or `go test` it is the source tree itself. Rather than
-// encode which, probe for a file that must be present either way.
-func repoRoot(t *testing.T) string {
-	t.Helper()
-	probe := synced[0].canonical
-
-	var candidates []string
-	if dir := os.Getenv("BUILD_WORKSPACE_DIRECTORY"); dir != "" {
-		candidates = append(candidates, dir)
-	}
-	if wd, err := os.Getwd(); err == nil {
-		for dir := wd; ; {
-			candidates = append(candidates, dir)
-			parent := filepath.Dir(dir)
-			if parent == dir {
-				break
-			}
-			dir = parent
-		}
-	}
-
-	for _, dir := range candidates {
-		if _, err := os.Stat(filepath.Join(dir, probe)); err == nil {
-			return dir
-		}
-	}
-	t.Fatalf("cannot find %s from any of %v", probe, candidates)
-	return ""
 }

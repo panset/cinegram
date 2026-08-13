@@ -4,6 +4,21 @@ All notable changes to the Cinegram extension are recorded here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-08-12
+
+### Added
+
+- **The bundled `cinegram` binary can update itself when used outside the
+  extension.** `cinegram upgrade` replaces a release-installed binary with
+  the latest checksum-verified GitHub release; `cinegram upgrade --check`
+  reports whether one exists (exit 1 when it does).
+
+### Changed
+
+- The stale-binary message now names the fix for the binary actually in use:
+  rebuild for a workspace Bazel build, an extension update for the bundled
+  copy, `cinegram upgrade` for a release install.
+
 ## [0.1.0] — 2026-08-10
 
 First public release.
@@ -36,4 +51,5 @@ First public release.
 - Recording needs a Chrome or Chromium on `PATH` (or `cinegram.chromePath`);
   every frame is a separate headless screenshot.
 
+[0.2.0]: https://github.com/panset/cinegram/releases/tag/v0.2.0
 [0.1.0]: https://github.com/panset/cinegram/releases/tag/v0.1.0
