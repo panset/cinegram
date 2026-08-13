@@ -78,6 +78,7 @@ type captureOptions struct {
 	view     string
 	width    int
 	height   int
+	reel     bool
 }
 
 // runCapture renders one moment, or several evenly spaced ones.
@@ -116,8 +117,15 @@ func runCapture(opt captureOptions, stderr io.Writer) error {
 		return err
 	}
 
+	// frame deliberately shoots the full page chrome; --reel swaps in the
+	// story layout instead.
+	query := ""
+	if opt.reel {
+		query = "?reel"
+	}
+
 	for _, shot := range shots {
-		url := frameURL(base, viewID, scenarioID, shot.at, false)
+		url := frameURL(base, viewID, scenarioID, shot.at, query)
 		if err := shoot(chrome, url, shot.path, opt.width, opt.height); err != nil {
 			return err
 		}
@@ -149,17 +157,14 @@ func servePage(input string, stderr io.Writer) (base string, stop func(), err er
 	}, nil
 }
 
-// frameURL addresses one exact moment of one scenario.
+// frameURL addresses one exact moment of one scenario. query selects the page
+// mode — "", "?embed" or "?reel" — emitted verbatim.
 //
 // The query comes before the fragment, which is not a stylistic choice: the
-// runtime reads `?embed` from location.search and the moment from the hash, and
-// a hash that started before the query would swallow it.
-func frameURL(base, viewID, scenarioID string, at int, embed bool) string {
-	q := ""
-	if embed {
-		q = "?embed"
-	}
-	return fmt.Sprintf("%s%s#v=%s&s=%s&t=%d", base, q, viewID, scenarioID, at)
+// runtime reads its mode flags from location.search and the moment from the
+// hash, and a hash that started before the query would swallow it.
+func frameURL(base, viewID, scenarioID string, at int, query string) string {
+	return fmt.Sprintf("%s%s#v=%s&s=%s&t=%d", base, query, viewID, scenarioID, at)
 }
 
 type shot struct {

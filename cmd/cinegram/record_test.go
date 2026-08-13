@@ -12,6 +12,36 @@ import (
 	"testing"
 )
 
+// TestReelPresetDimensions covers the --reel sizing rule: the preset fills in
+// only the dimensions the command line left alone, detected via flag.Visit —
+// so an explicit --width or --height wins per axis, even when it happens to
+// restate the old default, and even-rounding still applies afterwards.
+func TestReelPresetDimensions(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		w, h int
+	}{
+		{"reel alone", []string{"a.dgm", "-o", "x.mp4", "--reel"}, 1080, 1920},
+		{"explicit width survives", []string{"a.dgm", "-o", "x.mp4", "--reel", "--width", "900"}, 900, 1920},
+		{"explicit height still rounds even", []string{"a.dgm", "-o", "x.mp4", "--reel", "--height", "2401"}, 1080, 2402},
+		{"no reel keeps landscape defaults", []string{"a.dgm", "-o", "x.mp4"}, 1280, 720},
+		{"explicit old defaults beat the preset", []string{"a.dgm", "-o", "x.mp4", "--reel", "--width", "1280", "--height", "720"}, 1280, 720},
+	}
+	for _, c := range cases {
+		opt, err := parseRecordOptions(c.args)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if opt.width != c.w || opt.height != c.h {
+			t.Errorf("%s: got %dx%d, want %dx%d", c.name, opt.width, opt.height, c.w, c.h)
+		}
+		if c.name != "no reel keeps landscape defaults" && !opt.reel {
+			t.Errorf("%s: reel flag not set", c.name)
+		}
+	}
+}
+
 // TestFrameTimesTileTheScenario covers the schedule `record` captures against.
 // Times are computed from the index rather than accumulated, so an fps whose
 // interval is not a whole number of milliseconds does not drift, and the last

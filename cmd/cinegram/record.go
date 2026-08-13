@@ -67,11 +67,16 @@ type recordOptions struct {
 	scenario string
 	view     string
 	progress bool
+	reel     bool
 }
 
-func cmdRecord(args []string, stdout, stderr io.Writer) error {
+// parseRecordOptions is the parse-and-validate half of cmdRecord, separated so
+// the --reel preset rules are unit-testable without a browser.
+func parseRecordOptions(args []string) (recordOptions, error) {
 	opt := recordOptions{}
+	var fset *flag.FlagSet
 	input, output, err := parseArgsWith("record", args, func(fs *flag.FlagSet) {
+		fset = fs
 		fs.StringVar(&opt.format, "format", "", "gif, mp4 or webm (default: from the -o extension)")
 		fs.IntVar(&opt.fps, "fps", defaultFPS, "frames per second")
 		fs.IntVar(&opt.width, "width", 1280, "viewport width")
@@ -80,14 +85,31 @@ func cmdRecord(args []string, stdout, stderr io.Writer) error {
 		fs.StringVar(&opt.view, "view", "", "view id (default: the one the document opens on)")
 		fs.BoolVar(&opt.progress, "progress", false,
 			"report capture progress on stderr, one line per frame")
+		fs.BoolVar(&opt.reel, "reel", false,
+			"portrait story preset: shoots the ?reel page at 1080x1920")
 	})
 	if err != nil {
-		return err
+		return opt, err
 	}
 	if output == "" {
-		return fmt.Errorf("record needs -o to say where the recording goes")
+		return opt, fmt.Errorf("record needs -o to say where the recording goes")
 	}
 	opt.input, opt.output = input, output
+
+	// --reel presets a portrait canvas per axis, but only where the flag was
+	// left untouched: Visit reports the flags actually set on the command
+	// line, so `--reel --height 2400` means a taller reel, and an explicit
+	// `--width 1280 --height 720` wins even though it matches the defaults.
+	if opt.reel {
+		set := map[string]bool{}
+		fset.Visit(func(f *flag.Flag) { set[f.Name] = true })
+		if !set["width"] {
+			opt.width = 1080
+		}
+		if !set["height"] {
+			opt.height = 1920
+		}
+	}
 
 	if opt.format == "" {
 		opt.format = formatFromPath(output)
@@ -95,10 +117,10 @@ func cmdRecord(args []string, stdout, stderr io.Writer) error {
 	switch opt.format {
 	case "gif", "mp4", "webm":
 	default:
-		return fmt.Errorf("unknown --format %q: use gif, mp4 or webm", opt.format)
+		return opt, fmt.Errorf("unknown --format %q: use gif, mp4 or webm", opt.format)
 	}
 	if opt.fps < 1 {
-		return fmt.Errorf("--fps must be at least 1, got %d", opt.fps)
+		return opt, fmt.Errorf("--fps must be at least 1, got %d", opt.fps)
 	}
 
 	// Rounded up unconditionally rather than only for video: yuv420p needs even
@@ -106,6 +128,14 @@ func cmdRecord(args []string, stdout, stderr io.Writer) error {
 	// pixel is invisible in a GIF.
 	opt.width, opt.height = even(opt.width), even(opt.height)
 
+	return opt, nil
+}
+
+func cmdRecord(args []string, stdout, stderr io.Writer) error {
+	opt, err := parseRecordOptions(args)
+	if err != nil {
+		return err
+	}
 	return runRecord(opt, stderr)
 }
 
@@ -127,6 +157,16 @@ func even(n int) int {
 		return n + 1
 	}
 	return n
+}
+
+// recordQuery names the page mode a recording shoots: embed strips the page
+// furniture around the stage, and reel replaces the layout wholesale — never
+// both, since the reel CSS owns the whole page.
+func recordQuery(opt recordOptions) string {
+	if opt.reel {
+		return "?reel"
+	}
+	return "?embed"
 }
 
 func runRecord(opt recordOptions, stderr io.Writer) error {
@@ -176,8 +216,17 @@ func runRecord(opt recordOptions, stderr io.Writer) error {
 	defer os.RemoveAll(dir)
 
 	times := frameTimes(duration, opt.fps)
-	fmt.Fprintf(stderr, "recording %s (%s, %dms) as %d frames at %dfps\n",
-		opt.input, scenarioID, duration, len(times), opt.fps)
+	// The GIF encoder holds every decoded frame at once, and at reel size
+	// that is real memory — say so while there is still time to Ctrl-C.
+	// Appended to this line rather than printed as its own, because anything
+	// new on stderr leaks verbatim into the VS Code extension's notifications.
+	note := ""
+	if opt.reel && opt.format == "gif" {
+		note = fmt.Sprintf(" (gif holds ~%d MB of frames in memory; mp4 is lighter)",
+			len(times)*opt.width*opt.height*4>>20)
+	}
+	fmt.Fprintf(stderr, "recording %s (%s, %dms) as %d frames at %dfps%s\n",
+		opt.input, scenarioID, duration, len(times), opt.fps, note)
 
 	paths, err := captureFrames(chrome, base, viewID, scenarioID, dir, times, opt,
 		progressReporter(opt, stderr), stderr)
@@ -278,7 +327,7 @@ func captureFrames(chrome, base, viewID, scenarioID, dir string, times []int, op
 
 			// `?embed` strips the page furniture, so the recording is the
 			// diagram and its narration rather than a screenshot of a toolbar.
-			url := frameURL(base, viewID, scenarioID, times[i], true)
+			url := frameURL(base, viewID, scenarioID, times[i], recordQuery(opt))
 
 			var err error
 			for attempt := 1; attempt <= captureAttempts; attempt++ {

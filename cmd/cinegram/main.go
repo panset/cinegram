@@ -98,6 +98,12 @@ Usage:
                                                  record a scenario; GIF needs
                                                  nothing installed, mp4/webm
                                                  need ffmpeg
+                              [--reel]           portrait story preset: the ?reel
+                                                 page at 1080x1920 with the
+                                                 auto-follow camera (also on
+                                                 frame; mp4 recommended at this
+                                                 size). Explicit --width/--height
+                                                 still win, per axis
                               [--progress]       report each captured frame on
                                                  stderr, for a host drawing a
                                                  progress bar
@@ -531,16 +537,33 @@ func lintJSON(bags []*diag.Bag, stdout io.Writer) error {
 func cmdFrame(args []string, stdout, stderr io.Writer) error {
 	var at, scenario, view string
 	var frames, width, height int
+	var reel bool
+	var fset *flag.FlagSet
 	input, output, err := parseArgsWith("frame", args, func(fs *flag.FlagSet) {
+		fset = fs
 		fs.StringVar(&at, "at", "0", "the moment to capture, e.g. 2400ms or 2.4s")
 		fs.IntVar(&frames, "frames", 1, "capture N evenly spaced moments into -o as a directory")
 		fs.StringVar(&scenario, "scenario", "", "scenario id or name (default: the first)")
 		fs.StringVar(&view, "view", "", "view id (default: the one the document opens on)")
 		fs.IntVar(&width, "width", 1400, "viewport width")
 		fs.IntVar(&height, "height", 900, "viewport height")
+		fs.BoolVar(&reel, "reel", false, "portrait story preset: shoots the ?reel page at 1080x1920")
 	})
 	if err != nil {
 		return err
+	}
+
+	// The same per-axis preset rule as record: --reel fills in only the
+	// dimensions the command line left alone.
+	if reel {
+		set := map[string]bool{}
+		fset.Visit(func(f *flag.Flag) { set[f.Name] = true })
+		if !set["width"] {
+			width = 1080
+		}
+		if !set["height"] {
+			height = 1920
+		}
 	}
 
 	ms, err := units.ParseMillis(at)
@@ -550,7 +573,7 @@ func cmdFrame(args []string, stdout, stderr io.Writer) error {
 
 	return runCapture(captureOptions{
 		input: input, output: output, at: ms, frames: frames,
-		scenario: scenario, view: view, width: width, height: height,
+		scenario: scenario, view: view, width: width, height: height, reel: reel,
 	}, stderr)
 }
 
