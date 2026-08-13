@@ -16,7 +16,7 @@ open /tmp/k8s.html
 ```
 
 Or skip the build entirely: every example is playable at
-<https://tejaspanse.github.io/cinegram/>.
+<https://panset.github.io/cinegram/>.
 
 ## The language
 
