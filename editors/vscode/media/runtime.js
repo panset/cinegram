@@ -433,7 +433,21 @@
     this.camKeys = null;
     this._camMoved = false;
 
+    // Removers for every listener this player puts somewhere that outlives its
+    // own DOM — window, document, a media query. See `own` and dispose: a host
+    // that mounts a fresh player per edit would otherwise gain one more set of
+    // them with every mount, each holding the player it belonged to alive.
+    this._unbind = [];
+
     this.build();
+  }
+
+  // own binds a listener the player has to take back off itself, and records
+  // how. Listeners on elements inside the root need none of this: they die with
+  // the nodes when the host clears or replaces the root.
+  function own(player, target, type, fn, opts) {
+    target.addEventListener(type, fn, opts);
+    player._unbind.push(function () { target.removeEventListener(type, fn, opts); });
   }
 
   // --- preferences ------------------------------------------------------
@@ -575,9 +589,8 @@
     this.bindStageGestures();
 
     // Camera keyframes bake the stage size in, so a resize invalidates them.
-    // Same inline pattern as the window pointer listeners above this; it
-    // joins Player.dispose when that exists.
-    window.addEventListener('resize', function () {
+    // Same inline pattern as the window pointer listeners above this.
+    own(self, window, 'resize', function () {
       self.camKeys = null;
       if (self.reel && !self.camOverride && self.svg) {
         self.apply(self.time);
@@ -644,8 +657,14 @@
           document.documentElement.setAttribute('data-theme', self.theme);
           self.render();
         };
-        if (mq.addEventListener) mq.addEventListener('change', follow);
-        else if (mq.addListener) mq.addListener(follow);
+        if (mq.addEventListener) {
+          own(self, mq, 'change', follow);
+        } else if (mq.addListener) {
+          // The legacy pair predates EventTarget on MediaQueryList, so `own`
+          // cannot express it; the remover goes on by hand.
+          mq.addListener(follow);
+          self._unbind.push(function () { mq.removeListener(follow); });
+        }
       } catch (e) { /* no matchMedia: the initial theme stands */ }
     }
 
@@ -660,7 +679,7 @@
       if (!this.root.hasAttribute('tabindex')) this.root.setAttribute('tabindex', '0');
       this.root.addEventListener('keydown', function (ev) { self.onKey(ev); });
     } else {
-      document.addEventListener('keydown', function (ev) { self.onKey(ev); });
+      own(self, document, 'keydown', function (ev) { self.onKey(ev); });
     }
 
     // The hash is the single source of truth for which view is showing, and
@@ -671,7 +690,7 @@
     // document the player owns none of it: navigation happens in the player and
     // the URL is left to whatever else is on the page.
     if (this.usesHash()) {
-      window.addEventListener('hashchange', function () { self.applyHash(); });
+      own(self, window, 'hashchange', function () { self.applyHash(); });
     }
 
     // Embed mode drops the chrome around the diagram but not the diagram's own
@@ -1006,7 +1025,7 @@
       lastY = ev.clientY;
     });
 
-    window.addEventListener('pointermove', function (ev) {
+    own(self, window, 'pointermove', function (ev) {
       if (!dragging) return;
       var dx = ev.clientX - lastX, dy = ev.clientY - lastY;
       // A few pixels of slop, so a click on a node is not read as a pan and
@@ -1021,7 +1040,7 @@
       self.applyTransform();
     });
 
-    window.addEventListener('pointerup', function () {
+    own(self, window, 'pointerup', function () {
       if (moved) self.stage.classList.remove('is-panning');
       dragging = false;
     });
@@ -2030,6 +2049,26 @@
     this.playBtn.textContent = 'Play';
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = null;
+  };
+
+  // dispose stops the clock and takes back every listener the player put
+  // outside its own DOM. A host that mounts a fresh player per edit — the
+  // playground, a webview re-rendering a block — needs it: element listeners
+  // die with the root the host replaces, but the window, document and
+  // matchMedia ones would stack up one set per mount, each of them still
+  // holding the player it was built for.
+  //
+  // documentElement's `data-theme` is deliberately left as it is. It describes
+  // the page, not this player, and clearing it would make the whole document
+  // flash back to light between two mounts.
+  Player.prototype.dispose = function () {
+    this.pause();
+    for (var i = 0; i < this._unbind.length; i++) {
+      // A remover cannot meaningfully fail, but a host disposing twice or
+      // after its document went away should not throw at the caller.
+      try { this._unbind[i](); } catch (e) { /* already gone */ }
+    }
+    this._unbind = [];
   };
 
   Player.prototype.seek = function (ms) {

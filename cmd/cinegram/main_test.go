@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/tejaspanse/cinegram/pkg/diag"
+	"github.com/tejaspanse/cinegram/pkg/envelope"
 	"github.com/tejaspanse/cinegram/pkg/source"
 )
 
@@ -198,7 +199,7 @@ func TestEnvelopeAlwaysCarriesBothHalves(t *testing.T) {
 	failed := diag.NewBag("guide.md")
 	failed.ErrorHintf(source.Pos{Line: 9, Col: 15}, "known nodes: a, b", "%q is not a node in this diagram", "nope")
 
-	diags, errs := collectDiagnostics([]*diag.Bag{failed})
+	diags, errs := envelope.Collect([]*diag.Bag{failed})
 	if errs != 1 {
 		t.Fatalf("error count = %d, want 1", errs)
 	}
@@ -210,7 +211,7 @@ func TestEnvelopeAlwaysCarriesBothHalves(t *testing.T) {
 		t.Fatalf("writeEnvelope: %v", err)
 	}
 
-	var got jsonEnvelope
+	var got envelope.Envelope
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("output is not valid JSON: %v\n%s", err, out.String())
 	}
@@ -235,9 +236,9 @@ func TestEnvelopeAlwaysCarriesBothHalves(t *testing.T) {
 	}
 }
 
-func mustCollect(t *testing.T) []jsonDiagnostic {
+func mustCollect(t *testing.T) []envelope.Diagnostic {
 	t.Helper()
-	diags, errs := collectDiagnostics([]*diag.Bag{diag.NewBag("ok.dgm")})
+	diags, errs := envelope.Collect([]*diag.Bag{diag.NewBag("ok.dgm")})
 	if errs != 0 {
 		t.Fatalf("clean bag reported %d errors", errs)
 	}
@@ -273,7 +274,7 @@ func TestLintJSONExitCodes(t *testing.T) {
 				t.Fatalf("error = %v, wantErr %v", err, tc.wantErr)
 			}
 
-			var got []jsonDiagnostic
+			var got []envelope.Diagnostic
 			if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 				t.Fatalf("output is not valid JSON: %v\n%s", err, out.String())
 			}

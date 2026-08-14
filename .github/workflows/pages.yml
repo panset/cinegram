@@ -1,0 +1,76 @@
+# Deploys the GitHub Pages site: the committed demo pages plus the playground.
+#
+# The site has two halves that are produced in opposite ways, and the split is
+# the whole design here:
+#
+#   docs/       committed. `bazel run //site:sync` is its only writer and
+#               //site:site_test fails while it is stale, so this workflow
+#               uploads it verbatim and never rebuilds it. Every existing
+#               demo URL therefore keeps working byte for byte.
+#   playground/ assembled. It is ~10 MB, most of it a .wasm nobody wants in
+#               git history, so //web/playground:site builds it here from the
+#               sources and the artifacts already in the tree.
+#
+# `bazel test //...` runs first as the deploy gate. It includes
+# //site:site_test, so a commit that changed an example without re-running
+# //site:sync blocks the deploy exactly as it blocks CI.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a queued run supersedes nothing, it just waits, because
+# cancelling mid-deploy can leave the site half-published.
+concurrency:
+  group: pages
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # bazelisk reads .bazelversion, so CI builds with the same Bazel as dev.
+      - uses: bazelbuild/setup-bazelisk@v3
+
+      # Same key as ci.yml, so the two workflows share one warm cache rather
+      # than each paying for a cold //... build on every push to main.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel
+          key: bazel-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel.lock') }}
+
+      - name: Qualify
+        run: bazel test //...
+
+      # Verbatim. //site:sync is the only thing that ever writes docs/, and it
+      # runs on a committer's machine — see skills/publish-site/SKILL.md.
+      - name: Stage the committed demo site
+        run: cp -R docs "$PWD/_site"
+
+      # _site sits in the checkout, which is safe only because nothing reads
+      # the workspace afterwards: the root package globs docs/** and nothing
+      # else, so no Bazel target picks the copy up, and no git step follows.
+      # The assembler resolves a relative -o against BUILD_WORKING_DIRECTORY;
+      # an absolute path takes that question off the table entirely.
+      - name: Assemble the playground
+        run: bazel run //web/playground:site -- -o "$PWD/_site/playground"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

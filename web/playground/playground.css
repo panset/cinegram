@@ -1,0 +1,424 @@
+/*
+ * Page layout for the playground. Nothing here restyles the player.
+ *
+ * runtime.css already publishes the --dgm-* colour tokens on :root and swaps
+ * them on html[data-theme], which the player's own theme toggle stamps. Keying
+ * this page off the same tokens means the two halves cannot disagree: flipping
+ * the player's theme repaints the editor with it. The few colours the page
+ * needs beyond that set are declared the same way — a light value on bare
+ * :root, an override under [data-theme='dark'] and under prefers-color-scheme
+ * for the untouched default — so the page never has an undefined colour.
+ *
+ * The body is `.pg`, deliberately not `.dgm-standalone`: that class is what
+ * turns on runtime.css's page-level rules, and this page owns its own layout.
+ */
+
+:root {
+  --pg-top: 48px;
+  --pg-left: 42%;
+  --pg-code: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --pg-err-bg: #fdecec;
+  --pg-err-fg: #8a1f1f;
+}
+
+:root[data-theme='dark'],
+:root:not([data-theme='light']) {
+  --pg-err-bg: #351a1a;
+  --pg-err-fg: #f7a8a8;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --pg-err-bg: #fdecec;
+    --pg-err-fg: #8a1f1f;
+  }
+}
+
+body.pg {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--dgm-bg);
+  color: var(--dgm-fg);
+  font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* --- top bar ------------------------------------------------------------ */
+
+.pg-top {
+  flex: 0 0 auto;
+  height: var(--pg-top);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--dgm-border);
+  background: var(--dgm-panel);
+}
+
+.pg-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pg-logo {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.pg-tag {
+  color: var(--dgm-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.pg-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pg-btn {
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 11px;
+  border-radius: 6px;
+  border: 1px solid var(--dgm-border);
+  background: var(--dgm-bg);
+  color: var(--dgm-fg);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pg-btn:hover:not(:disabled) {
+  border-color: var(--dgm-accent);
+  color: var(--dgm-accent);
+}
+
+.pg-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pg-btn-small {
+  font-size: 12px;
+  padding: 3px 8px;
+}
+
+.pg-btn-ghost {
+  color: var(--dgm-muted);
+}
+
+/* --- the two panels ----------------------------------------------------- */
+
+.pg-main {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+.pg-left {
+  flex: 0 0 var(--pg-left);
+  min-width: 260px;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  box-sizing: border-box;
+  border-right: 1px solid var(--dgm-border);
+  background: var(--dgm-panel);
+  min-height: 0;
+}
+
+/* The drop target is the whole left panel, so a file dropped anywhere near the
+   editor lands rather than being opened by the browser. */
+.pg-left.is-dropping {
+  outline: 2px dashed var(--dgm-accent);
+  outline-offset: -6px;
+}
+
+.pg-right {
+  flex: 1 1 auto;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--dgm-bg);
+}
+
+.pg-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pg-label {
+  font-size: 12px;
+  color: var(--dgm-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.pg-select {
+  font: inherit;
+  font-size: 13px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--dgm-border);
+  background: var(--dgm-bg);
+  color: var(--dgm-fg);
+}
+
+/* --- open files --------------------------------------------------------- */
+
+.pg-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pg-tab {
+  font: inherit;
+  font-size: 12px;
+  font-family: var(--pg-code);
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--dgm-border);
+  background: var(--dgm-bg);
+  color: var(--dgm-muted);
+  cursor: pointer;
+}
+
+.pg-tab.is-open {
+  border-color: var(--dgm-accent);
+  color: var(--dgm-accent);
+  background: var(--dgm-accent-soft);
+}
+
+.pg-tab .pg-tab-entry {
+  margin-left: 5px;
+  opacity: 0.7;
+}
+
+/* --- editor ------------------------------------------------------------- */
+
+.pg-editor {
+  flex: 1 1 auto;
+  min-height: 120px;
+  resize: none;
+  box-sizing: border-box;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--dgm-border);
+  background: var(--dgm-bg);
+  color: var(--dgm-fg);
+  font: 13px/1.55 var(--pg-code);
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+}
+
+.pg-editor:focus {
+  outline: 2px solid var(--dgm-accent-soft);
+  outline-offset: -1px;
+  border-color: var(--dgm-accent);
+}
+
+/* --- attachments -------------------------------------------------------- */
+
+.pg-attach {
+  flex: 0 0 auto;
+  border: 1px solid var(--dgm-border);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--dgm-bg);
+}
+
+.pg-attach-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pg-attach-head .pg-label {
+  flex: 1 1 auto;
+}
+
+.pg-attach-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--dgm-muted);
+}
+
+.pg-attach-hint code {
+  font-family: var(--pg-code);
+  font-size: 11px;
+}
+
+.pg-attach-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  max-height: 132px;
+  overflow: auto;
+}
+
+.pg-attach-list:empty {
+  display: none;
+}
+
+.pg-attach-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 12px;
+  font-family: var(--pg-code);
+}
+
+.pg-attach-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  font: inherit;
+  border: 0;
+  background: none;
+  color: var(--dgm-fg);
+  padding: 0;
+}
+
+.pg-attach-row.is-openable .pg-attach-name {
+  cursor: pointer;
+  color: var(--dgm-accent);
+}
+
+.pg-attach-size {
+  flex: 0 0 auto;
+  color: var(--dgm-muted);
+}
+
+.pg-attach-remove {
+  flex: 0 0 auto;
+  font: inherit;
+  border: 0;
+  background: none;
+  color: var(--dgm-muted);
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.pg-attach-remove:hover {
+  color: var(--dgm-fail);
+}
+
+/* --- diagnostics -------------------------------------------------------- */
+
+.pg-diagnostics {
+  flex: 0 0 auto;
+  max-height: 26vh;
+  overflow: auto;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: 12px/1.5 var(--pg-code);
+  background: var(--dgm-warn-bg);
+  color: var(--dgm-warn-fg);
+  border: 1px solid transparent;
+}
+
+.pg-diagnostics.has-errors {
+  background: var(--pg-err-bg);
+  color: var(--pg-err-fg);
+}
+
+.pg-diag {
+  margin: 0 0 4px;
+}
+
+.pg-diag:last-child {
+  margin-bottom: 0;
+}
+
+.pg-diag-hint {
+  opacity: 0.8;
+  padding-left: 12px;
+}
+
+/* --- player host -------------------------------------------------------- */
+
+.pg-player-host {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.pg-player-host > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* A compile error keeps the last drawing on screen rather than clearing the
+   panel — mid-keystroke breakage is the normal state of an editor, and a page
+   that blanks on every half-typed line is unusable. Dimming says "this is not
+   what you just typed" without taking the reference away. */
+.pg-player-host.is-stale {
+  opacity: 0.4;
+  filter: saturate(0.5);
+  transition: opacity 120ms ease;
+}
+
+.pg-boot {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dgm-muted);
+  background: var(--dgm-bg);
+  z-index: 5;
+}
+
+.pg-boot[hidden] {
+  display: none;
+}
+
+/* --- narrow screens ------------------------------------------------------ */
+
+@media (max-width: 860px) {
+  body.pg {
+    height: auto;
+    overflow: auto;
+  }
+
+  .pg-main {
+    flex-direction: column;
+  }
+
+  .pg-left {
+    flex: 0 0 auto;
+    max-width: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--dgm-border);
+  }
+
+  .pg-editor {
+    min-height: 240px;
+  }
+
+  .pg-right {
+    min-height: 70vh;
+  }
+}

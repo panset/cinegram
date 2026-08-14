@@ -32,6 +32,13 @@ ul.demos li {
 ul.demos a.title { font-weight: 600; font-size: 1.05rem; text-decoration: none; }
 ul.demos a.title:hover { text-decoration: underline; }
 .source { color: var(--muted); font-size: .8rem; font-family: ui-monospace, monospace; margin-left: .5rem; }
+.try { margin: 1.4rem 0 0; }
+.try a {
+  display: inline-block; background: var(--accent); color: var(--bg);
+  border-radius: 8px; padding: .5rem .9rem; font-weight: 600;
+  text-decoration: none;
+}
+.try span { color: var(--muted); font-size: .9rem; margin-left: .6rem; }
 .blurb { margin: .3rem 0 0; color: var(--muted); font-size: .92rem; }
 footer { margin-top: 3rem; color: var(--muted); font-size: .85rem; }
 </style>
@@ -44,6 +51,8 @@ footer { margin-top: 3rem; color: var(--muted); font-size: .85rem; }
 self-contained HTML file compiled from a <code>.dgm</code> source in
 <a href="https://github.com/tejaspanse/cinegram">the repository</a>&rsquo;s
 <code>examples/</code> directory.</p>
+<p class="try"><a href="playground/">Try the playground</a><span>Write your own in
+the browser &mdash; the compiler runs in the tab, nothing is uploaded.</span></p>
 <ul class="demos">
 <li>
 <a class="title" href="demos/blue-green-deploy.html">cut over to v1.5</a><span class="source">blue-green-deploy.dgm</span>
@@ -95,7 +104,8 @@ self-contained HTML file compiled from a <code>.dgm</code> source in
 </li>
 </ul>
 <footer>Generated from the examples by <code>bazel run //site:sync</code>;
-the site is committed, not built &mdash; no CI involved.</footer>
+these pages are committed, not built &mdash; the deploy workflow only uploads
+them.</footer>
 </main>
 </body>
 </html>

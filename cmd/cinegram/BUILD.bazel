@@ -22,6 +22,7 @@ go_library(
         "//pkg/emit/html",
         "//pkg/emit/mermaid",
         "//pkg/emit/narrate",
+        "//pkg/envelope",
         "//pkg/gifenc",
         "//pkg/ir",
         "//pkg/loader",
@@ -71,6 +72,7 @@ go_test(
     embed = [":cinegram_lib"],
     deps = [
         "//pkg/diag",
+        "//pkg/envelope",
         "//pkg/source",
     ],
 )

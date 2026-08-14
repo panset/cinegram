@@ -18,6 +18,12 @@ open /tmp/k8s.html
 Or skip the build entirely: every example is playable at
 <https://panset.github.io/cinegram/>.
 
+**Try it in the browser.** <https://panset.github.io/cinegram/playground/> is
+the compiler itself, built to WASM and running in the tab — paste a diagram,
+watch it animate, share the link. Nothing is uploaded; the document lives in
+the URL fragment. Locally that page is `bazel run //web/playground:site --
+--serve`.
+
 ## The language
 
 A `.dgm` file is a Mermaid diagram followed by one or more `scenario` blocks,
@@ -921,7 +927,7 @@ highlighting, a preview panel, an *Open With… → Cinegram Animation* editor, 
 `editors/vscode/`).
 
 Not built yet: `architecture-beta` and the other Mermaid diagram types (the
-registry seam exists for them), and WASM builds.
+registry seam exists for them).
 
 ## The VS Code extension
 

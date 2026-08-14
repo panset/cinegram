@@ -1,0 +1,87 @@
+[
+  {
+    "id": "k8s-request",
+    "title": "Kubernetes request path",
+    "entry": "k8s-request.dgm",
+    "files": ["k8s-request.dgm", "pod-a.dgm"]
+  },
+  {
+    "id": "deploy-pipeline",
+    "title": "Deploy pipeline",
+    "entry": "deploy-pipeline.dgm",
+    "files": ["deploy-pipeline.dgm"]
+  },
+  {
+    "id": "payment-checkout",
+    "title": "Checkout, told twice",
+    "entry": "payment-checkout.dgm",
+    "files": ["payment-checkout.dgm"]
+  },
+  {
+    "id": "blue-green-deploy",
+    "title": "Blue/green deployment",
+    "entry": "blue-green-deploy.dgm",
+    "files": ["blue-green-deploy.dgm"]
+  },
+  {
+    "id": "layered-arch",
+    "title": "Layered service",
+    "entry": "layered-arch.dgm",
+    "files": ["layered-arch.dgm"]
+  },
+  {
+    "id": "data-platform",
+    "title": "Data platform (pan and zoom)",
+    "entry": "data-platform.dgm",
+    "files": ["data-platform.dgm"]
+  },
+  {
+    "id": "incident-triage",
+    "title": "Incident triage map",
+    "entry": "incident-triage.dgm",
+    "files": ["incident-triage.dgm"]
+  },
+  {
+    "id": "oauth-login",
+    "title": "OAuth authorization code flow",
+    "entry": "oauth-login.dgm",
+    "files": ["oauth-login.dgm"]
+  },
+  {
+    "id": "oidc-login",
+    "title": "OIDC login (with storyboard)",
+    "entry": "oidc-login.dgm",
+    "files": [
+      "oidc-login.dgm",
+      "frames/app-home.svg",
+      "frames/app-signin.svg",
+      "frames/app-signing-in.svg",
+      "frames/idp-login.svg",
+      "frames/idp-mfa.svg"
+    ]
+  },
+  {
+    "id": "websocket-handshake",
+    "title": "WebSocket upgrade (sequence)",
+    "entry": "websocket-handshake.dgm",
+    "files": ["websocket-handshake.dgm", "pod-a.dgm"]
+  },
+  {
+    "id": "raft-election",
+    "title": "Raft leader election",
+    "entry": "raft-election.dgm",
+    "files": ["raft-election.dgm"]
+  },
+  {
+    "id": "tcp-connection",
+    "title": "TCP lifecycle (state diagram)",
+    "entry": "tcp-connection.dgm",
+    "files": ["tcp-connection.dgm"]
+  },
+  {
+    "id": "pod-a",
+    "title": "Inside Pod A",
+    "entry": "pod-a.dgm",
+    "files": ["pod-a.dgm"]
+  }
+]

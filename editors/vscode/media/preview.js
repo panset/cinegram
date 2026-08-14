@@ -210,7 +210,11 @@
 
   function stop(player) {
     if (!player) return;
-    try { player.pause(); } catch (e) { /* already gone */ }
+    // dispose also takes the player's document- and window-level listeners off
+    // again, which pause alone leaves behind — a real leak here, since every
+    // edit to the file remounts every block. Feature-detected so a runtime.js
+    // copy older than this file still stops the clock.
+    try { player.dispose ? player.dispose() : player.pause(); } catch (e) { /* already gone */ }
   }
 
   // --- rendering a failure -----------------------------------------------------
