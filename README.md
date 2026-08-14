@@ -895,7 +895,7 @@ There are no third-party Go dependencies, and the intent is to keep it that
 way: a hand-rolled lexer and recursive-descent parser need nothing beyond the
 standard library.
 
-The demo site at <https://tejaspanse.github.io/cinegram/> is the same story
+The demo site at <https://panset.github.io/cinegram/> is the same story
 one level up: GitHub Pages serves `docs/` straight from `main` (Settings →
 Pages → deploy from branch, `/docs` folder — a one-time repository setting),
 so there is no CI build anywhere. `docs/` holds one committed, self-contained
