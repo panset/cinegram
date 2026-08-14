@@ -9,8 +9,11 @@ description: >
 
 # Publishing the demo site
 
-`docs/` is the site GitHub Pages serves, straight from `main` — there is no
-CI build after the commit, so committing `docs/` **is** publishing. The
+`docs/` is the site GitHub Pages serves. The `pages` workflow
+(`.github/workflows/pages.yml`) runs on every push to `main`: it gates on
+`bazel test //...`, uploads the committed `docs/` **verbatim** (it never
+rebuilds it), and assembles the playground beside it at `/playground/` — so
+committing `docs/` to `main` is still what publishes the demo pages. The
 generator lives in `site/`; it renders one self-contained page per standalone
 example plus an index.
 
@@ -48,6 +51,10 @@ Done when the test passes and `git status` shows nothing unstaged under
 
 ## If the site is not live at all
 
-One-time repository setting, not a file: Settings → Pages → Deploy from a
-branch → `main`, `/docs`. The site then serves at
-<https://panset.github.io/cinegram/>.
+One-time repository setting, not a file: Settings → Pages → Source =
+"GitHub Actions" (or `gh api -X PUT repos/panset/cinegram/pages -f
+build_type=workflow`), then run the `pages` workflow
+(`gh workflow run pages.yml`). The site then serves at
+<https://panset.github.io/cinegram/>. If a deploy looks wrong, check the
+latest `pages` run before touching settings — a stale `docs/` fails the
+qualify step and blocks the deploy by design.
