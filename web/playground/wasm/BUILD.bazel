@@ -1,0 +1,25 @@
+# gazelle:ignore
+#
+# Hand-written: gazelle would generate a host-platform go_binary for a source
+# file guarded by `//go:build js && wasm`, which has no package to build. The
+# goos/goarch attributes transition the whole dep tree to js/wasm instead, so
+# `bazel build //...` keeps working without a --platforms flag.
+
+load("@rules_go//go:def.bzl", "go_binary")
+
+go_binary(
+    name = "cinegram_wasm",
+    srcs = ["main.go"],
+    goarch = "wasm",
+    goos = "js",
+    out = "cinegram.wasm",  # a js/wasm binary has no extension otherwise
+    pure = "on",
+    visibility = ["//web/playground:__subpackages__"],
+    deps = [
+        "//pkg/compile",
+        "//pkg/diag",
+        "//pkg/emit/html",
+        "//pkg/envelope",
+        "//pkg/loader",
+    ],
+)

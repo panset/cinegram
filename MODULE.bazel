@@ -9,4 +9,11 @@ bazel_dep(name = "rules_go", version = "0.55.1")
 bazel_dep(name = "gazelle", version = "0.44.0")
 
 go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
-go_sdk.download(version = "1.24.0")
+go_sdk.download(
+    name = "go_sdk",
+    version = "1.24.0",
+)
+
+# wasm_exec.js must match the SDK that compiled the .wasm; taking it from the
+# same repo makes that a fact rather than a discipline.
+use_repo(go_sdk, "go_sdk")
