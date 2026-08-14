@@ -27,6 +27,7 @@ import (
 	"github.com/tejaspanse/cinegram/pkg/emit/html"
 	"github.com/tejaspanse/cinegram/pkg/emit/mermaid"
 	"github.com/tejaspanse/cinegram/pkg/emit/narrate"
+	"github.com/tejaspanse/cinegram/pkg/envelope"
 	"github.com/tejaspanse/cinegram/pkg/ir"
 	"github.com/tejaspanse/cinegram/pkg/loader"
 	"github.com/tejaspanse/cinegram/pkg/parser"
@@ -265,10 +266,10 @@ func write(path string, data []byte, stdout io.Writer) error {
 
 func cmdCompile(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	var as string
-	var envelope bool
+	var wantEnvelope bool
 	input, output, err := parseArgsWith("compile", args, func(fs *flag.FlagSet) {
 		fs.StringVar(&as, "as", "", "with `-`, resolve relative paths as if the source lived at this path")
-		fs.BoolVar(&envelope, "envelope", false, "pair the timeline with its diagnostics and exit 0 regardless")
+		fs.BoolVar(&wantEnvelope, "envelope", false, "pair the timeline with its diagnostics and exit 0 regardless")
 	})
 	if err != nil {
 		return err
@@ -285,8 +286,8 @@ func cmdCompile(args []string, stdin io.Reader, stdout, stderr io.Writer) error 
 		// unreadable path is already a diagnostic on the declaration that
 		// named it. An envelope reports it as one so the caller has a single
 		// shape to render rather than a status code to interpret.
-		if envelope {
-			return writeEnvelope(nil, []jsonDiagnostic{{
+		if wantEnvelope {
+			return writeEnvelope(nil, []envelope.Diagnostic{{
 				File:     entry,
 				Severity: diag.SeverityError.String(),
 				Message:  err.Error(),
@@ -296,8 +297,8 @@ func cmdCompile(args []string, stdin io.Reader, stdout, stderr io.Writer) error 
 	}
 	timeline := compile.CompileBundle(bundle)
 
-	if envelope {
-		diags, _ := collectDiagnostics(bundle.Bags())
+	if wantEnvelope {
+		diags, _ := envelope.Collect(bundle.Bags())
 		return writeEnvelope(timeline, diags, output, stdout)
 	}
 
@@ -345,20 +346,11 @@ func compileSource(input, as string, stdin io.Reader) (string, loader.ReadFileFu
 	}, nil
 }
 
-// jsonEnvelope pairs a timeline with the diagnostics found producing it.
-//
-// It exists for hosts that render the result in place — a VS Code preview shows
-// the message where the diagram would have been — and so has no failure mode of
-// its own: the timeline is emitted even when errors were found, and the caller
-// decides whether a partial diagram is worth drawing. Like jsonDiagnostic, it
-// is declared here because it is a wire format.
-type jsonEnvelope struct {
-	Timeline    *ir.Timeline     `json:"timeline"`
-	Diagnostics []jsonDiagnostic `json:"diagnostics"`
-}
-
-func writeEnvelope(t *ir.Timeline, diags []jsonDiagnostic, output string, stdout io.Writer) error {
-	encoded, err := json.MarshalIndent(jsonEnvelope{Timeline: t, Diagnostics: diags}, "", "  ")
+// writeEnvelope serialises the wire shape from pkg/envelope to -o or stdout.
+// The format itself lives there so a WASM main can produce the same bytes; the
+// output side stays here because only the CLI has a file to write to.
+func writeEnvelope(t *ir.Timeline, diags []envelope.Diagnostic, output string, stdout io.Writer) error {
+	encoded, err := json.MarshalIndent(envelope.Envelope{Timeline: t, Diagnostics: diags}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -479,51 +471,12 @@ func cmdLint(args []string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-// jsonDiagnostic is the machine-readable shape of a diagnostic. It is declared
-// here rather than in pkg/diag because it is a wire format: the fields are
-// flat, the severity is a word rather than an enum, and it should not move when
-// the internal type does.
-type jsonDiagnostic struct {
-	File     string `json:"file"`
-	Line     int    `json:"line"`
-	Col      int    `json:"col"`
-	Severity string `json:"severity"`
-	Message  string `json:"message"`
-	Hint     string `json:"hint,omitempty"`
-}
-
-// collectDiagnostics flattens every bag into the wire shape, returning the
-// error count alongside so callers that still key off exit status do not have
-// to walk the result again. Always a non-nil slice: `[]` is a valid answer and
-// `null` is not one a caller should have to handle.
-func collectDiagnostics(bags []*diag.Bag) ([]jsonDiagnostic, int) {
-	out := []jsonDiagnostic{}
-	errs := 0
-
-	for _, bag := range bags {
-		for _, d := range bag.All() {
-			if d.Severity == diag.SeverityError {
-				errs++
-			}
-			out = append(out, jsonDiagnostic{
-				File:     bag.Filename,
-				Line:     d.Pos.Line,
-				Col:      d.Pos.Col,
-				Severity: d.Severity.String(),
-				Message:  d.Msg,
-				Hint:     d.Hint,
-			})
-		}
-	}
-	return out, errs
-}
-
 // lintJSON writes every diagnostic in the bundle as one array on stdout.
 //
 // Exit-code semantics are unchanged — warnings 0, errors 1 — so a caller can
 // branch on the status and read the detail, rather than having to choose.
 func lintJSON(bags []*diag.Bag, stdout io.Writer) error {
-	out, errs := collectDiagnostics(bags)
+	out, errs := envelope.Collect(bags)
 
 	encoded, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {

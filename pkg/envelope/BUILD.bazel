@@ -1,0 +1,22 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "envelope",
+    srcs = ["envelope.go"],
+    importpath = "github.com/tejaspanse/cinegram/pkg/envelope",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/diag",
+        "//pkg/ir",
+    ],
+)
+
+go_test(
+    name = "envelope_test",
+    srcs = ["envelope_test.go"],
+    embed = [":envelope"],
+    deps = [
+        "//pkg/diag",
+        "//pkg/source",
+    ],
+)
