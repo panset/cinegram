@@ -163,6 +163,8 @@ reading the `.dgm`.
 | Timeline as data | `cinegram compile out.dgm -o timeline.json` |
 | A browsable site from a folder of `.dgm` files | `cinegram site diagrams/ -o out/` |
 | A diagram **inside** a page they already have (MkDocs/Zensical, or any site) | the embed kit — see below |
+| Spoken narration | `cinegram voice out.dgm`, then `--with-voice` on `preview`/`record` (needs `pace: voice`) |
+| The same diagram explained to a non-expert | a `retells` scenario — see the `explain-diagram` skill |
 
 To put a player in the middle of someone's existing page rather than give it a
 page of its own: `cinegram assets -o <site>/assets/cinegram` installs the

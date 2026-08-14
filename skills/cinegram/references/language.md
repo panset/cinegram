@@ -57,6 +57,9 @@ a `step`.
 | `autoplay` | Start once rendered. **Default `true`**; skipped under reduced motion. |
 | `variant`, `until` | Inherit another scenario's opening steps — see Variants. |
 | `outcome` | `ok` or `fail`; `fail` marks the scenario ✕ in the picker. |
+| `retells` | Re-explain another scenario's steps in different words — see Retellings. |
+| `audience` | Free label for who the words are written for (`kid`, `newcomer`, …). Steers no timing. |
+| `pace` | Only `voice`: stretch each step to fit its recorded narration. Inert until clips exist. |
 
 ## step
 
@@ -226,6 +229,53 @@ scenario "gateway outage" { variant: "happy path", until: submit, outcome: fail 
 - Depth-1 only: a variant of a variant is an error. A step id colliding with
   an inherited one is an error — rename it.
 - Write the shared prefix once, in the base; tell the failure as a variant.
+
+## Retellings (reading levels)
+
+The same animation explained to a different reader. Use this — never a second
+copy of the scenario — when a diagram needs both a plain-English telling and a
+precise one.
+
+```
+scenario "like you're 5" { retells: "authorization code flow", audience: "kid" }
+  step exchange "The app shows the ticket and its own badge" {
+    desc: "It hands over the ticket together with its own secret badge. Neither is enough alone."
+  }
+```
+
+- `retells:` names the base **by its name**. The retelling adopts all of its
+  steps, actions and timing; each of its own `step`s names an existing step **by
+  its effective id** and replaces that step's prose.
+- A retelling's steps carry **`desc` and an optional title, and no actions** — an
+  action in one is an error. Changing what happens is what `variant` is for, and
+  a scenario that is both is an error.
+- **Every step of a retelling needs an explicit id.** An anonymous step would
+  fall back to `step<index>` and override whichever beat sat at that position.
+- Steps the retelling says nothing about keep the base's prose. Write only the
+  rungs that differ.
+- Scenario attributes are **inherited then overridden** (the opposite of a
+  variant), so `speed`, `loop` and `outcome` carry — a retold failure path is
+  still a failure path.
+- Retelling a `variant` is fine: variants resolve first, so the base is already
+  spliced. Depth-1 among retellings: a retelling of a retelling is an error.
+- `skills/explain-diagram/SKILL.md` is the guidance for *writing* the rungs.
+
+## Narration out loud
+
+`cinegram voice <file>` records each step's `desc` as speech into
+`<file>.voice/`, and the player's **Voice** button speaks it. With no recording
+the button falls back to the browser's own synthesizer, so a page can talk with
+nothing installed.
+
+- The synthesizer is `$CINEGRAM_TTS_COMMAND` (must write a WAV to `{out}`, read
+  its line from stdin); macOS `say` is the default. Nothing is built in.
+- Clips are keyed by **the words**, so rewording re-records one line and
+  renaming or reordering re-records nothing.
+- Add `pace: voice` to the scenario, or narration is cut off — a walkthrough
+  written to be watched is far shorter than one read aloud.
+- `--with-voice` is needed to carry it: on `preview` and `compile` to inline it,
+  on `record` to mix it into an mp4 or webm (a GIF has no audio track).
+- Never commit `*.voice/`; it is a build product.
 
 ## view and interact
 
