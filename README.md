@@ -927,7 +927,7 @@ highlighting, a preview panel, an *Open With… → Cinegram Animation* editor, 
 `editors/vscode/`).
 
 Not built yet: `architecture-beta` and the other Mermaid diagram types (the
-registry seam exists for them), and WASM builds.
+registry seam exists for them).
 
 ## The VS Code extension
 

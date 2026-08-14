@@ -41,7 +41,7 @@ jobs:
             echo "::error::gofmt not found in the hermetic SDK"
             exit 1
           fi
-          bad="$("$GOFMT" -l ./cmd ./pkg ./internal ./site)"
+          bad="$("$GOFMT" -l ./cmd ./pkg ./internal ./site ./web)"
           if [ -n "$bad" ]; then
             echo "::error::these files are not gofmt-formatted:"
             echo "$bad"
