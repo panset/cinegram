@@ -31,8 +31,9 @@ bazel run //pkg/compile:compile_test -- -update
 ```
 
 **`docs/` is the committed GitHub Pages site — regenerate it, never edit it.**
-Pages serves it straight from `main` with no CI build, so after changing
-anything under `examples/` or in the render pipeline:
+Nothing rebuilds it — `.github/workflows/pages.yml` uploads what is committed,
+verbatim — so after changing anything under `examples/` or in the render
+pipeline:
 
 ```sh
 bazel run //site:sync
@@ -311,6 +312,36 @@ would not be *true*, since `view … from` reads from disk and only a save makes
 the file on disk what the panel claims to show. Live-on-type would need the
 payload delivered by `postMessage` plus the snapshot/restore dance
 `media/preview.js` does for the Markdown path.
+
+### The playground is assembled, never committed
+
+`web/playground/` is a static page that runs the compiler in the tab:
+`web/playground/wasm` builds `pkg/{loader,compile,emit/html}` to js/wasm, and
+`playground.js` calls it through `cinegramCompile` / `cinegramRenderHTML`.
+Nothing under `web/playground/` is a site — `bazel run //web/playground:site --
+-o DIR` (or `--serve` to develop against it) assembles one out of the page,
+the canonical browser assets in `pkg/emit/html/assets/`, the `.wasm` and
+`wasm_exec.js` from the same Go SDK that compiled it. The 6.4 MB `.wasm` is
+therefore never in git, and there is no fourth copy of `mermaid.min.js` to
+drift.
+
+Three things about it are easy to break:
+
+- **`web/playground/BUILD.bazel` and `web/playground/wasm/BUILD.bazel` are
+  hand-written, each with a leading `# gazelle:ignore`.** Gazelle would name
+  the binary after its directory and has nothing to resolve
+  `@rules_go//go/runfiles` against — this repo has no `go_deps` lockfile.
+  Re-running `bazel run //:gazelle` must leave both files untouched.
+- **The envelope wire format lives in `pkg/envelope`**, not in
+  `cmd/cinegram/main.go`, because the WASM main and the CLI hand the same JSON
+  to the same consumers. `pkg/emit/html.Render` is compiled into the `.wasm`
+  for exactly one reason: Download HTML must be byte-identical to
+  `cinegram preview -o`.
+- **`.github/workflows/pages.yml` is what publishes the site.** It uploads the
+  committed `docs/` **verbatim** and assembles the playground beside it at
+  `/playground/`; `bazel run //site:sync` is still the only writer of `docs/`,
+  and the workflow's `bazel test //...` gate means a stale `docs/` blocks the
+  deploy.
 
 ## Constraints
 

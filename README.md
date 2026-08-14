@@ -18,6 +18,12 @@ open /tmp/k8s.html
 Or skip the build entirely: every example is playable at
 <https://panset.github.io/cinegram/>.
 
+**Try it in the browser.** <https://panset.github.io/cinegram/playground/> is
+the compiler itself, built to WASM and running in the tab — paste a diagram,
+watch it animate, share the link. Nothing is uploaded; the document lives in
+the URL fragment. Locally that page is `bazel run //web/playground:site --
+--serve`.
+
 ## The language
 
 A `.dgm` file is a Mermaid diagram followed by one or more `scenario` blocks,
