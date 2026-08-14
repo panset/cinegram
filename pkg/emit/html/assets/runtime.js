@@ -20,19 +20,29 @@
   // ---------------------------------------------------------------------
   // SVG indexing
   //
-  // Nodes are found by id: mermaid builds them as `flowchart-<id>-<counter>`.
-  // Edges are matched geometrically instead, by comparing each path's
-  // endpoints against node centres. That avoids depending on mermaid's edge-id
-  // format, which has changed between releases, and as a bonus tells us
-  // whether a path happens to be drawn against the direction we declared.
+  // Nodes are found by id: mermaid builds them as `<prefix>-<id>-<counter>`,
+  // where the prefix names the renderer — `flowchart-` for a flowchart,
+  // `state-` for a state diagram. Edges are matched geometrically instead, by
+  // comparing each path's endpoints against node centres. That avoids
+  // depending on mermaid's edge-id format, which has changed between releases,
+  // and as a bonus tells us whether a path happens to be drawn against the
+  // direction we declared.
   // ---------------------------------------------------------------------
 
-  function indexNodes(svg) {
+  var FLOWCHART_NODE_ID = /^flowchart-(.+)-\d+$/;
+  var STATE_NODE_ID = /^state-(.+)-\d+$/;
+
+  // indexNodesBy maps declared ids onto their g.node, for whichever id format
+  // the renderer that drew this diagram uses.
+  //
+  // The capture is greedy on purpose: a state called `retry-3` renders as
+  // `state-retry-3-7`, and only the last `-<digits>` is mermaid's counter.
+  function indexNodesBy(svg, re) {
     var map = {};
     var groups = svg.querySelectorAll('g.node');
     for (var i = 0; i < groups.length; i++) {
       var g = groups[i];
-      var m = /^flowchart-(.+)-\d+$/.exec(g.id || '');
+      var m = re.exec(g.id || '');
       if (m) {
         map[m[1]] = g;
       }
@@ -40,9 +50,30 @@
     return map;
   }
 
+  function indexNodes(svg) { return indexNodesBy(svg, FLOWCHART_NODE_ID); }
+
+  function indexStateNodes(svg) { return indexNodesBy(svg, STATE_NODE_ID); }
+
+  // withClusters is a node lookup that falls back to composites.
+  //
+  // A transition drawn into a composite state stops at the cluster's border,
+  // not at any node, so the geometric matcher has to be able to score a path
+  // against the composite itself. Nodes win on a name collision: an edge to a
+  // real node is always about that node.
+  function withClusters(nodes, clusters) {
+    var map = {};
+    var id;
+    for (id in clusters) map[id] = clusters[id];
+    for (id in nodes) map[id] = nodes[id];
+    return map;
+  }
+
   function indexClusters(svg, view) {
     var map = {};
-    var els = svg.querySelectorAll('g.cluster');
+    // A flowchart subgraph is `g.cluster`; a state composite is
+    // `g.statediagram-cluster` and carries no counter suffix on its id. The
+    // two never appear in the same SVG, so one selector covers both.
+    var els = svg.querySelectorAll('g.cluster, g.statediagram-cluster');
     for (var i = 0; i < els.length; i++) {
       var el = els[i];
       var id = (el.id || '').replace(/-\d+$/, '');
@@ -84,6 +115,19 @@
     }
   }
 
+  // REVERSE_COST is how much worse a path read backwards has to look before it
+  // is preferred to one read forwards.
+  //
+  // Reading a path backwards has to stay possible — mermaid does sometimes draw
+  // an edge from the far end, which is the whole reason the match is geometric.
+  // But when two arrows run between the same pair in *opposite* directions, both
+  // fit both edges almost equally well, and scoring them symmetrically lets each
+  // declared edge take the other one's arrow. Making the backwards reading pay
+  // for itself settles that in favour of the arrow actually drawn for the edge,
+  // while leaving the genuine far-end case — where nothing else comes close —
+  // matching as before.
+  var REVERSE_COST = 1.5;
+
   function indexEdges(svg, view, nodes) {
     var paths = Array.prototype.slice.call(
       svg.querySelectorAll('.edgePaths path, path.flowchart-link')
@@ -115,7 +159,7 @@
       for (var k = 0; k < paths.length; k++) {
         if (used[k] || !ends[k]) continue;
         var fwd = dist(ends[k].start, a) + dist(ends[k].end, b);
-        var rev = dist(ends[k].start, b) + dist(ends[k].end, a);
+        var rev = REVERSE_COST * (dist(ends[k].start, b) + dist(ends[k].end, a));
         var score = Math.min(fwd, rev);
         if (score < bestScore) {
           bestScore = score;
@@ -1627,11 +1671,17 @@
     if (!this.svg) return;
     var v = this.view();
 
-    // Two indexing strategies, chosen by diagram type. Everything after this
+    // Indexing strategy is chosen by diagram type. Everything after this
     // point — states, flows, notes, pills, chips — works off the same three
-    // maps, which is what lets a second diagram type cost one indexer instead
+    // maps, which is what lets a further diagram type cost one indexer instead
     // of a second runtime.
-    this.sequence = (v.diagram && v.diagram.type) === 'sequenceDiagram';
+    //
+    // There are two strategies, not three. A sequence diagram has neither
+    // g.node nor .edgePaths and needs its own; a state diagram has both, so it
+    // reuses the flowchart's — differing only in mermaid's id prefix and in
+    // being able to match an edge that lands on a composite rather than a node.
+    var type = (v.diagram && v.diagram.type) || '';
+    this.sequence = type === 'sequenceDiagram';
     this.anchors = {};
 
     if (this.sequence) {
@@ -1639,6 +1689,13 @@
       this.clusters = {};
       this.nodes = indexActors(this.svg, v, this.anchors);
       this.edges = indexMessages(this.svg, v, this.anchors);
+    } else if (type === 'stateDiagram') {
+      this.nodes = indexStateNodes(this.svg);
+      this.clusters = indexClusters(this.svg, v);
+      this.layer = makeLayer(this.svg);
+      // The cluster-aware lookup goes only to the state branch, so flowchart
+      // edge matching stays byte-identical to what it has always done.
+      this.edges = indexEdges(this.svg, v, withClusters(this.nodes, this.clusters));
     } else {
       this.nodes = indexNodes(this.svg);
       this.clusters = indexClusters(this.svg, v);
@@ -1665,8 +1722,12 @@
     // is far more confusing than an explicit list of what could not be found.
     var problems = [];
     var self = this;
+    // Resolved through elementFor, not this.nodes, because a name can be both.
+    // Writing an edge into a composite state mentions the composite, which
+    // registers a node placeholder beside the group of the same name — and the
+    // thing mermaid actually drew for it is the cluster.
     v.nodes.forEach(function (n) {
-      if (!self.nodes[n.id]) problems.push('node "' + n.id + '" not found in the rendered SVG');
+      if (!self.elementFor(n.id)) problems.push('node "' + n.id + '" not found in the rendered SVG');
     });
     v.edges.forEach(function (e) {
       if (!self.edges[e.id]) problems.push('edge ' + e.from + ' → ' + e.to + ' could not be matched to a path');

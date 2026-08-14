@@ -40,8 +40,8 @@ scenario "A request"
 ````
 
 The diagram body is ordinary [Mermaid](https://mermaid.js.org) — `flowchart`,
-`graph` and `sequenceDiagram`, with every node shape, link form and subgraph
-you already write. Everything Cinegram does not model round-trips verbatim, so
+`graph`, `sequenceDiagram` and `stateDiagram-v2`, with every node shape, link
+form, subgraph and composite state you already write. Everything Cinegram does not model round-trips verbatim, so
 `classDef`, `click` and future Mermaid syntax keep working.
 
 ## `.dgm` files

@@ -1,0 +1,23 @@
+%% The state grammar's failure modes, one per line, pinned so that a change to
+%% the classification order shows up as a diagnostic that moved.
+stateDiagram-v2
+  A --> B
+
+  }
+
+  [*] : a marker cannot be described
+  --> C
+  D -->
+  a --> b --> c
+  state E <<history>>
+  state F { G --> H }
+  state "no id here"
+
+  %% An unterminated note runs to the end of the file, so it has to be the last
+  %% thing here — and putting it inside an unterminated composite is the only
+  %% way to pin both of the run-to-EOF errors in one fixture.
+  state J {
+    note left of A
+      this note is never closed, so everything below it is note prose
+      state K
+      A --> Z

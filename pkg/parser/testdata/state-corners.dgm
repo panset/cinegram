@@ -1,0 +1,69 @@
+%% Every form the state grammar has to survive, including the ones it
+%% deliberately does not model.
+stateDiagram-v2
+  direction LR
+
+  s1
+  state s2
+  state "A label with as inside it" as s3
+  s4 : a plain description
+  s5 : compares x --> y inside a description
+  s3 --> s4: no space before the colon
+
+  [*] --> s1
+  s1 --> s2
+  s1 --> s2 : again, same pair
+  s2 --> s3 : an event
+  s3 --> s3 : self transition
+  s4 --> [*]
+
+  state pick <<choice>>
+  state split <<fork>>
+  state merge <<join>>
+  s2 --> pick
+  pick --> split : left
+  split --> par1
+  split --> par2
+  par1 --> merge
+  par2 --> merge
+
+  state outer {
+    direction TB
+    [*] --> inner1
+    inner1 --> inner2 : nested event
+    state "deep label" as deeper {
+      [*] --> d1
+      d1 --> [*]
+    }
+    inner2 --> deeper
+    %% A concurrency divider. Note what it costs: Mermaid re-parents `outer`'s
+    %% regions into clusters it names itself, so the `[*]` above renders as
+    %% `divider-id-N_start` and `outer_start` is the one name in this file that
+    %% will not bind in a browser. The parser still synthesizes it, because the
+    %% name follows from the source and nothing else could be predicted.
+    --
+    other1 --> other2
+  }
+  s5 --> outer
+  merge --> outer
+
+  note right of s1 : a note with x --> y inside it
+  note left of s2
+    a multi-line note
+    scenario is not a keyword in here
+    and neither is d1 --> d2 nor a stray }
+  end note
+
+  classDef hot fill:#f96
+  class s1 hot
+
+scenario "corners"
+  step walk "walk" {
+    flow root_start -> s1
+    flow s1 -> s2 { msg: 2 }
+    flow s2 -> pick
+    flow outer_start -> inner1
+    highlight outer
+    flow d1 -> deeper_end
+    flow merge -> outer
+  }

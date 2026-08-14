@@ -48,12 +48,16 @@ func checkComments(d ast.Diagram, b *diag.Bag) {
 	})
 }
 
-// walkStatements visits every statement, descending into subgraphs.
+// walkStatements visits every statement, descending into the two block forms
+// that hold a body: a flowchart subgraph and a state composite.
 func walkStatements(body []ast.Statement, visit func(ast.Statement)) {
 	for _, s := range body {
 		visit(s)
-		if sub, ok := s.(*ast.SubgraphStmt); ok {
-			walkStatements(sub.Body, visit)
+		switch b := s.(type) {
+		case *ast.SubgraphStmt:
+			walkStatements(b.Body, visit)
+		case *ast.StateCompositeStmt:
+			walkStatements(b.Body, visit)
 		}
 	}
 }

@@ -1,0 +1,101 @@
+%% The TCP connection lifecycle, as a stateDiagram-v2.
+%% ---
+%% raft-election.dgm tells a state-machine story with a flowchart; this one
+%% uses the diagram type built for the job. The `[*]` markers, the `<<choice>>`
+%% pseudostate and the composite `Teardown` block are all first-class,
+%% addressable animation targets — a third diagram type, still costing one
+%% parser and one indexer.
+%% ---
+%% `[*]` is not a legal identifier, so the start and end markers answer to
+%% synthesized names: `root_start` and `root_end` at the top level, and
+%% `Teardown_start` inside the composite. `flow root_start -> CLOSED` animates
+%% the very first arrow.
+%% ---
+%% The flows carry no `label`: a state diagram already draws each transition's
+%% event text, and a label would print a second copy on top of it.
+stateDiagram-v2
+  direction TB
+
+  [*] --> CLOSED
+  CLOSED : CLOSED — no connection exists
+  CLOSED --> SYN_SENT : connect() / send SYN
+  SYN_SENT --> ESTABLISHED : SYN-ACK received / send ACK
+  SYN_SENT --> CLOSED : RST — nobody listening
+  ESTABLISHED : ESTABLISHED — data flows both ways
+  ESTABLISHED --> CLOSED : RST received
+
+  ESTABLISHED --> Teardown : close begins
+  state Teardown {
+    state who_closes <<choice>>
+    [*] --> who_closes
+    who_closes --> FIN_WAIT_1 : we sent the first FIN
+    who_closes --> CLOSE_WAIT : the peer's FIN arrived first
+    FIN_WAIT_1 --> FIN_WAIT_2 : our FIN is ACKed
+    FIN_WAIT_2 --> TIME_WAIT : peer's FIN arrives / send ACK
+    CLOSE_WAIT --> LAST_ACK : close() / send FIN
+  }
+  TIME_WAIT --> CLOSED : 2MSL timer expires
+  LAST_ACK --> CLOSED : our FIN is ACKed
+  CLOSED --> [*]
+
+scenario "orderly close" { speed: 1.0 }
+
+  step nothing "No connection exists" {
+    desc: "CLOSED is less a state a socket passes through than the fact that no socket exists. Every connection begins and ends here, which is why the diagram enters it from the start marker rather than from anywhere else."
+    flow root_start -> CLOSED { dur: 500ms }
+    highlight CLOSED
+  }
+
+  step connect "The active open" {
+    desc: "connect() sends a SYN and commits this end to remembering a half-open attempt. Everything about SYN_SENT is optimism: a timer, a retransmit budget, and no evidence yet that anyone is listening."
+    flow CLOSED -> SYN_SENT { dur: 600ms }
+    set SYN_SENT { badge: "SYN sent", state: waiting, color: "#d97706" }
+  }
+
+  step establish "The handshake completes" {
+    desc: "The SYN-ACK answers both questions at once — the peer exists, and it heard us — and our ACK settles its remaining one. Three segments, and both sides now agree on two sequence numbers."
+    flow SYN_SENT -> ESTABLISHED { dur: 700ms }
+    unset SYN_SENT
+    set ESTABLISHED { badge: "established", state: open, color: "#16a34a" }
+    gauge ESTABLISHED { label: "connection", value: "open" }
+  }
+
+  step choose "Someone has to hang up first" {
+    desc: "Teardown is symmetric in the protocol but not in the diagram: whoever sends the first FIN takes the active path. The choice pseudostate is addressable like any node, which is what lets this step walk through it."
+    unset ESTABLISHED
+    highlight Teardown
+    seq {
+      flow ESTABLISHED -> Teardown { dur: 500ms }
+      flow Teardown_start -> who_closes { dur: 400ms }
+      flow who_closes -> FIN_WAIT_1 { dur: 400ms }
+    }
+  }
+
+  step fins "Both FINs travel" {
+    desc: "FIN_WAIT_1 waits for our FIN to be acknowledged; FIN_WAIT_2 waits for the peer to send its own. Nothing forces the peer to be ready to close just because we are, which is why these are two states and not one."
+    flow FIN_WAIT_1 -> FIN_WAIT_2 -> TIME_WAIT { dur: 1200ms }
+    set TIME_WAIT { badge: "2MSL", state: waiting, color: "#d97706" }
+  }
+
+  step linger "TIME_WAIT holds the door" {
+    desc: "The connection is over, yet the state remains for two maximum segment lifetimes, absorbing stray retransmissions so an old segment cannot wander into a new connection wearing the same port numbers. This is the state operators curse and the reason the protocol works."
+    flow TIME_WAIT -> CLOSED { dur: 800ms }
+    unset TIME_WAIT
+    gauge ESTABLISHED { label: "connection", value: "closed" }
+    dim Teardown
+  }
+
+  step done "Back where it started" {
+    desc: "A clean close returns the machine to the same nothing it began as. The end marker is the start marker's twin, and both are ordinary animation targets."
+    flow CLOSED -> root_end { dur: 500ms }
+  }
+
+scenario "RST teardown" { variant: "orderly close", until: establish, outcome: fail }
+
+  step rst "The peer slams the door" {
+    desc: "A reset is not a close. No FIN, no ACK, no TIME_WAIT — one segment tears the connection out of both state machines, and whatever data was in flight is simply gone. Everything the orderly path exists to guarantee is exactly what this path skips."
+    flow ESTABLISHED -> CLOSED { dur: 700ms, status: fail }
+    unset ESTABLISHED
+    set CLOSED { badge: "aborted", state: error, color: "#dc2626" }
+    gauge ESTABLISHED { label: "connection", value: "reset" }
+  }

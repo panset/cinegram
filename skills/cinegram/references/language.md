@@ -3,7 +3,7 @@
 A `.dgm` file is a Mermaid diagram followed by animation blocks:
 
 ```
-<mermaid body — flowchart/graph or sequenceDiagram, untouched>
+<mermaid body — flowchart/graph, sequenceDiagram or stateDiagram-v2, untouched>
 
 view <id> "<title>" from "<path.dgm>"     (optional, repeatable)
 interact { … }                            (optional)
@@ -16,7 +16,8 @@ scenario "<name>" { <attrs> }             (one or more)
 - The diagram half is **ordinary Mermaid** — every node shape, link form,
   `subgraph`, `classDef`, frontmatter and `%%` comment round-trips verbatim.
   Never rewrite it; only append blocks after it. Supported diagram types:
-  `flowchart`/`graph` and `sequenceDiagram`.
+  `flowchart`/`graph`, `sequenceDiagram` and `stateDiagram-v2`
+  (`stateDiagram` too).
 - The four top-level keywords are `scenario`, `storyboard`, `view`,
   `interact` — any order, any number of each.
 - `%%` comments work in the animation half too. **Never emit an empty `%%`
@@ -169,6 +170,27 @@ Participants are nodes — target the **short id** (`participant C as Browser`
 - **Leave `label` off flows** — the diagram already prints the message text.
 - `focus` the busy participant to direct attention.
 
+## State diagrams
+
+States are nodes and each `A --> B` is its own edge. Composite `state X { }`
+blocks behave exactly like subgraphs — target the composite to `highlight`,
+`dim` or `reveal` everything inside it, at any nesting depth. `<<choice>>`,
+`<<fork>>` and `<<join>>` pseudostates are ordinary targets. `note`,
+`direction`, `classDef` and the `--` concurrency divider round-trip verbatim.
+Rules:
+
+- **`[*]` is addressed by a synthesized name**, because `[*]` itself is not a
+  legal identifier. Use `root_start` and `root_end` at the top level, and
+  `<Composite>_start` / `<Composite>_end` inside a composite — so
+  `flow root_start -> CLOSED` animates the opening arrow. (Markers inside a
+  composite split by `--` into concurrent regions are the exception: Mermaid
+  names them after the region and they cannot be targeted.)
+- **Use `msg:` when the same pair has several transitions**, exactly as in a
+  sequence diagram. Two `A --> B` lines are two arrows.
+- **Leave `label` off flows** — the diagram already prints the event text.
+- A `flow` into a composite (`flow ESTABLISHED -> Teardown`) is fine; it lands
+  on the composite's border, which is where Mermaid draws that arrow.
+
 ## Storyboard
 
 ```
@@ -284,4 +306,5 @@ interact    := "interact" "{" { "click" ident "->" ("view" ident | "reveal" iden
 - Use `set`/`gauge` for facts a scrubbing reader must see (who is leader, how
   many votes), not for transient emphasis.
 - Give flows `label`s in flowcharts (`"POST /token + secret"`, `"200 OK"`) —
-  they carry the protocol; omit them in sequence diagrams.
+  they carry the protocol; omit them in sequence and state diagrams, which
+  already draw the text themselves.

@@ -3,8 +3,8 @@ name: cinegram
 description: >
   Author, edit, preview and record Cinegram .dgm files — animated, narrated
   Mermaid diagrams. Use when the user wants to animate a Mermaid diagram
-  (flowchart or sequenceDiagram), add an animated walkthrough / scenario to a
-  diagram, or create, edit, lint, preview or export a .dgm file.
+  (flowchart, sequenceDiagram or stateDiagram), add an animated walkthrough /
+  scenario to a diagram, or create, edit, lint, preview or export a .dgm file.
 ---
 
 # Animating Mermaid diagrams with Cinegram

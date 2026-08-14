@@ -1,0 +1,35 @@
+diagram: stateDiagram (stateDiagram-v2)
+
+nodes:
+  A          label="A"                      shape=-         
+  B          label="B"                      shape=-         
+
+groups:
+  J          label="J"                      parent=-          children=[]
+
+edges:
+  e0   A -> B style=normal head=arrow
+
+diagnostics:
+  6:3: error: unexpected `}` outside a composite state
+    hint: remove it, or open a composite with `state X {` above
+  8:3: error: `[*]` cannot carry a description
+    hint: `[*]` is a marker, not a state; describe the state it points at instead
+  9:3: error: transition is missing a state on one side
+    hint: write a transition as `A --> B` or `A --> B : event`
+  10:3: error: transition is missing a state on one side
+    hint: write a transition as `A --> B` or `A --> B : event`
+  11:3: error: a state transition joins exactly two states
+    hint: split it into one transition per line: `a --> b` then `b --> c`
+  12:3: warning: unknown state stereotype "history"
+    hint: Cinegram models <<choice>>, <<fork>> and <<join>>; anything else is passed through to Mermaid untouched
+  13:3: warning: could not read this `state` declaration; it is passed through to Mermaid untouched
+    hint: write `state ID`, `state "Label" as ID`, `state ID <<choice>>`, or open a block with `state ID {` and close it with `}` on its own line
+  14:3: warning: could not read this `state` declaration; it is passed through to Mermaid untouched
+    hint: write `state ID`, `state "Label" as ID`, `state ID <<choice>>`, or open a block with `state ID {` and close it with `}` on its own line
+  19:3: warning: subgraph "J" is declared but nothing references it or anything inside it
+    hint: is J supposed to be animated, or to hold something?
+  24:1: error: unterminated note block
+    hint: add an `end note` line to close it
+  24:1: error: unterminated composite state "J"
+    hint: add a `}` line to close the composite state

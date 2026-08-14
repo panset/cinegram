@@ -1,7 +1,7 @@
 # Cinegram authoring skill
 
 Teach your AI coding agent to animate Mermaid diagrams. Paste your existing
-`flowchart` or `sequenceDiagram`, say what should move — *"walk a request
+`flowchart`, `sequenceDiagram` or `stateDiagram-v2`, say what should move — *"walk a request
 through the load balancer, then show the retry when the pod dies"* — and the
 agent writes, validates and previews the [Cinegram](https://github.com/panset/cinegram)
 `.dgm` file for you. You never have to learn the format.
