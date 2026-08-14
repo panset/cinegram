@@ -112,8 +112,13 @@ committable and leaves the repo green.
 - Go is NOT installed locally — never run bare `go build`/`go test`; Bazel only.
 - After adding Go packages run `bazel run //:gazelle`; protect hand-written
   BUILD content with `# gazelle:ignore` (whole file) or `# keep` (attribute).
-- The repo remote is `panset/cinegram`; the Pages URL will be
-  `https://panset.github.io/cinegram/`.
+- The repo remote is `panset/cinegram`; the playground URL will be
+  `https://panset.github.io/cinegram/playground/`.
+- Any change to a browser asset (`runtime.js`, `runtime.css`) staleness-fails
+  `//site:site_test` — run `bazel run //site:sync` to regenerate the
+  committed demo pages, never hand-edit `docs/`. (Learned in Phase 2.)
+- Browser verification must go through `--serve`; the Chrome extension
+  blocks `file://` pages, so never verify by opening an `-o` file directly.
 - Resolved build question: `go_binary` in rules_go 0.55.1 supports
   `goos = "js", goarch = "wasm"` attributes (verified in
   `go/private/rules/binary.bzl`: goos line ~401, goarch ~412, `out` ~310,
