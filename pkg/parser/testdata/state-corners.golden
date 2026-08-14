@@ -1,0 +1,62 @@
+diagram: stateDiagram (stateDiagram-v2)
+
+nodes:
+  s1         label="s1"                     shape=-         
+  s2         label="s2"                     shape=state     
+  s3         label="A label with as inside it" shape=state     
+  s4         label="a plain description"    shape=state     
+  s5         label="compares x --> y inside a description" shape=state     
+  root_start label="start"                  shape=start     
+  root_end   label="end"                    shape=end       
+  pick       label="pick"                   shape=choice    
+  split      label="split"                  shape=fork      
+  merge      label="merge"                  shape=join      
+  par1       label="par1"                   shape=-         
+  par2       label="par2"                   shape=-         
+  outer_start label="start"                  shape=start      group=outer
+  inner1     label="inner1"                 shape=-          group=outer
+  inner2     label="inner2"                 shape=-          group=outer
+  deeper_start label="start"                  shape=start      group=deeper
+  d1         label="d1"                     shape=-          group=deeper
+  deeper_end label="end"                    shape=end        group=deeper
+  deeper     label="deeper"                 shape=-         
+  other1     label="other1"                 shape=-          group=outer
+  other2     label="other2"                 shape=-          group=outer
+  outer      label="outer"                  shape=-         
+
+groups:
+  outer      label="outer"                  parent=-          children=[outer_start inner1 inner2 deeper other1 other2]
+  deeper     label="deep label"             parent=outer      children=[deeper_start d1 deeper_end]
+
+edges:
+  e0   s3 -> s4 style=normal head=arrow label="no space before the colon"
+  e1   root_start -> s1 style=normal head=arrow
+  e2   s1 -> s2 style=normal head=arrow
+  e3   s1 -> s2 style=normal head=arrow label="again, same pair"
+  e4   s2 -> s3 style=normal head=arrow label="an event"
+  e5   s3 -> s3 style=normal head=arrow label="self transition"
+  e6   s4 -> root_end style=normal head=arrow
+  e7   s2 -> pick style=normal head=arrow
+  e8   pick -> split style=normal head=arrow label="left"
+  e9   split -> par1 style=normal head=arrow
+  e10  split -> par2 style=normal head=arrow
+  e11  par1 -> merge style=normal head=arrow
+  e12  par2 -> merge style=normal head=arrow
+  e13  outer_start -> inner1 style=normal head=arrow
+  e14  inner1 -> inner2 style=normal head=arrow label="nested event"
+  e15  deeper_start -> d1 style=normal head=arrow
+  e16  d1 -> deeper_end style=normal head=arrow
+  e17  inner2 -> deeper style=normal head=arrow
+  e18  other1 -> other2 style=normal head=arrow
+  e19  s5 -> outer style=normal head=arrow
+  e20  merge -> outer style=normal head=arrow
+
+scenario "corners"
+  step walk "walk"
+    flow root_start -> s1
+    flow s1 -> s2 {msg="2"}
+    flow s2 -> pick
+    flow outer_start -> inner1
+    highlight outer
+    flow d1 -> deeper_end
+    flow merge -> outer

@@ -229,6 +229,83 @@ func (s *MessageStmt) Raw() string     { return s.Text }
 func (s *MessageStmt) Pos() source.Pos { return s.StartPos }
 
 // ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+
+// StateDiagram is a `stateDiagram-v2` (or `stateDiagram`) body.
+//
+// Kind is "stateDiagram" for both spellings. The header line round-trips
+// verbatim, so a file written against v2 stays written against v2; Kind is the
+// internal name the runtime switches its indexing strategy on, and the two
+// renderers emit the same DOM, so splitting them would buy nothing.
+type StateDiagram struct {
+	HeaderText string
+	Statements []Statement
+	StartPos   source.Pos
+}
+
+func (s *StateDiagram) Kind() string      { return "stateDiagram" }
+func (s *StateDiagram) Header() string    { return s.HeaderText }
+func (s *StateDiagram) Body() []Statement { return s.Statements }
+
+// StateStmt is one non-composite state declaration: a bare `id`, a
+// `state "Label" as id`, a `state id <<choice>>`, or an `id : description`.
+//
+// Stereotype is "choice", "fork" or "join" — the pseudostates Mermaid draws as
+// a diamond or a bar. They are ordinary addressable nodes here, because a
+// scenario that walks a decision without being able to stop on the decision is
+// telling half the story.
+type StateStmt struct {
+	ID         string
+	Label      string
+	Stereotype string
+
+	Text     string
+	StartPos source.Pos
+}
+
+func (s *StateStmt) Raw() string     { return s.Text }
+func (s *StateStmt) Pos() source.Pos { return s.StartPos }
+
+// TransitionStmt is one `A --> B : event` line.
+//
+// From and To hold resolved ids, so a `[*]` endpoint arrives here already
+// carrying its synthesized marker name and nothing downstream has to know that
+// `[*]` was ever written. Every written occurrence is its own statement and its
+// own edge, exactly as in a sequence diagram: two transitions between the same
+// pair are two arrows a scenario may want to animate separately.
+type TransitionStmt struct {
+	From  string
+	To    string
+	Label string // the text after the colon
+
+	Text     string
+	StartPos source.Pos
+}
+
+func (s *TransitionStmt) Raw() string     { return s.Text }
+func (s *TransitionStmt) Pos() source.Pos { return s.StartPos }
+
+// StateCompositeStmt is a `state X { ... }` block. Composites nest.
+//
+// This is deliberately not a SubgraphStmt. The closer is `}` rather than `end`,
+// which the mermaid emitter hard-codes for subgraphs, and "subgraph" is
+// flowchart vocabulary — reusing the type would mean one of the two diagram
+// types printing a closer it never wrote.
+type StateCompositeStmt struct {
+	ID        string
+	Label     string
+	Direction string // from a nested `direction XX` statement
+	Body      []Statement
+	Text      string // the header line only
+	CloseText string // the closing `}` line, preserved for round-tripping
+	StartPos  source.Pos
+}
+
+func (s *StateCompositeStmt) Raw() string     { return s.Text }
+func (s *StateCompositeStmt) Pos() source.Pos { return s.StartPos }
+
+// ---------------------------------------------------------------------------
 // Scenario (diagram-agnostic)
 // ---------------------------------------------------------------------------
 

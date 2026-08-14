@@ -238,6 +238,61 @@ request run backwards.
 **Leave `label` off.** The diagram already draws the message text, so a flow
 label prints a second copy on top of it.
 
+## State diagrams
+
+`stateDiagram-v2` is the diagram type Cinegram's premise fits best. A state
+chart is static, but "what happens when this event fires in this state" is
+exactly what a scenario is:
+
+```
+stateDiagram-v2
+  [*] --> CLOSED
+  CLOSED --> SYN_SENT : connect() / send SYN
+  ESTABLISHED --> Teardown : close begins
+  state Teardown {
+    state who_closes <<choice>>
+    [*] --> who_closes
+    who_closes --> FIN_WAIT_1 : we sent the first FIN
+  }
+
+scenario "orderly close"
+  step choose "Someone has to hang up first" {
+    highlight Teardown
+    seq {
+      flow ESTABLISHED -> Teardown { dur: 500ms }
+      flow Teardown_start -> who_closes { dur: 400ms }
+      flow who_closes -> FIN_WAIT_1 { dur: 400ms }
+    }
+  }
+```
+
+States, transitions, `<<choice>>`/`<<fork>>`/`<<join>>` pseudostates and
+composite `state X { }` blocks are all addressable animation targets; a
+composite behaves like a subgraph, so `highlight`, `dim` and `reveal` on one
+cover everything inside it, however deeply nested. `note`, `direction`,
+`classDef` and the `--` concurrency divider round-trip verbatim as unmodelled
+syntax. The plain `stateDiagram` header works too and renders identically.
+`examples/tcp-connection.dgm` is the worked example.
+
+Three things are worth knowing when animating one:
+
+**`[*]` answers to a name.** It is not a legal identifier, so a scenario could
+never reference it — yet the first arrow into a machine and the last one out are
+usually the first things worth animating. Mermaid already names these nodes
+internally and Cinegram adopts its spelling: `root_start` and `root_end` at the
+top level, `<Composite>_start` and `<Composite>_end` inside a composite. So
+`flow root_start -> CLOSED` animates the opening arrow, and lint's did-you-mean
+knows the names. (One gap: inside a composite split into concurrent regions by
+`--`, Mermaid names the markers after the region it generated rather than after
+the composite, and those names are not predictable from the source.)
+
+**`msg` picks between repeated transitions**, exactly as it does between a
+sequence diagram's repeated messages. Two `A --> B` lines are two arrows on the
+page and two edges here, and lint warns when a flow had to guess.
+
+**Leave `label` off.** The diagram already draws each transition's event text,
+so a flow label prints a second copy on top of it.
+
 ## Narration
 
 An animation shows you *what* moves. It cannot tell you *why*, and a diagram
@@ -805,10 +860,11 @@ Two design decisions are load-bearing and worth preserving:
   function as an argument.
 
 The runtime binds to the rendered SVG defensively: nodes by mermaid's
-`flowchart-<id>-<n>` id, and edges by matching path endpoints against node
-centres rather than by parsing mermaid's edge-id format, which has changed
-between releases. Anything that fails to bind is reported in a banner on the
-page instead of silently not animating.
+`<renderer>-<id>-<n>` id — `flowchart-` for a flowchart, `state-` for a state
+diagram — and edges by matching path endpoints against node centres rather than
+by parsing mermaid's edge-id format, which has changed between releases.
+Anything that fails to bind is reported in a banner on the page instead of
+silently not animating.
 
 ## Building
 
@@ -853,7 +909,8 @@ webviews.
 ## Status
 
 Working today: flowcharts (`flowchart` / `graph`) with every Mermaid node shape
-and link form, `sequenceDiagram`, nested subgraphs, frontmatter, scenarios with
+and link form, `sequenceDiagram`, `stateDiagram-v2` with composites and
+pseudostates, nested subgraphs, frontmatter, scenarios with
 narration and persistent state, focus, deep links and embedding, the timeline
 compiler, clickable drill-down between diagrams of different types, the
 animated HTML preview, a serve/watch authoring loop, `narrate`, PNG frame

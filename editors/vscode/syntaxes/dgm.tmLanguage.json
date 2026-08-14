@@ -51,9 +51,9 @@
     "diagram": {
       "patterns": [
         {
-          "comment": "Mermaid diagram openers and structure. Deliberately shallow: the diagram body round-trips verbatim through the emitter, and colouring it in depth would be a second Mermaid implementation to keep in step.",
+          "comment": "Mermaid diagram openers and structure. Deliberately shallow: the diagram body round-trips verbatim through the emitter, and colouring it in depth would be a second Mermaid implementation to keep in step. `stateDiagram-v2` precedes `stateDiagram` so the longer spelling wins, and `state` refuses a following colon so that a `state: waiting` attribute on its own line stays an attribute. Lowercase `note` is deliberately absent: it would out-anchor the `note` action, which this grammar colours as an action everywhere.",
           "name": "keyword.control.diagram.dgm",
-          "match": "^\\s*\\b(flowchart|graph|sequenceDiagram|subgraph|end|direction|participant|actor|activate|deactivate|loop|alt|else|opt|par|rect|autonumber|Note)\\b"
+          "match": "^\\s*\\b(flowchart|graph|sequenceDiagram|stateDiagram-v2|stateDiagram|state\\b(?!\\s*:)|subgraph|end note|end|direction|participant|actor|activate|deactivate|loop|alt|else|opt|par|rect|autonumber|Note)\\b"
         },
         {
           "name": "constant.language.direction.dgm",

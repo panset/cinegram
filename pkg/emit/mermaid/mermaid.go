@@ -47,6 +47,17 @@ func writeStatements(b *strings.Builder, stmts []ast.Statement, depth int) {
 			writeLine(b, "end", depth)
 			continue
 		}
+		// A state composite closes with `}`, not `end`. It carries its own
+		// closer rather than borrowing a constant, because an unterminated
+		// composite still has to reprint as whatever the author actually wrote.
+		if cs, ok := st.(*ast.StateCompositeStmt); ok {
+			writeLine(b, cs.Text, depth)
+			writeStatements(b, cs.Body, depth+1)
+			if cs.CloseText != "" {
+				writeLine(b, cs.CloseText, depth)
+			}
+			continue
+		}
 		writeLine(b, st.Raw(), depth)
 	}
 }

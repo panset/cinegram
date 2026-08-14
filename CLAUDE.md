@@ -171,15 +171,27 @@ after touching that file.
 ### Runtime binds to the SVG defensively
 
 `pkg/emit/html/assets/runtime.js` finds nodes by mermaid's
-`flowchart-<id>-<n>` id, but matches **edges geometrically** by comparing path
+`<renderer>-<id>-<n>` id, but matches **edges geometrically** by comparing path
 endpoints to node centres. This is intentional: mermaid's edge-id format has
 changed between releases, and geometric matching additionally detects paths
 mermaid drew from the far end (composed with `Reverse` as `!reverse !== !flip`).
-Unbound nodes, edges or click sources surface in a warning banner on the page
-rather than silently failing.
+A backwards reading pays `REVERSE_COST`, so that two arrows running between the
+same pair in opposite directions each take the one drawn for it instead of
+scoring identically and swapping. Unbound nodes, edges or click sources surface
+in a warning banner on the page rather than silently failing.
 
-A sequence diagram has neither `g.node` nor `.edgePaths`, so `index()` picks a
-strategy from `ir.Diagram.Type`. Actors are recovered by **column** — the parts
+There are **two strategies, not one per diagram type**, and `index()` picks
+between them on `ir.Diagram.Type`. A state diagram reuses the flowchart's whole
+apparatus — `indexNodesBy`, `indexClusters`, `indexEdges`, `makeLayer` — and
+differs in exactly two details: mermaid's id prefix is `state-` rather than
+`flowchart-` (and its composite clusters are `g.statediagram-cluster` with no
+counter suffix), and the node lookup handed to `indexEdges` is merged with the
+clusters, because a transition into a composite stops at the cluster's border
+rather than at any node. That merge is passed **only** in the state branch, so
+flowchart matching is byte-identical.
+
+A sequence diagram is the one that genuinely needs the second strategy: it has
+neither `g.node` nor `.edgePaths`. Actors are recovered by **column** — the parts
 of one actor are loose rects and texts sharing a lifeline x — and wrapped in a
 `g.dgm-actor` so that every existing `.dgm-highlight rect` rule applies
 unchanged. Messages are matched to edges by **order**, because mermaid draws

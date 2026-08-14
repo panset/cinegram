@@ -1,0 +1,14 @@
+stateDiagram-v2
+  [*] --> A
+  A --> B : first attempt
+  A --> B : retry
+  B --> [*]
+
+scenario "order" { }
+  step s1 "the arrow order picks itself" { flow A -> B { dur: 100ms } }
+  step s2 "first, named" { flow A -> B { dur: 100ms, msg: 1 } }
+  step s3 "second, named" { flow A -> B { dur: 100ms, msg: 2 } }
+  step s4 "the markers animate like any other node" {
+    flow root_start -> A { dur: 100ms }
+    flow B -> root_end { dur: 100ms }
+  }
