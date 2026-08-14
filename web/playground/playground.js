@@ -511,6 +511,40 @@
 
   // --- examples -------------------------------------------------------------------------
 
+  // The picker's first entry is not an example: it resets the working set to a
+  // small skeleton. A truly empty editor's first feedback would be a parse
+  // error, so "fresh" means a two-node diagram and a scenario to grow from.
+  var NEW_DOC_ID = '__new__';
+  var STARTER = [
+    '%% A fresh cinegram document: a Mermaid diagram, then a scenario that',
+    '%% animates it. Edit anything — the page recompiles as you type.',
+    'flowchart LR',
+    '  client[Client]',
+    '  server[Server]',
+    '  db[(Database)]',
+    '',
+    '  client --> server',
+    '  server --> db',
+    '',
+    'scenario "a request" { speed: 1.0 }',
+    '',
+    '  step ask "The client asks" {',
+    '    desc: "flow sends a pulse along an edge; highlight holds a node."',
+    '    flow client -> server { label: "GET /thing", dur: 600ms }',
+    '    highlight server',
+    '  }',
+    '',
+    '  step fetch "The server reads" {',
+    '    flow server -> db { dur: 500ms }',
+    '    flow db -> server { dur: 500ms, delay: 600ms }',
+    '  }',
+    '',
+    '  step answer "And answers" {',
+    '    flow server -> client { label: "200 OK", dur: 600ms }',
+    '  }',
+    ''
+  ].join('\n');
+
   function loadExamplesManifest() {
     return fetch('examples.json').then(function (r) {
       if (!r.ok) throw new Error('examples.json: HTTP ' + r.status);
@@ -518,6 +552,10 @@
     }).then(function (list) {
       examples = list;
       ui.examples.textContent = '';
+      var fresh = document.createElement('option');
+      fresh.value = NEW_DOC_ID;
+      fresh.textContent = 'New document';
+      ui.examples.appendChild(fresh);
       for (var i = 0; i < list.length; i++) {
         var option = document.createElement('option');
         option.value = list[i].id;
@@ -527,7 +565,42 @@
     });
   }
 
+  // adoptDocument replaces the whole working set: vfs, entry, player. A new
+  // document is a new reading, so let it play from the top: dropping the
+  // player is what makes `autoplay: !was` true again.
+  function adoptDocument(files, entry) {
+    vfs.clear();
+    files.forEach(function (f) {
+      if (f.bytes) putBytes(f.path, f.bytes);
+      else putText(f.path, f.text);
+    });
+
+    entryPath = entry;
+    openPath = entry;
+
+    stop(player);
+    player = null;
+    compiled = false;
+
+    clearHash();
+    clearNotice();
+    syncEditor();
+    renderTabs();
+    renderAttachments();
+    compile();
+  }
+
+  function newDocument() {
+    adoptDocument([{ path: 'untitled.dgm', text: STARTER }], 'untitled.dgm');
+    ui.examples.value = NEW_DOC_ID;
+  }
+
   function loadExample(id) {
+    if (id === NEW_DOC_ID) {
+      newDocument();
+      return Promise.resolve();
+    }
+
     var example = null;
     for (var i = 0; i < examples.length; i++) {
       if (examples[i].id === id) example = examples[i];
@@ -544,28 +617,8 @@
     });
 
     return Promise.all(jobs).then(function (loaded) {
-      vfs.clear();
-      loaded.forEach(function (f) {
-        if (f.bytes) putBytes(f.path, f.bytes);
-        else putText(f.path, f.text);
-      });
-
-      entryPath = example.entry;
-      openPath = example.entry;
+      adoptDocument(loaded, example.entry);
       ui.examples.value = id;
-
-      // A new document is a new reading, so let it play from the top: dropping
-      // the player is what makes `autoplay: !was` true again.
-      stop(player);
-      player = null;
-      compiled = false;
-
-      clearHash();
-      clearNotice();
-      syncEditor();
-      renderTabs();
-      renderAttachments();
-      compile();
     }).catch(function (e) {
       fail('That example could not be loaded: ' + message(e));
     });
