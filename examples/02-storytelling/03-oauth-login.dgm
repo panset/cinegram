@@ -3,6 +3,12 @@
 %% Every step carries a `desc` that says *why* the protocol does what it does,
 %% not just what moves where. The animation shows the mechanics; the narration
 %% carries the argument.
+%% -
+%% Then the same argument is made twice more, at two other reading levels, with
+%% `retells`. All three tellings are one animation — pick a rung in the scenario
+%% picker and the diagram does not change, only the words do. That is deliberate:
+%% an explanation a child can follow and a reference an engineer can trust cannot
+%% disagree about the mechanics if there are no second mechanics to disagree with.
 flowchart LR
   browser[User's Browser]
   app[Your Application]
@@ -66,4 +72,74 @@ scenario "authorization code flow" { speed: 1.0 }
   step done "The user is signed in" {
     desc: "The application ends up able to act for the user without ever having held the user's password. Every step above exists to make that sentence true."
     flow api -> app -> browser { label: "200 OK", dur: 1000ms, style: response }
+  }
+
+%% The same eight beats, explained to someone who has never heard of a token.
+%% One sustained metaphor — a front desk, a paper ticket and a wristband — because
+%% a metaphor that changes every step is just jargon with friendlier words.
+scenario "like you're 5" { retells: "authorization code flow", audience: "kid" }
+
+  step start "You ask to come in" {
+    desc: "You tell the app you want to come in. The app does not keep a list of anybody's secret words, on purpose, so it cannot check yours. Instead it walks you over to the front desk."
+  }
+
+  step redirect "The app walks you to the front desk" {
+    desc: "It sends you off holding a note. The note says who is asking and what they would like to do. There is nothing secret written on it, because you can read it, and so can anyone peeking over your shoulder."
+  }
+
+  step consent "You whisper your secret word to the desk, and nobody else" {
+    desc: "You tell the desk your secret word. Only the desk hears it — never the app. Then the desk asks whether the app is allowed to do the things on the note, and you say yes."
+  }
+
+  step code "The desk sends you back with a paper ticket" {
+    desc: "The desk gives you a little paper ticket and sends you back to the app. The ticket on its own opens nothing at all. It is a coat check stub with no coat behind it yet."
+  }
+
+  step exchange "The app shows the ticket and its own badge, through the back door" {
+    desc: "The app goes round to a back door that you were never in, and hands over the ticket together with its own secret badge. Neither one is enough by itself — it is the two arriving together that proves this is really the app."
+  }
+
+  step issued "The desk hands back a wristband" {
+    desc: "Back through that same private door comes a wristband. It travels the back way so nobody out in the hallway ever gets a look at it."
+  }
+
+  step call "The app wears the wristband to the ride" {
+    desc: "Now the app shows the wristband at the ride. The ride looks at the wristband, not at who is wearing it, and never phones the front desk to ask about you."
+  }
+
+  step done "It worked, and nobody learned your secret word" {
+    desc: "The app can now do things for you, and it never once found out your secret word. Every single step above is there to make that one sentence true."
+  }
+
+%% A middle rung: plain words, no metaphor, and the mechanics named honestly.
+%% Steps it says nothing about keep the engineer's prose, which is the point of
+%% an overlay — a rung only has to differ where it needs to.
+scenario "new to OAuth" { retells: "authorization code flow", audience: "newcomer" }
+
+  step start "Sign-in begins at the application" {
+    desc: "The application deliberately stores no passwords, so it cannot verify one. It redirects the browser to an identity provider that can, and takes itself out of the exchange."
+  }
+
+  step redirect "The browser is sent to the provider" {
+    desc: "The redirect names the application, where to come back to, and what access it wants. All of it is readable in the address bar, which is exactly why no secret is included."
+  }
+
+  step consent "The user signs in with the provider" {
+    desc: "The password is typed into the provider, not into the application. The application never receives it, so it cannot leak it later."
+  }
+
+  step code "The provider returns a short-lived code" {
+    desc: "The browser comes back carrying a code that expires quickly and cannot be redeemed alone. Anyone who intercepts it still lacks the application's secret."
+  }
+
+  step exchange "The application redeems the code server to server" {
+    desc: "This request leaves the application's own server, not the browser. Sending the code and the client secret together is what identifies the caller as the real application."
+  }
+
+  step issued "Tokens arrive on the back channel" {
+    desc: "The access token comes back over a connection the browser never touched, so it never lands in the address bar, browser history, or a referrer header."
+  }
+
+  step call "The application calls the API with the token" {
+    desc: "The API checks the token's signature and the access it grants. It never calls the application back to ask, which is what lets one token work across many services."
   }
