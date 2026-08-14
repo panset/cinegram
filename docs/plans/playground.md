@@ -262,6 +262,10 @@ resolves.
 
 **New `examples/BUILD.bazel`**: `filegroup(name = "playground_examples",
 srcs = glob(["*.dgm", "frames/*.svg"]), visibility = ["//web/playground:__pkg__"])`.
+*(Phase 4 lesson: making `examples/` a package silently empties the root
+`filegroup(name = "examples", srcs = glob(["examples/**"]))` — add an
+`all_files` filegroup here and point `//:examples` at it, or `//site:site_test`
+fails with "cannot find examples".)*
 
 **New `web/playground/index.html`** — classic scripts in order:
 `mermaid.min.js`, `runtime.js`, `wasm_exec.js`, `playground.js`; stylesheets
@@ -336,14 +340,19 @@ loudly on a miss; it runs in CI). Relative `-o` resolves against
 cmd/cinegram/main.go:204-212). Serve with `http.ServeContent` (Go's mime table
 knows `.wasm` → `application/wasm`, required for `instantiateStreaming`).
 
-**New `web/playground/BUILD.bazel`** — gazelle skeleton then hand-adjust with
-`# keep`: `filegroup(name="static", srcs=[examples.json, index.html,
-playground.css, playground.js])`; `go_binary(name="site",
-embed=[":playground_lib"], data=[":static", "//examples:playground_examples",
+**New `web/playground/BUILD.bazel`** — *(Phase 4 lesson: gazelle CANNOT
+generate this — it names the binary after the directory and has no `go_deps`
+lockfile to resolve `github.com/bazelbuild/rules_go/go/runfiles` against.
+Hand-write it with a leading `# gazelle:ignore`, same precedent as the wasm
+BUILD)*: `filegroup(name="static", …)`; `go_binary(name="site", srcs=…,
+data=[":static", "//examples:playground_examples",
 "//pkg/emit/html:browser_assets", "//web/playground/wasm:cinegram_wasm",
-"@go_sdk//:lib/wasm/wasm_exec.js"])`. Gazelle resolves the
-`github.com/bazelbuild/rules_go/go/runfiles` import to `@rules_go//go/runfiles`
-automatically; hand-pin with `# keep` if it guesses wrong.
+"@go_sdk//:lib/wasm/wasm_exec.js"], deps=["@rules_go//go/runfiles"])`.
+API note: `runfiles.Runfiles` exposes `Rlocation(path) (string, error)` —
+there is no `ReadFile`; pair it with `os.ReadFile`. Also
+`cinegram preview … -o -` writes nothing — byte comparisons must go through a
+temp file. With `{keys:'scoped', hash:false}` a mounted player's
+`_unbind.length` is 4, not 6 (two sites are skipped by design).
 
 **Gate**: `bazel run //:gazelle && bazel test //... && bazel build //...`;
 `bazel run //web/playground:site -- -o /tmp/pg-site && ls -R /tmp/pg-site`;
