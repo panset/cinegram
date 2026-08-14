@@ -342,6 +342,111 @@ second for the length of the step.
 `examples/02-storytelling/03-oauth-login.dgm` is the worked example: an OAuth 2.0 authorization
 code flow where every step explains what the protocol is buying with it.
 
+## Reading levels
+
+The same diagram usually has to explain itself to more than one person: the
+engineer on call, someone who joined last week, and — the honest test of whether
+you understand a thing at all — a child. Those are different pieces of writing,
+not the same writing at three temperatures, but they are the *same animation*.
+`retells` says so:
+
+```
+scenario "authorization code flow" { speed: 1.0 }
+  step exchange "The app trades the code for tokens" {
+    desc: "It sends the code together with its client secret, and that pairing is what proves the exchange is genuine."
+    flow app -> auth { label: "POST /token + secret", dur: 700ms }
+  }
+
+scenario "like you're 5" { retells: "authorization code flow", audience: "kid" }
+  step exchange "The app shows the ticket and its own badge" {
+    desc: "It hands over the ticket together with its own secret badge. Neither is enough alone — the two arriving together is what proves this is really the app."
+  }
+```
+
+A retelling adopts the base's steps, actions and timing wholesale and replaces
+only the words. Each of its `step`s names an existing step and carries `desc`,
+optionally a new title, and **no actions** — changing what happens is what a
+`variant` is for, and a scenario that tried to be both is rejected. Steps a
+retelling says nothing about keep the base's prose, so a rung only has to differ
+where it needs to.
+
+Scenario attributes are inherited and then overridden, which is the opposite of a
+variant's "keep only your own" — and has to be, since a retelling is the same
+walkthrough. It plays at the base's speed and, above all, ends the way the base
+ends: a retelling of a failure path that lost its `outcome: fail` would tell a
+child the story goes well.
+
+Retellings resolve *after* variants, so retelling a variant retells the spliced
+result and neither feature needs to know about the other. Depth-1 applies to
+retellings on their own: a retelling of a retelling is an error, for the same
+reason it is for variants.
+
+The reader picks a rung in the scenario picker, and the diagram does not move
+when they do. That is the whole point — an explanation a child can follow and a
+reference an engineer trusts cannot contradict each other about the mechanics
+when there is only one set of mechanics to contradict.
+
+`examples/oauth-login.dgm` tells the authorization code flow three times.
+`skills/explain-diagram/SKILL.md` is the guidance for writing the rungs, most of
+which is about the part no linter can check.
+
+## Speaking it
+
+Prose written to be read aloud can be. `cinegram voice` records every step's
+`desc` into a sidecar directory beside the document, and the page then narrates
+itself:
+
+```sh
+cinegram voice examples/oauth-login.dgm --voice Samantha
+cinegram preview examples/oauth-login.dgm --with-voice
+```
+
+**No synthesizer is built in and none is depended on.** A TTS command is named by
+the environment, exactly as Chrome and ffmpeg are, so the engine is yours to pick
+and this repository gains no dependency and no API key handling:
+
+```sh
+export CINEGRAM_TTS_COMMAND='piper --model en_US-amy.onnx --output_file {out}'
+```
+
+It must write a WAV to `{out}` and read its line from stdin. On macOS `say` is
+the default, so there is nothing to install and nothing to configure. WAV because
+the clip's length is then readable from the header with the standard library
+alone — that length goes in the manifest, and the clip is compressed to AAC
+afterwards if ffmpeg is around, which a measured-then-compressed clip makes free.
+
+Clips are keyed by **the words they say**, not by the step. Rewording a sentence
+re-records one clip; renaming a scenario or reordering steps re-records nothing,
+and two rungs that phrase a step identically share one recording. Prose that no
+longer appears has its clip deleted, so the directory tracks the document instead
+of accumulating every draft.
+
+`pace: voice` on a scenario lets the recordings set the clock: each step stretches
+to at least the length of the line spoken over it. It is opt-in because the timing
+is otherwise entirely yours, and it does nothing until a recording exists — but it
+is nearly always wanted, because a walkthrough written to be *watched* is much
+shorter than the same walkthrough read *aloud*. Without it the voice is cut off
+and the lines overlap. Flows keep the durations they were given either way; what
+stretches is the step, and with it anything that spans one.
+
+Narration is opt-in everywhere it would be carried — `--with-voice` on `preview`,
+`compile` and `record` — because the audio outweighs everything else on the page
+put together. Leaving it off also keeps compilation a pure function of the
+checked-in sources, so the demo site regenerates identically whether or not the
+person running it happens to have recorded anything.
+
+A page built without it still speaks. The prose is in every step, and the
+**Voice** button falls back to the browser's own synthesizer — so any page can
+talk with no sidecar, no synthesizer installed and nothing embedded. The recording
+is what makes it sound the same for everyone, and what lets it into a video.
+Voice starts off, because a browser will not begin audio without a gesture and
+the toggle is that gesture; while it is on, the caption stops announcing itself,
+since a screen reader and a narrator saying the same sentence is two voices at
+once.
+
+The recordings are a build product — derived from the prose, binary, and changed
+by any edit to a sentence. `.gitignore` covers `*.voice/`.
+
 ## Persistent state
 
 Most actions describe a moment. Some facts are not moments: which node is
@@ -673,6 +778,7 @@ cinegram frame   <file.dgm> --at 1620ms -o still.png   # one exact moment
 cinegram record  <file.dgm> -o out.gif      # a GIF, mp4 or webm of one scenario
 cinegram sheet   <file.dgm> -o sheet.png    # a labelled grid, one cell per step
 cinegram narrate <file.dgm> [--format=md|json]   # the animation, written out
+cinegram voice   <file.dgm> [--voice NAME]  # record the prose as speech
 cinegram lint    <file.dgm> [--format=text|json] [--strict] [--fix] # diagnostics only
 cinegram mcp                                # the same tools over MCP, on stdio
 ```
@@ -794,6 +900,7 @@ first".
 | `--width`, `--height` | `1280`, `720` | Rounded up to even, which yuv420p requires and a GIF does not mind. |
 | `--reel` | off | The `?reel` story page at 1080×1920, auto-follow camera included. Explicit dimensions still win, per axis. |
 | `--scenario`, `--view` | the first / the entry document | Which walkthrough to record. |
+| `--with-voice` | off | Mix in the narration from `<file>.voice/`, each line delayed to the step it explains. Needs `mp4` or `webm`; a GIF has no audio track and says so rather than writing a silent file. |
 | `--progress` | off | `cinegram-progress capture <i> <n>` per frame and one `cinegram-progress encode`, on stderr, for a host drawing a progress bar. Purely additive: the human-readable lines are unchanged. |
 
 ### Contact sheets

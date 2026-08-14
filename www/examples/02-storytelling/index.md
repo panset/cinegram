@@ -10,7 +10,7 @@ Checkout, told twice. The first scenario is the path everyone draws; the second 
 
 A blue/green deployment: how traffic moves to a new version with no gap.
 
-## [authorization code flow](03-oauth-login.md)
+## [oauth login](03-oauth-login.md)
 
 OAuth 2.0 authorization code flow, told as an explorable explanation.
 

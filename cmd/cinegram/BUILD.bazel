@@ -23,6 +23,7 @@ go_library(
         "site.go",
         "upgrade.go",
         "version.go",
+        "voice.go",
     ],
     importpath = "github.com/tejaspanse/cinegram/cmd/cinegram",
     visibility = ["//visibility:private"],
@@ -42,6 +43,7 @@ go_library(
         "//pkg/parser",
         "//pkg/sitegen",
         "//pkg/units",
+        "//pkg/voice",
     ],
 )
 
@@ -86,6 +88,7 @@ go_test(
         "serve_test.go",
         "sheet_test.go",
         "upgrade_test.go",
+        "voice_test.go",
     ],
     embed = [":cinegram_lib"],
     deps = [
@@ -94,5 +97,6 @@ go_test(
         "//pkg/envelope",
         "//pkg/ir",
         "//pkg/source",
+        "//pkg/voice",
     ],
 )

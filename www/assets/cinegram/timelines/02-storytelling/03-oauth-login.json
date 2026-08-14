@@ -4,11 +4,10 @@
   "views": [
     {
       "id": "03-oauth-login",
-      "title": "authorization code flow",
       "diagram": {
         "type": "flowchart",
         "direction": "LR",
-        "mermaid": "%% OAuth 2.0 authorization code flow, told as an explorable explanation.\n%% ---\n%% Every step carries a `desc` that says *why* the protocol does what it does,\n%% not just what moves where. The animation shows the mechanics; the narration\n%% carries the argument.\nflowchart LR\n  browser[User's Browser]\n  app[Your Application]\n  subgraph provider[Identity Provider]\n    auth[Authorization Server]\n    tokens[(Token Store)]\n  end\n  api[Resource API]\n  browser --\u003e app\n  app --\u003e auth\n  auth --\u003e tokens\n  app --\u003e api\n"
+        "mermaid": "%% OAuth 2.0 authorization code flow, told as an explorable explanation.\n%% ---\n%% Every step carries a `desc` that says *why* the protocol does what it does,\n%% not just what moves where. The animation shows the mechanics; the narration\n%% carries the argument.\n%% -\n%% Then the same argument is made twice more, at two other reading levels, with\n%% `retells`. All three tellings are one animation — pick a rung in the scenario\n%% picker and the diagram does not change, only the words do. That is deliberate:\n%% an explanation a child can follow and a reference an engineer can trust cannot\n%% disagree about the mechanics if there are no second mechanics to disagree with.\nflowchart LR\n  browser[User's Browser]\n  app[Your Application]\n  subgraph provider[Identity Provider]\n    auth[Authorization Server]\n    tokens[(Token Store)]\n  end\n  api[Resource API]\n  browser --\u003e app\n  app --\u003e auth\n  auth --\u003e tokens\n  app --\u003e api\n  %% `pace: voice` costs nothing until someone runs `cinegram voice` on this file:\n  %% with no recording there is no line to wait for, and the timings below are what\n  %% they say. With one, each step stretches to at least the length of its sentence,\n  %% which is what makes `record --with-voice` produce a narrated video instead of\n  %% one that talks over itself. All three tellings inherit it.\n"
       },
       "nodes": [
         {
@@ -245,6 +244,446 @@
               "id": "call",
               "name": "The app calls the API on the user's behalf",
               "desc": "The API trusts the token, not the caller: it validates the signature and the scopes and never contacts the application. That is what lets the same token work across services that have never heard of each other.",
+              "start": 4400,
+              "end": 5100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 4400,
+                  "end": 5100,
+                  "edge": "e3",
+                  "from": "app",
+                  "to": "api",
+                  "label": "Authorization: Bearer …"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 4400,
+                  "end": 5100,
+                  "target": "api",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "done",
+              "name": "The user is signed in",
+              "desc": "The application ends up able to act for the user without ever having held the user's password. Every step above exists to make that sentence true.",
+              "start": 5100,
+              "end": 6100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 5100,
+                  "end": 5600,
+                  "edge": "e3",
+                  "from": "api",
+                  "to": "app",
+                  "reverse": true,
+                  "label": "200 OK",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5600,
+                  "end": 6100,
+                  "edge": "e0",
+                  "from": "app",
+                  "to": "browser",
+                  "reverse": true,
+                  "label": "200 OK",
+                  "style": "response"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "s1",
+          "name": "like you're 5",
+          "duration": 6100,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "audience": "kid",
+          "steps": [
+            {
+              "id": "start",
+              "name": "You ask to come in",
+              "desc": "You tell the app you want to come in. The app does not keep a list of anybody's secret words, on purpose, so it cannot check yours. Instead it walks you over to the front desk.",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "browser",
+                  "to": "app",
+                  "label": "GET /login"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 600,
+                  "target": "app",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "redirect",
+              "name": "The app walks you to the front desk",
+              "desc": "It sends you off holding a note. The note says who is asking and what they would like to do. There is nothing secret written on it, because you can read it, and so can anyone peeking over your shoulder.",
+              "start": 600,
+              "end": 1300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "app",
+                  "to": "auth",
+                  "label": "302 → /authorize"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 600,
+                  "end": 1300,
+                  "target": "auth",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "consent",
+              "name": "You whisper your secret word to the desk, and nobody else",
+              "desc": "You tell the desk your secret word. Only the desk hears it — never the app. Then the desk asks whether the app is allowed to do the things on the note, and you say yes.",
+              "start": 1300,
+              "end": 2100,
+              "tracks": [
+                {
+                  "kind": "note",
+                  "start": 1300,
+                  "end": 2100,
+                  "target": "auth",
+                  "text": "user signs in\nand approves the scopes"
+                },
+                {
+                  "kind": "pulse",
+                  "start": 1300,
+                  "end": 2100,
+                  "target": "auth"
+                }
+              ]
+            },
+            {
+              "id": "code",
+              "name": "The desk sends you back with a paper ticket",
+              "desc": "The desk gives you a little paper ticket and sends you back to the app. The ticket on its own opens nothing at all. It is a coat check stub with no coat behind it yet.",
+              "start": 2100,
+              "end": 2900,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2100,
+                  "end": 2900,
+                  "edge": "e1",
+                  "from": "auth",
+                  "to": "app",
+                  "reverse": true,
+                  "label": "302 ?code=Ab3x…",
+                  "style": "response"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 2100,
+                  "end": 2900,
+                  "target": "app",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "exchange",
+              "name": "The app shows the ticket and its own badge, through the back door",
+              "desc": "The app goes round to a back door that you were never in, and hands over the ticket together with its own secret badge. Neither one is enough by itself — it is the two arriving together that proves this is really the app.",
+              "start": 2900,
+              "end": 3700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2900,
+                  "end": 3600,
+                  "edge": "e1",
+                  "from": "app",
+                  "to": "auth",
+                  "label": "POST /token + secret"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3200,
+                  "end": 3700,
+                  "edge": "e2",
+                  "from": "auth",
+                  "to": "tokens",
+                  "label": "mint \u0026 record"
+                }
+              ]
+            },
+            {
+              "id": "issued",
+              "name": "The desk hands back a wristband",
+              "desc": "Back through that same private door comes a wristband. It travels the back way so nobody out in the hallway ever gets a look at it.",
+              "start": 3700,
+              "end": 4400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3700,
+                  "end": 4400,
+                  "edge": "e1",
+                  "from": "auth",
+                  "to": "app",
+                  "reverse": true,
+                  "label": "access + refresh token",
+                  "style": "response"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 3700,
+                  "end": 4400,
+                  "target": "app",
+                  "color": "#16a34a"
+                }
+              ]
+            },
+            {
+              "id": "call",
+              "name": "The app wears the wristband to the ride",
+              "desc": "Now the app shows the wristband at the ride. The ride looks at the wristband, not at who is wearing it, and never phones the front desk to ask about you.",
+              "start": 4400,
+              "end": 5100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 4400,
+                  "end": 5100,
+                  "edge": "e3",
+                  "from": "app",
+                  "to": "api",
+                  "label": "Authorization: Bearer …"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 4400,
+                  "end": 5100,
+                  "target": "api",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "done",
+              "name": "It worked, and nobody learned your secret word",
+              "desc": "The app can now do things for you, and it never once found out your secret word. Every single step above is there to make that one sentence true.",
+              "start": 5100,
+              "end": 6100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 5100,
+                  "end": 5600,
+                  "edge": "e3",
+                  "from": "api",
+                  "to": "app",
+                  "reverse": true,
+                  "label": "200 OK",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5600,
+                  "end": 6100,
+                  "edge": "e0",
+                  "from": "app",
+                  "to": "browser",
+                  "reverse": true,
+                  "label": "200 OK",
+                  "style": "response"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "s2",
+          "name": "new to OAuth",
+          "duration": 6100,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "audience": "newcomer",
+          "steps": [
+            {
+              "id": "start",
+              "name": "Sign-in begins at the application",
+              "desc": "The application deliberately stores no passwords, so it cannot verify one. It redirects the browser to an identity provider that can, and takes itself out of the exchange.",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "browser",
+                  "to": "app",
+                  "label": "GET /login"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 600,
+                  "target": "app",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "redirect",
+              "name": "The browser is sent to the provider",
+              "desc": "The redirect names the application, where to come back to, and what access it wants. All of it is readable in the address bar, which is exactly why no secret is included.",
+              "start": 600,
+              "end": 1300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "app",
+                  "to": "auth",
+                  "label": "302 → /authorize"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 600,
+                  "end": 1300,
+                  "target": "auth",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "consent",
+              "name": "The user signs in with the provider",
+              "desc": "The password is typed into the provider, not into the application. The application never receives it, so it cannot leak it later.",
+              "start": 1300,
+              "end": 2100,
+              "tracks": [
+                {
+                  "kind": "note",
+                  "start": 1300,
+                  "end": 2100,
+                  "target": "auth",
+                  "text": "user signs in\nand approves the scopes"
+                },
+                {
+                  "kind": "pulse",
+                  "start": 1300,
+                  "end": 2100,
+                  "target": "auth"
+                }
+              ]
+            },
+            {
+              "id": "code",
+              "name": "The provider returns a short-lived code",
+              "desc": "The browser comes back carrying a code that expires quickly and cannot be redeemed alone. Anyone who intercepts it still lacks the application's secret.",
+              "start": 2100,
+              "end": 2900,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2100,
+                  "end": 2900,
+                  "edge": "e1",
+                  "from": "auth",
+                  "to": "app",
+                  "reverse": true,
+                  "label": "302 ?code=Ab3x…",
+                  "style": "response"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 2100,
+                  "end": 2900,
+                  "target": "app",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "exchange",
+              "name": "The application redeems the code server to server",
+              "desc": "This request leaves the application's own server, not the browser. Sending the code and the client secret together is what identifies the caller as the real application.",
+              "start": 2900,
+              "end": 3700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2900,
+                  "end": 3600,
+                  "edge": "e1",
+                  "from": "app",
+                  "to": "auth",
+                  "label": "POST /token + secret"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3200,
+                  "end": 3700,
+                  "edge": "e2",
+                  "from": "auth",
+                  "to": "tokens",
+                  "label": "mint \u0026 record"
+                }
+              ]
+            },
+            {
+              "id": "issued",
+              "name": "Tokens arrive on the back channel",
+              "desc": "The access token comes back over a connection the browser never touched, so it never lands in the address bar, browser history, or a referrer header.",
+              "start": 3700,
+              "end": 4400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3700,
+                  "end": 4400,
+                  "edge": "e1",
+                  "from": "auth",
+                  "to": "app",
+                  "reverse": true,
+                  "label": "access + refresh token",
+                  "style": "response"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 3700,
+                  "end": 4400,
+                  "target": "app",
+                  "color": "#16a34a"
+                }
+              ]
+            },
+            {
+              "id": "call",
+              "name": "The application calls the API with the token",
+              "desc": "The API checks the token's signature and the access it grants. It never calls the application back to ask, which is what lets one token work across many services.",
               "start": 4400,
               "end": 5100,
               "tracks": [

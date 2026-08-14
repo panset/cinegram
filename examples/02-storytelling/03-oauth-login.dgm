@@ -25,7 +25,12 @@ flowchart LR
   auth --> tokens
   app --> api
 
-scenario "authorization code flow" { speed: 1.0 }
+%% `pace: voice` costs nothing until someone runs `cinegram voice` on this file:
+%% with no recording there is no line to wait for, and the timings below are what
+%% they say. With one, each step stretches to at least the length of its sentence,
+%% which is what makes `record --with-voice` produce a narrated video instead of
+%% one that talks over itself. All three tellings inherit it.
+scenario "authorization code flow" { speed: 1.0, pace: voice }
 
   step start "The user asks to sign in" {
     desc: "The application has no credentials of its own to check, so it does not try. It hands the browser off to the identity provider and steps out of the conversation entirely."

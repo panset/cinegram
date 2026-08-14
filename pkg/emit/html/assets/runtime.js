@@ -375,6 +375,8 @@
     this.scenarioIndex = 0;
     this.time = 0;
     this.playing = false;
+    // Narration starts silent; see setVoice for why the reader has to ask.
+    this.voiceOn = false;
     // Overwritten from the selected scenario's compiled speed before the first
     // frame; the button then cycles absolute values from wherever that landed.
     this.speed = 1;
@@ -785,6 +787,14 @@
     this.captionKey = null;
     this.root.appendChild(this.caption);
 
+    // One audio element reused for every clip, rather than one per step. A
+    // fresh Audio() per step would leave the previous one decoding and talking
+    // over its replacement, and the browser would hold every clip of a long
+    // scenario in memory at once.
+    this.audio = document.createElement('audio');
+    this.audio.preload = 'auto';
+    this.root.appendChild(this.audio);
+
     var foot = el('div', 'dgm-foot');
 
     var track = el('div', 'dgm-scrub-wrap');
@@ -1028,6 +1038,18 @@
     this.cineBtn.setAttribute('aria-pressed', this.follow ? 'true' : 'false');
     rail.appendChild(this.cineBtn);
 
+    // Voice reads the walkthrough aloud: the clip `cinegram voice` recorded, or
+    // the browser's own synthesizer speaking the same prose. Off by default and
+    // outside dgm-authoring, for the same reason Cine is — narration is worth
+    // most to a presenter and a reel, which are the modes that strip the
+    // building tools.
+    this.voiceBtn = iconButton('voice', 'Read the walkthrough aloud', 'dgm-btn', function () {
+      self.setVoice(!self.voiceOn);
+    });
+    // Resting value only; setVoice is the one writer, as with Cine.
+    this.voiceBtn.setAttribute('aria-pressed', 'false');
+    rail.appendChild(this.voiceBtn);
+
     // "Look at *this* step" is most of why anyone sends a diagram to a
     // colleague, and reproducing a moment by describing it never works.
     this.shareBtn = iconButton('copy', SHARE_LABEL, 'dgm-btn dgm-authoring', function () { self.copyLink(); });
@@ -1082,6 +1104,8 @@
       'M20 14.5V18a2 2 0 0 1-2 2h-3.5',
       'M9.5 20H6a2 2 0 0 1-2-2v-3.5'
     ],
+    // A speaker and two waves: narration.
+    voice: ['M4 9.5h3l4-3.5v12l-4-3.5H4z', 'M15 9.2a4 4 0 0 1 0 5.6', 'M17.6 6.6a7.6 7.6 0 0 1 0 10.8'],
     help: ['M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z', 'M9.3 9.4a2.8 2.8 0 0 1 5.5.9c0 1.9-2.7 2.3-2.7 4.1', 'M12 17.6v.01'],
     // The two theme states, named for the state each *is* rather than the one
     // a press goes to: a sun for light, a moon for dark.
@@ -2883,6 +2907,9 @@
     this.scenarioIndex = i;
     this.time = this.restingTime();
     this.stopAt = null;
+    // Switching rung mid-sentence would leave the previous telling talking over
+    // the new one — and switching rung is exactly what an audience ladder is for.
+    this.hush();
     this.adoptScenarioSpeed();
     this.buildSteps();
     // A new scenario is a new context; a dismissal does not carry into it.
@@ -3415,6 +3442,15 @@
     this.playing = true;
     this.playBtn.textContent = 'Pause';
     this.lastFrame = 0;
+    // Narration follows the clock: pausing mid-sentence and resuming picks the
+    // sentence up, rather than starting it again or leaving the voice behind.
+    if (this.voiceOn) {
+      if (this.audio.getAttribute('src')) {
+        var p = this.audio.play();
+        if (p && p.catch) p.catch(function () {});
+      }
+      if (window.speechSynthesis) window.speechSynthesis.resume();
+    }
     this.loopFrame();
   };
 
@@ -3423,6 +3459,12 @@
     this.playBtn.textContent = 'Play';
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = null;
+    this.audio.pause();
+    // Guarded, unlike the audio element: speechSynthesis is one global queue
+    // shared by every player on the page, so a silent player pausing it would
+    // cut off a *different* player's narration. Several players per page is
+    // ordinary here — the playground, a folder listing, a Markdown preview.
+    if (this.voiceOn && window.speechSynthesis) window.speechSynthesis.pause();
   };
 
   // dispose stops the clock and takes back every listener the player put
@@ -3459,6 +3501,13 @@
     if (this.mapBody) this.mapBody.innerHTML = '';
     this.mapClone = null;
     this.mapKeys = null;
+
+    // pause() above stops the clock, and for narration that is not enough.
+    // speechSynthesis is a page-global queue, so a paused utterance belonging to
+    // a disposed player would still be there for the next player's resume() to
+    // pick up; and the audio element is holding an inlined clip, which by this
+    // point is the largest thing this object owns now the map clone is gone.
+    this.hush();
   };
 
   Player.prototype.seek = function (ms) {
@@ -3867,6 +3916,92 @@
       this.camKeys = null;
       this.mapKeys = null;
     }
+
+    // Speaking hangs off the same diff as the caption, so a line is spoken when
+    // the reader arrives at a step and not once per frame. Seeking inside a step
+    // therefore does not restart the sentence, while seeking to another step
+    // does — which is what a reader means by both.
+    this.speak(step);
+  };
+
+  // ---------------------------------------------------------------------
+  // Narration
+  // ---------------------------------------------------------------------
+
+  // stepAt is the step whose window contains t, or null between steps and before
+  // the first. syncChrome works the same thing out while it walks the step list
+  // to style it; this is for callers that want only the answer.
+  Player.prototype.stepAt = function (t) {
+    var steps = this.scenario().steps;
+    for (var i = 0; i < steps.length; i++) {
+      if (t >= steps[i].start && t < steps[i].end) return steps[i];
+    }
+    return null;
+  };
+
+  // Voice is off until asked for, and that is not timidity about defaults.
+  // Browsers refuse to start audio without a user gesture, so narration that
+  // switched itself on would be silently blocked on the first page and startling
+  // on the second. The toggle *is* the gesture.
+  //
+  // Two sources, in order: the clip `cinegram voice` recorded, or the browser's
+  // own synthesizer reading `desc`. The fallback is what makes narration cost
+  // nothing — any page can talk, with no sidecar, no synthesizer installed and
+  // nothing embedded — and the recording is what makes it sound the same for
+  // everyone, and appear in an exported video.
+  Player.prototype.speak = function (step) {
+    if (!this.voiceOn) return;
+    this.hush();
+    if (!step) return;
+
+    if (step.audio) {
+      this.audio.src = step.audio;
+      // A rejected play() is not an error worth surfacing: it means the gesture
+      // has expired or the tab is muted, and the caption still says everything
+      // the voice would have.
+      var p = this.audio.play();
+      if (p && p.catch) p.catch(function () {});
+      return;
+    }
+
+    if (!step.desc || !window.speechSynthesis) return;
+    var said = new SpeechSynthesisUtterance(step.desc);
+    said.rate = this.speed || 1;
+    window.speechSynthesis.speak(said);
+  };
+
+  // hush stops whichever source is talking. Both are stopped unconditionally:
+  // asking which one was used means remembering, and a stale answer leaves two
+  // voices running.
+  Player.prototype.hush = function () {
+    this.audio.pause();
+    // Assigning removeAttribute rather than src='' — an empty src resolves to
+    // the page itself, which the element then tries to decode as audio.
+    this.audio.removeAttribute('src');
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+  };
+
+  Player.prototype.setVoice = function (on) {
+    this.voiceOn = !!on;
+    // The class is what an eye reads; aria-pressed is what a screen reader
+    // hears. Written together here, as setFollow does, so the two cannot come
+    // apart — and never as textContent, which would throw the icon away.
+    this.voiceBtn.classList.toggle('is-on', this.voiceOn);
+    this.voiceBtn.setAttribute('aria-pressed', this.voiceOn ? 'true' : 'false');
+
+    // A screen reader announcing the caption while the page speaks the same
+    // sentence is two voices over each other, so the live region stands down
+    // for as long as the narration is doing its job.
+    this.caption.setAttribute('aria-live', this.voiceOn ? 'off' : 'polite');
+
+    if (!this.voiceOn) {
+      this.hush();
+      return;
+    }
+    // Speak the step the reader is already on, so switching voice on is
+    // audible immediately rather than at the next step boundary. This runs
+    // inside the click, which is what unlocks audio for the rest of the page.
+    this.speak(this.stepAt(this.time));
   };
 
   // ---------------------------------------------------------------------

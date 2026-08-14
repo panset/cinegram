@@ -35,6 +35,7 @@ import (
 	"github.com/tejaspanse/cinegram/pkg/loader"
 	"github.com/tejaspanse/cinegram/pkg/parser"
 	"github.com/tejaspanse/cinegram/pkg/units"
+	"github.com/tejaspanse/cinegram/pkg/voice"
 )
 
 func main() {
@@ -70,6 +71,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return cmdLint(rest, stdout, stderr)
 	case "narrate":
 		return cmdNarrate(rest, stdout, stderr)
+	case "voice":
+		return cmdVoice(rest, stdout, stderr)
 	case "frame":
 		return cmdFrame(rest, stdout, stderr)
 	case "record":
@@ -145,6 +148,13 @@ Usage:
                               [--scenario ID] [--view ID] [--width N] [--height N]
   cinegram narrate <file.dgm> [-o out.md] [--format=md|json]
                                                  the animation as a walkthrough
+  cinegram voice   <file.dgm> [--voice NAME] [-o dir] [--force]
+                                                 record each step's desc as
+                                                 speech into <file>.voice/,
+                                                 which the page then narrates.
+                                                 Needs a synthesizer named by
+                                                 $CINEGRAM_TTS_COMMAND; macOS
+                                                 say is the default
   cinegram lint    <file.dgm> [--format=text|json]
                                                  report diagnostics only
                               [--strict]         exit 1 on warnings too, for a
@@ -331,10 +341,11 @@ func write(path string, data []byte, stdout io.Writer) error {
 
 func cmdCompile(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	var as string
-	var wantEnvelope bool
+	var wantEnvelope, withVoice bool
 	input, output, err := parseArgsWith("compile", args, func(fs *flag.FlagSet) {
 		fs.StringVar(&as, "as", "", "with `-`, resolve relative paths as if the source lived at this path")
 		fs.BoolVar(&wantEnvelope, "envelope", false, "pair the timeline with its diagnostics and exit 0 regardless")
+		fs.BoolVar(&withVoice, "with-voice", false, "inline the recorded narration from <file>.voice/")
 	})
 	if err != nil {
 		return err
@@ -345,7 +356,7 @@ func cmdCompile(args []string, stdin io.Reader, stdout, stderr io.Writer) error 
 		return err
 	}
 
-	bundle, err := loader.Load(entry, read)
+	bundle, err := loader.Load(entry, read, voiceOpts(withVoice)...)
 	if err != nil {
 		// Only the entry file failing to read reaches here; every other
 		// unreadable path is already a diagnostic on the declaration that
@@ -439,11 +450,12 @@ func cmdMermaid(args []string, stdout, stderr io.Writer) error {
 
 func cmdPreview(args []string, stdout, stderr io.Writer) error {
 	var addr string
-	var serve, watch bool
+	var serve, watch, withVoice bool
 	input, output, err := parseArgsWith("preview", args, func(fs *flag.FlagSet) {
 		fs.BoolVar(&serve, "serve", false, "serve the page over HTTP instead of writing a file")
 		fs.StringVar(&addr, "addr", defaultAddr, "address to serve on")
 		fs.BoolVar(&watch, "watch", false, "rebuild and reload when the source changes")
+		fs.BoolVar(&withVoice, "with-voice", false, "inline the recorded narration from <file>.voice/")
 	})
 	if err != nil {
 		return err
@@ -462,7 +474,7 @@ func cmdPreview(args []string, stdout, stderr io.Writer) error {
 		output = defaultOutputPath(input)
 	}
 
-	bundle, err := loader.Load(input, os.ReadFile)
+	bundle, err := loader.Load(input, os.ReadFile, voiceOpts(withVoice)...)
 	if err != nil {
 		return err
 	}
@@ -472,6 +484,10 @@ func cmdPreview(args []string, stdout, stderr io.Writer) error {
 	}
 	if rootHasNoScenarios(timeline) {
 		fmt.Fprintln(stderr, "cinegram: warning: no scenarios, the page will render a static diagram")
+	}
+	if withVoice && !hasNarration(timeline) {
+		fmt.Fprintf(stderr, "cinegram: warning: --with-voice but %s holds no clips; run `cinegram voice %s`\n",
+			voice.DirFor(input), input)
 	}
 
 	page, err := html.Render(timeline, html.Options{})

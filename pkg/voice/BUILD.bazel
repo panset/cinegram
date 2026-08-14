@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "voice",
+    srcs = ["voice.go"],
+    importpath = "github.com/tejaspanse/cinegram/pkg/voice",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "voice_test",
+    srcs = ["voice_test.go"],
+    embed = [":voice"],
+)

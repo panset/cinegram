@@ -183,6 +183,16 @@ type Step struct {
 	// animation; `narrate`-style tooling reads it as the body text.
 	Desc string `json:"desc,omitempty"`
 
+	// Audio is Desc spoken aloud: a self-contained `data:` URI the loader built
+	// from the narration sidecar, never a path, for the same reason a storyboard
+	// Frame carries its image that way.
+	//
+	// It is empty unless the document has a sidecar, so the timeline only grows
+	// for a document whose author asked for narration by running `cinegram
+	// voice`. A renderer with no clip is not a renderer with no narration — the
+	// prose is still in Desc, and speaking it is the browser's business.
+	Audio string `json:"audio,omitempty"`
+
 	Start  int     `json:"start"`
 	End    int     `json:"end"`
 	Tracks []Track `json:"tracks"`

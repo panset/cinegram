@@ -136,12 +136,66 @@ Three things to look for in `narrate` output, which no linter can catch:
    only makes sense next to the base has not replaced enough.
 2. **Every rung reports the same duration.** `narrate` prints it per scenario.
    Identical durations are the proof that you retold the animation instead of
-   accidentally rewriting it.
+   accidentally rewriting it. (This check only holds while nothing is spoken —
+   see `pace: voice` below, which stretches each rung to fit *its own* words and
+   so makes the rungs differ on purpose.)
 3. **The metaphor survives to the last step.** Skim the child rung for the
    moment it quietly reverts to real vocabulary; that is the step where the
    metaphor broke and you stopped noticing.
 
 `examples/oauth-login.dgm` in this repository is a worked three-rung example.
+
+## Saying it out loud
+
+An explanation written for a child is one somebody reads aloud, so it can be.
+`cinegram voice` records each step's `desc` into a sidecar directory beside the
+document:
+
+```sh
+cinegram voice diagram.dgm --voice Samantha
+```
+
+Nothing about the synthesizer is built in. macOS `say` is the default because it
+is already there; anything else is one environment variable, and it needs no API
+key and no network:
+
+```sh
+export CINEGRAM_TTS_COMMAND='piper --model en_US-amy.onnx --output_file {out}'
+```
+
+The command must write a **WAV** to `{out}` and read its line from **stdin**.
+WAV because that is how the clip's length gets measured with no extra tooling;
+the length is then kept in the manifest and the clip is compressed to AAC if
+`ffmpeg` is around.
+
+Three things worth knowing:
+
+- **Clips are keyed by the words, not the step.** Rewording one sentence
+  re-records one clip; renaming a scenario or reordering steps re-records
+  nothing. Two rungs that happen to phrase a step identically share one
+  recording. Prose that no longer appears has its clip deleted.
+- **`pace: voice` is almost always what you want**, on the base scenario so every
+  rung inherits it. A walkthrough written to be *watched* is far shorter than the
+  same walkthrough read *aloud* — eight beats of 700ms against eight sentences of
+  ten seconds — so without it the narration is cut off and the lines talk over
+  each other. With it, each step waits for its line. It does nothing at all until
+  a recording exists, so it is safe to write before recording anything.
+- **The recordings are a build product.** They are derived from the prose, they
+  are megabytes of binary, and they change whenever a sentence does. Do not
+  commit them; `.gitignore` already covers `*.voice/`.
+
+Narration is opt-in everywhere downstream, because it is heavier than everything
+else on the page put together:
+
+```sh
+cinegram preview diagram.dgm --with-voice     # a self-contained narrated page
+cinegram compile diagram.dgm --with-voice     # the timeline, to inspect
+```
+
+A page built *without* it still speaks: the prose is in every step, and the
+player falls back to the browser's own synthesizer. So the Voice button works
+with no sidecar, no synthesizer installed and nothing embedded — the recording
+is what makes it sound the same for everyone, and what lets it appear in a video.
 
 ## Delivering it
 
@@ -149,9 +203,11 @@ The rungs are ordinary scenarios, so everything downstream already works — and
 `--reel` is worth knowing about here specifically:
 
 ```sh
-cinegram record diagram.dgm -o eli5.mp4 --scenario s1 --reel --format mp4
+cinegram record diagram.dgm -o eli5.mp4 --scenario s1 --reel --format mp4 --with-voice
 ```
 
-That is the child rung as a portrait video, which is the form an explanation
-like this usually wants to travel in. `--scenario` takes the compiled id
-(`s0`, `s1`, …) as `cinegram compile` reports it.
+That is the child rung as a **narrated portrait video**, which is the form an
+explanation like this usually wants to travel in. `--scenario` takes the compiled
+id (`s0`, `s1`, …) as `cinegram compile` reports it, and `--with-voice` needs
+`mp4` or `webm` — a GIF has no audio track, and asking for one says so rather
+than quietly writing a silent file.

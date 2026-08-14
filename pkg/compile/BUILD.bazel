@@ -13,6 +13,7 @@ go_library(
         "//pkg/loader",
         "//pkg/symbol",
         "//pkg/units",
+        "//pkg/voice",
     ],
 )
 
@@ -25,5 +26,6 @@ go_test(
         "//pkg/ir",
         "//pkg/loader",
         "//pkg/parser",
+        "//pkg/voice",
     ],
 )

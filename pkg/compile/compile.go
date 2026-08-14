@@ -18,6 +18,7 @@ import (
 	"github.com/tejaspanse/cinegram/pkg/loader"
 	"github.com/tejaspanse/cinegram/pkg/symbol"
 	"github.com/tejaspanse/cinegram/pkg/units"
+	"github.com/tejaspanse/cinegram/pkg/voice"
 )
 
 const (
@@ -44,8 +45,20 @@ const (
 // A document that declares views compiles here with those bindings unresolved —
 // use CompileBundle to follow them.
 func Compile(doc *ast.Document, table *symbol.Table, bag *diag.Bag) *ir.Timeline {
-	v := compileView(doc, table, "main", "", nil, nil, bag)
+	v := compileView(doc, table, "main", "", nil, assets{}, bag)
 	return &ir.Timeline{Version: ir.Version, Root: v.ID, Views: []ir.View{v}}
+}
+
+// assets is everything the loader read from disk on a document's behalf, already
+// inlined as data URIs: the storyboard images, and the narration clips keyed by
+// the prose they speak.
+//
+// It travels as one value because Compile lowers a document that never had a
+// filesystem and passes it empty — a zero assets is a document that draws and
+// animates and says nothing aloud, which is the ordinary case.
+type assets struct {
+	frames map[string]string
+	voice  map[string]voice.Loaded
 }
 
 // CompileBundle lowers every document a loader reached into one timeline, so a
@@ -54,16 +67,17 @@ func CompileBundle(b *loader.Bundle) *ir.Timeline {
 	t := &ir.Timeline{Version: ir.Version, Root: b.Root}
 	for _, u := range b.Units {
 		t.Views = append(t.Views, compileView(
-			u.Result.Document, u.Result.Symbols, u.ViewID, u.Title, u.Views, u.FrameData, u.Bag))
+			u.Result.Document, u.Result.Symbols, u.ViewID, u.Title, u.Views,
+			assets{frames: u.FrameData, voice: u.VoiceData}, u.Bag))
 	}
 	return t
 }
 
 // compileView lowers one document. aliases maps the local `view` names the
 // document used onto canonical view ids; it is nil when compiling standalone.
-// frameData maps each storyboard image path onto the data URI the loader read
-// for it, and is likewise nil when there was no filesystem to read from.
-func compileView(doc *ast.Document, table *symbol.Table, id, title string, aliases, frameData map[string]string, bag *diag.Bag) ir.View {
+// a carries what the loader read from disk — storyboard images and narration —
+// and is likewise empty when there was no filesystem to read from.
+func compileView(doc *ast.Document, table *symbol.Table, id, title string, aliases map[string]string, a assets, bag *diag.Bag) ir.View {
 	v := ir.View{
 		ID:      id,
 		Title:   title,
@@ -112,10 +126,10 @@ func compileView(doc *ast.Document, table *symbol.Table, id, title string, alias
 	scenarios := resolveRetellings(resolveVariants(doc.Scenarios))
 	v.Scenarios = make([]ir.Scenario, 0, len(scenarios))
 	for i, sc := range scenarios {
-		v.Scenarios = append(v.Scenarios, compileScenario(sc, i, table, bag))
+		v.Scenarios = append(v.Scenarios, compileScenario(sc, i, table, a.voice, bag))
 	}
 
-	v.Storyboard = compileStoryboard(doc.Storyboards, frameData)
+	v.Storyboard = compileStoryboard(doc.Storyboards, a.frames)
 	v.Bindings, v.Hidden = compileBindings(doc.Interactions, table, aliases)
 	return v
 }
@@ -417,7 +431,7 @@ func expand(name string, table *symbol.Table) []string {
 	return out
 }
 
-func compileScenario(sc *ast.Scenario, index int, table *symbol.Table, bag *diag.Bag) ir.Scenario {
+func compileScenario(sc *ast.Scenario, index int, table *symbol.Table, clips map[string]voice.Loaded, bag *diag.Bag) ir.Scenario {
 	out := ir.Scenario{
 		ID:    "s" + strconv.Itoa(index),
 		Name:  sc.Name,
@@ -440,9 +454,23 @@ func compileScenario(sc *ast.Scenario, index int, table *symbol.Table, bag *diag
 	// diagram's repeated messages from the start.
 	seen := hopCount{}
 
+	// `pace: voice` is opt-in because it lets the recordings move the clock, and
+	// the clock is otherwise entirely the author's. Without it a step keeps the
+	// length it was written to have and a long sentence is simply cut off by the
+	// next beat; with it, no step ends before it has finished speaking.
+	fitVoice := sc.Attrs.String("pace") == "voice"
+	if p := sc.Attrs.String("pace"); p != "" && p != "voice" {
+		v, _ := sc.Attrs.Get("pace")
+		bag.WarnHintf(v.At, "the only pace is `voice`, which stretches each step to fit its narration",
+			"unknown pace %q", p)
+	}
+
 	cursor := 0
 	for i, st := range sc.Steps {
 		start := cursor + attrMillis(st.Attrs, "delay", 0, bag)
+		desc := st.Attrs.String("desc")
+		clip := clips[voice.Key(desc)]
+
 		span := stepSpan(st, bag)
 		if span < minStepMillis {
 			// A note rather than an error: the clamp is invisible to a viewer,
@@ -453,11 +481,23 @@ func compileScenario(sc *ast.Scenario, index int, table *symbol.Table, bag *diag
 				st.EffectiveID(i), span, minStepMillis)
 			span = minStepMillis
 		}
+		// Stretching before layout rather than after is what makes this cheap and
+		// correct: the flows inside keep the durations they were given, while a
+		// stateful action that spans "its whole step" spans the longer one, so a
+		// highlight holds until the sentence about it is finished.
+		//
+		// After the minimum clamp, not before: that warning is about the span the
+		// author wrote, and a step stretched to fit a ten-second line would
+		// otherwise hide the fact that `dur: 1ms` was a typo.
+		if fitVoice && clip.Ms > span {
+			span = clip.Ms
+		}
 
 		step := ir.Step{
 			ID:    st.EffectiveID(i),
 			Name:  st.Name,
-			Desc:  st.Attrs.String("desc"),
+			Desc:  desc,
+			Audio: clip.Data,
 			Start: start,
 			End:   start + span,
 		}

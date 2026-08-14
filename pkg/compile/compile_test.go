@@ -12,6 +12,7 @@ import (
 	"github.com/tejaspanse/cinegram/pkg/ir"
 	"github.com/tejaspanse/cinegram/pkg/loader"
 	"github.com/tejaspanse/cinegram/pkg/parser"
+	"github.com/tejaspanse/cinegram/pkg/voice"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -392,6 +393,142 @@ scenario "x"
 	}
 	if len(sc.Persistent) != 1 || sc.Persistent[0].Start != 300 {
 		t.Fatalf("persistent = %+v, want one track firing at 300", sc.Persistent)
+	}
+}
+
+// compileNarrated lowers src as if the loader had found a sidecar, with each
+// line's duration taken from clips (keyed by the prose, as the sidecar keys it).
+func compileNarrated(t *testing.T, src string, clips map[string]int) *ir.Timeline {
+	t.Helper()
+	res, bag := parser.Parse("inline.dgm", src)
+	if bag.HasErrors() {
+		t.Fatalf("unexpected diagnostics:\n%s", bag)
+	}
+	loaded := map[string]voice.Loaded{}
+	for text, ms := range clips {
+		loaded[voice.Key(text)] = voice.Loaded{Data: "data:audio/mp4;base64,AA", Ms: ms}
+	}
+	return CompileBundle(&loader.Bundle{Root: "main", Units: []*loader.Unit{{
+		ViewID: "main", Result: res, Bag: bag,
+		Views: map[string]string{}, FrameData: map[string]string{}, VoiceData: loaded,
+	}}})
+}
+
+// TestNarrationAttachesToTheStepThatSaysIt covers the key being the prose rather
+// than the step: that is what lets a retelling reuse a recording and what makes a
+// reworded sentence, and only that sentence, need re-recording.
+func TestNarrationAttachesToTheStepThatSaysIt(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "x"
+  step one "One" {
+    desc: "the first line"
+    flow a -> b { dur: 400ms }
+  }
+  step two "Two" {
+    desc: "unrecorded"
+    flow a -> b { dur: 400ms }
+  }
+`
+	sc := compileNarrated(t, src, map[string]int{"the first line": 3000}).Views[0].Scenarios[0]
+
+	if sc.Steps[0].Audio == "" {
+		t.Error("the recorded step carries no clip")
+	}
+	if sc.Steps[1].Audio != "" {
+		t.Error("a step with no recording was given one")
+	}
+	// Without `pace: voice` the author's clock is untouched, even though the line
+	// is far longer than the beat.
+	if sc.Duration != 800 {
+		t.Errorf("duration = %d, want the authored 800 — narration must not move the clock unasked", sc.Duration)
+	}
+}
+
+// TestPaceVoiceStretchesEachStepToItsLine covers the opt-in that makes narrated
+// video work. A step is as long as its animation needs and a line as long as it
+// takes to say, and the second is routinely much longer.
+func TestPaceVoiceStretchesEachStepToItsLine(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "x" { pace: voice }
+  step one "One" {
+    desc: "a long sentence"
+    flow a -> b { dur: 400ms }
+    highlight b { style: active }
+  }
+  step two "Two" {
+    desc: "a short one"
+    flow a -> b { dur: 400ms }
+  }
+`
+	sc := compileNarrated(t, src, map[string]int{
+		"a long sentence": 5000,
+		"a short one":     200, // shorter than the step: the step keeps its own length
+	}).Views[0].Scenarios[0]
+
+	if got := sc.Steps[0].End - sc.Steps[0].Start; got != 5000 {
+		t.Errorf("step one spans %d, want 5000 to fit its line", got)
+	}
+	if got := sc.Steps[1].End - sc.Steps[1].Start; got != 400 {
+		t.Errorf("step two spans %d, want the authored 400 — a short line must not shrink a step", got)
+	}
+	if sc.Steps[1].Start != 5000 {
+		t.Errorf("step two starts at %d, want 5000 — steps still run in sequence", sc.Steps[1].Start)
+	}
+
+	// The flow keeps the duration it was given; what stretches is the step, and
+	// with it the stateful action that spans one. Otherwise "wait for the voice"
+	// would silently slow every arrow down.
+	var flow, highlight *ir.Track
+	for i := range sc.Steps[0].Tracks {
+		switch sc.Steps[0].Tracks[i].Kind {
+		case ir.TrackFlow:
+			flow = &sc.Steps[0].Tracks[i]
+		case ir.TrackHighlight:
+			highlight = &sc.Steps[0].Tracks[i]
+		}
+	}
+	if flow == nil || highlight == nil {
+		t.Fatalf("expected a flow and a highlight, got %+v", sc.Steps[0].Tracks)
+	}
+	if got := flow.End - flow.Start; got != 400 {
+		t.Errorf("the flow now takes %d, want its authored 400", got)
+	}
+	if got := highlight.End - highlight.Start; got != 5000 {
+		t.Errorf("the highlight spans %d, want the whole stretched step", got)
+	}
+}
+
+// TestUnknownPaceWarnsAndChangesNothing keeps a typo from silently doing nothing
+// at all — `pace: voiced` would otherwise look like it had worked.
+func TestUnknownPaceWarnsAndChangesNothing(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "x" { pace: sideways }
+  step one "One" {
+    desc: "a long sentence"
+    flow a -> b { dur: 400ms }
+  }
+`
+	res, bag := parser.Parse("inline.dgm", src)
+	tl := CompileBundle(&loader.Bundle{Root: "main", Units: []*loader.Unit{{
+		ViewID: "main", Result: res, Bag: bag,
+		Views: map[string]string{}, FrameData: map[string]string{},
+		VoiceData: map[string]voice.Loaded{voice.Key("a long sentence"): {Ms: 5000}},
+	}}})
+
+	if bag.HasErrors() {
+		t.Errorf("an unknown pace should warn, not fail: %s", bag)
+	}
+	if !strings.Contains(bag.String(), "pace") {
+		t.Errorf("the warning should name pace: %s", bag)
+	}
+	if got := tl.Views[0].Scenarios[0].Duration; got != 400 {
+		t.Errorf("duration = %d, want the authored 400", got)
 	}
 }
 

@@ -161,7 +161,7 @@ func TestVideoCommandLine(t *testing.T) {
 	}
 
 	out := filepath.Join(dir, "out.mp4")
-	err := encodeVideo(stub, dir, recordOptions{output: out, format: "mp4", fps: 12})
+	err := encodeVideo(stub, dir, recordOptions{output: out, format: "mp4", fps: 12}, narration{})
 	if err != nil {
 		t.Fatalf("encodeVideo: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestVideoCommandLine(t *testing.T) {
 	// webm picks a different codec but keeps the same shape.
 	if err := encodeVideo(stub, dir, recordOptions{
 		output: filepath.Join(dir, "out.webm"), format: "webm", fps: 12,
-	}); err != nil {
+	}, narration{}); err != nil {
 		t.Fatalf("encodeVideo(webm): %v", err)
 	}
 	raw, _ = os.ReadFile(argvFile)
@@ -212,7 +212,7 @@ func TestVideoFailureSurfacesTheEncodersComplaint(t *testing.T) {
 
 	err := encodeVideo(stub, dir, recordOptions{
 		output: filepath.Join(dir, "out.mp4"), format: "mp4", fps: 12,
-	})
+	}, narration{})
 	if err == nil {
 		t.Fatal("a failing encoder was reported as success")
 	}

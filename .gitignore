@@ -36,3 +36,9 @@ dist/
 .npm/
 # Repo-local GitHub identity, referenced by core.sshCommand. Never committed.
 .ssh/
+
+# Recorded narration. `cinegram voice` regenerates it from the prose in the
+# document, so the clips are derived, and they are megabytes of binary that
+# would land in every clone and change with every reworded sentence. The words
+# are the source; the audio is a build product.
+*.voice/

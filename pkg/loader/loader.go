@@ -15,6 +15,7 @@ package loader
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -25,10 +26,30 @@ import (
 
 	"github.com/tejaspanse/cinegram/pkg/diag"
 	"github.com/tejaspanse/cinegram/pkg/parser"
+	"github.com/tejaspanse/cinegram/pkg/source"
+	"github.com/tejaspanse/cinegram/pkg/voice"
 )
 
 // ReadFileFunc reads a source file. os.ReadFile satisfies it.
 type ReadFileFunc func(path string) ([]byte, error)
+
+// Option adjusts what Load pulls in besides the documents themselves.
+type Option func(*config)
+
+type config struct{ voice bool }
+
+// WithVoice inlines the narration sidecar beside each document, if it has one.
+//
+// Off by default, and the default is the important half. A recorded document's
+// clips are megabytes — far more than the diagram, the timeline and the runtime
+// together — so a page that embeds them has to be asked for. Leaving it off also
+// keeps compilation a pure function of the checked-in sources: the demo site
+// regenerates to the same bytes whether or not the person running it happens to
+// have recorded narration locally, which is what keeps //site:site_test honest.
+//
+// A page built without this still narrates. The prose is in every step's Desc,
+// and speaking it is something the browser can do unaided.
+func WithVoice() Option { return func(c *config) { c.voice = true } }
 
 // Unit is one parsed source file in a bundle.
 type Unit struct {
@@ -47,6 +68,15 @@ type Unit struct {
 	// view paths resolve here: the parser never touches a filesystem, and the
 	// emitted page has to work from one anyway.
 	FrameData map[string]string
+
+	// VoiceData maps voice.Key(prose) to the recording of that prose, inlined
+	// the same way and for the same reasons as FrameData.
+	//
+	// It is empty unless a sidecar directory sits beside this document, and that
+	// absence is the opt-in: narration is only ever inlined into a page whose
+	// author ran `cinegram voice`, so no ordinary document pays for audio it
+	// never asked for.
+	VoiceData map[string]voice.Loaded
 }
 
 // Bundle is every document reachable from an entry file.
@@ -80,7 +110,11 @@ func (b *Bundle) HasErrors() bool {
 // it and loading continues, so one run surfaces every broken path rather than
 // stopping at the first. Only a failure to read the entry file itself is
 // returned as an error.
-func Load(path string, readFile ReadFileFunc) (*Bundle, error) {
+func Load(path string, readFile ReadFileFunc, opts ...Option) (*Bundle, error) {
+	var cfg config
+	for _, opt := range opts {
+		opt(&cfg)
+	}
 	root := filepath.Clean(path)
 
 	content, err := readFile(root)
@@ -102,6 +136,9 @@ func Load(path string, readFile ReadFileFunc) (*Bundle, error) {
 	for i := 0; i < len(bundle.Units); i++ {
 		u := bundle.Units[i]
 		loadFrames(u, readFile)
+		if cfg.voice {
+			loadVoice(u, readFile)
+		}
 
 		for _, decl := range u.Result.Document.Views {
 			if decl.Path == "" || filepath.IsAbs(decl.Path) {
@@ -141,6 +178,66 @@ func parseUnit(path, viewID, title string, content []byte) *Unit {
 		Bag:       bag,
 		Views:     map[string]string{},
 		FrameData: map[string]string{},
+		VoiceData: map[string]voice.Loaded{},
+	}
+}
+
+// loadVoice inlines whatever narration sits beside this unit.
+//
+// The sidecar is found at a known path rather than by listing a directory, which
+// keeps the loader's whole contact with the filesystem inside the readFile it was
+// handed — a missing manifest is an ordinary read error and simply means this
+// document has no recorded narration.
+//
+// Nothing here is fatal. A document narrates or it does not; a half-written
+// sidecar should cost the author a warning and a page that still animates, not a
+// build. The one thing worth an error is a manifest from a *newer* format, since
+// carrying on would mean guessing at fields this binary does not know.
+func loadVoice(u *Unit, readFile ReadFileFunc) {
+	dir := voice.DirFor(u.Path)
+
+	raw, err := readFile(filepath.Join(dir, voice.ManifestName))
+	if err != nil {
+		return // no sidecar: the common case, and not a problem
+	}
+
+	var m voice.Manifest
+	if err := json.Unmarshal(raw, &m); err != nil {
+		u.Bag.WarnHintf(source.Pos{Line: 1, Col: 1}, "re-run `cinegram voice` on this file to rebuild it",
+			"the narration manifest in %s is unreadable: %v", dir, err)
+		return
+	}
+	if m.Version > voice.Version {
+		u.Bag.ErrorHintf(source.Pos{Line: 1, Col: 1}, "upgrade cinegram, or delete "+dir+" and re-record it",
+			"the narration in %s is version %d and this binary understands %d", dir, m.Version, voice.Version)
+		return
+	}
+
+	for key, clip := range m.Clips {
+		if clip.File == "" {
+			continue
+		}
+		mime := clip.MIME
+		if mime == "" {
+			mime = voice.MIMEFor[strings.ToLower(filepath.Ext(clip.File))]
+		}
+		if mime == "" {
+			u.Bag.WarnHintf(source.Pos{Line: 1, Col: 1}, "re-record it as .wav or .m4a",
+				"narration clip %s has an audio type this cannot inline", clip.File)
+			continue
+		}
+
+		data, err := readFile(filepath.Clean(filepath.Join(dir, clip.File)))
+		if err != nil {
+			u.Bag.WarnHintf(source.Pos{Line: 1, Col: 1}, "re-run `cinegram voice` on this file",
+				"cannot read narration clip %s: %v", clip.File, err)
+			continue
+		}
+
+		u.VoiceData[key] = voice.Loaded{
+			Data: "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data),
+			Ms:   clip.Ms,
+		}
 	}
 }
 

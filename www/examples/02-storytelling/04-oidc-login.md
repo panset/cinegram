@@ -214,5 +214,5 @@ An OIDC login through authapiservice, as the shared engine actually runs it.
       }
     ```
 
-← [authorization code flow](../02-storytelling/03-oauth-login.md)  
+← [oauth login](../02-storytelling/03-oauth-login.md)  
 → [the cascade](../03-interaction/01-incident-triage.md)

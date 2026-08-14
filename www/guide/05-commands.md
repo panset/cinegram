@@ -14,6 +14,7 @@ cinegram frame   <file.dgm> --at 1620ms -o still.png   # one exact moment
 cinegram record  <file.dgm> -o out.gif      # a GIF, mp4 or webm of one scenario
 cinegram sheet   <file.dgm> -o sheet.png    # a labelled grid, one cell per step
 cinegram narrate <file.dgm> [--format=md|json]   # the animation, written out
+cinegram voice   <file.dgm> [--voice NAME]  # record the prose as speech
 cinegram lint    <file.dgm> [--format=text|json] [--strict] [--fix] # diagnostics only
 cinegram mcp                                # the same tools over MCP, on stdio
 ```
@@ -135,6 +136,7 @@ first".
 | `--width`, `--height` | `1280`, `720` | Rounded up to even, which yuv420p requires and a GIF does not mind. |
 | `--reel` | off | The `?reel` story page at 1080×1920, auto-follow camera included. Explicit dimensions still win, per axis. |
 | `--scenario`, `--view` | the first / the entry document | Which walkthrough to record. |
+| `--with-voice` | off | Mix in the narration from `<file>.voice/`, each line delayed to the step it explains. Needs `mp4` or `webm`; a GIF has no audio track and says so rather than writing a silent file. |
 | `--progress` | off | `cinegram-progress capture <i> <n>` per frame and one `cinegram-progress encode`, on stderr, for a host drawing a progress bar. Purely additive: the human-readable lines are unchanged. |
 
 ### Contact sheets

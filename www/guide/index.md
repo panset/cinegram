@@ -10,7 +10,7 @@ What a `.dgm` file is made of, and the three diagram kinds it can animate.
 
 ## [Telling the story](02-storytelling.md)
 
-Turning a diagram that moves into one that explains: narration, state that persists, where to look, and what happens when it goes wrong.
+Turning a diagram that moves into one that explains: narration at whatever level the reader needs, read aloud if you like, state that persists, where to look, and what happens when it goes wrong.
 
 ## [Presenting and sharing](03-presenting.md)
 

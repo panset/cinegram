@@ -10,7 +10,7 @@ GET /api/orders · ship a release
 
 ## [storytelling](02-storytelling/index.md)
 
-payment checkout · cut over to v1.5 · authorization code flow · sign in with an external IdP
+payment checkout · cut over to v1.5 · oauth login · sign in with an external IdP
 
 ## [interaction](03-interaction/index.md)
 

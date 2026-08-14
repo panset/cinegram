@@ -49,6 +49,12 @@ var scenarioAttrs = map[string]string{
 	// are for; it steers nothing in the timeline and exists so tooling can pick
 	// a reading level, or a narrating voice, without parsing the name.
 	"retells": "string", "audience": "string",
+
+	// `pace: voice` lets recorded narration set the clock, stretching each step
+	// to at least the length of the line spoken over it. Opt-in, because the
+	// timing is otherwise entirely the author's and a synthesizer should not get
+	// to move a beat without being asked.
+	"pace": "string",
 }
 
 var stepAttrs = map[string]string{

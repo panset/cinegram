@@ -17,6 +17,7 @@ import (
 	"github.com/tejaspanse/cinegram/pkg/compile"
 	"github.com/tejaspanse/cinegram/pkg/gifenc"
 	"github.com/tejaspanse/cinegram/pkg/loader"
+	"github.com/tejaspanse/cinegram/pkg/voice"
 )
 
 // `record` is `frame` run in a loop and then encoded. That is the whole design,
@@ -68,6 +69,7 @@ type recordOptions struct {
 	view     string
 	progress bool
 	reel     bool
+	voice    bool
 }
 
 // parseRecordOptions is the parse-and-validate half of cmdRecord, separated so
@@ -83,6 +85,7 @@ func parseRecordOptions(args []string) (recordOptions, error) {
 		fs.IntVar(&opt.height, "height", 720, "viewport height")
 		fs.StringVar(&opt.scenario, "scenario", "", "scenario id or name (default: the first)")
 		fs.StringVar(&opt.view, "view", "", "view id (default: the one the document opens on)")
+		fs.BoolVar(&opt.voice, "with-voice", false, "mix in the narration recorded in <file>.voice/")
 		fs.BoolVar(&opt.progress, "progress", false,
 			"report capture progress on stderr, one line per frame")
 		fs.BoolVar(&opt.reel, "reel", false,
@@ -182,13 +185,23 @@ func runRecord(opt recordOptions, stderr io.Writer) error {
 		}
 	}
 
-	bundle, err := loader.Load(opt.input, os.ReadFile)
+	bundle, err := loader.Load(opt.input, os.ReadFile, voiceOpts(opt.voice)...)
 	if err != nil {
 		return err
 	}
 	timeline := compile.CompileBundle(bundle)
 	if err := reportAll(bundle.Bags(), stderr); err != nil {
 		return err
+	}
+	if opt.voice && !hasNarration(timeline) {
+		return fmt.Errorf("--with-voice but %s holds no clips; run `cinegram voice %s` first",
+			voice.DirFor(opt.input), opt.input)
+	}
+	// A GIF has no audio track at all, so asking for narration in one is a
+	// request that cannot be met — better to say so than to write a silent file
+	// the author only discovers is silent after sending it to someone.
+	if opt.voice && opt.format == "gif" {
+		return fmt.Errorf("a GIF cannot carry sound; record --format mp4 or webm for narration")
 	}
 
 	viewID := opt.view
@@ -241,11 +254,31 @@ func runRecord(opt recordOptions, stderr io.Writer) error {
 		fmt.Fprintln(stderr, progressPrefix+" encode")
 	}
 
+	var mix narration
+	if opt.voice {
+		cues, err := writeCues(dir, stepsOf(timeline, viewID, scenarioID), clipsFor(bundle, viewID))
+		if err != nil {
+			return err
+		}
+		mix = mixArgs(cues, opt.format)
+
+		// Narration that runs past the last frame is cut off by -shortest, and
+		// lines that outlast their steps also talk over each other on the way
+		// there. Say so, with the fix, rather than shipping a video whose voice
+		// stops mid-sentence.
+		if over := narrationOverrun(cues, duration); over > 0 {
+			fmt.Fprintf(stderr,
+				"cinegram: warning: the narration runs %.1fs past the end of the animation and will be cut off.\n"+
+					"  add `pace: voice` to the scenario so each step waits for its line\n",
+				float64(over)/1000)
+		}
+	}
+
 	if opt.format == "gif" {
 		if err := writeGIF(opt.output, paths, opt.fps); err != nil {
 			return err
 		}
-	} else if err := encodeVideo(ffmpeg, dir, opt); err != nil {
+	} else if err := encodeVideo(ffmpeg, dir, opt, mix); err != nil {
 		return err
 	}
 
@@ -429,8 +462,9 @@ func findFFmpeg() (string, error) {
 // the browser time that produced the frames.
 const ffmpegTimeout = 120 * time.Second
 
-// encodeVideo turns the captured PNG sequence into a video.
-func encodeVideo(ffmpeg, dir string, opt recordOptions) error {
+// encodeVideo turns the captured PNG sequence into a video, mixing in narration
+// when there is any.
+func encodeVideo(ffmpeg, dir string, opt recordOptions, mix narration) error {
 	// -framerate before -i, because it describes the *input* sequence; after
 	// -i it would set the output rate and duplicate or drop frames instead.
 	args := []string{
@@ -438,6 +472,9 @@ func encodeVideo(ffmpeg, dir string, opt recordOptions) error {
 		"-framerate", fmt.Sprint(opt.fps),
 		"-i", filepath.Join(dir, "frame-%04d.png"),
 	}
+	// Every narration clip is another input, and they all have to be declared
+	// before the filter graph that references them by index.
+	args = append(args, mix.inputs...)
 	switch opt.format {
 	case "mp4":
 		// yuv420p and faststart are what make the file play in a browser and
@@ -447,6 +484,7 @@ func encodeVideo(ffmpeg, dir string, opt recordOptions) error {
 	case "webm":
 		args = append(args, "-c:v", "libvpx-vp9", "-pix_fmt", "yuv420p", "-b:v", "0", "-crf", "32")
 	}
+	args = append(args, mix.mix...)
 	args = append(args, opt.output)
 
 	cmd := exec.Command(ffmpeg, args...)

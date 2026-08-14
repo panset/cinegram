@@ -82,4 +82,4 @@ A blue/green deployment: how traffic moves to a new version with no gap.
     ```
 
 ← [payment checkout](../02-storytelling/01-payment-checkout.md)  
-→ [authorization code flow](../02-storytelling/03-oauth-login.md)
+→ [oauth login](../02-storytelling/03-oauth-login.md)
