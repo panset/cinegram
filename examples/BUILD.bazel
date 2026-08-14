@@ -1,0 +1,24 @@
+# The examples as files, for the two things that ship them rather than compile
+# them. This directory only became a package to hold these; the root BUILD's
+# `//:examples` now delegates here, because a glob stops at a package boundary
+# and would otherwise have silently emptied.
+
+# Everything, for //site:site_test — it regenerates the whole demo site, which
+# reads the storyboard images and the narration alongside the .dgm sources.
+filegroup(
+    name = "all_files",
+    srcs = glob(["**"]),
+    visibility = ["//:__pkg__"],
+)
+
+# Only what the playground can serve. //web/playground:site resolves each file
+# named in examples.json individually, so a manifest entry with no file behind
+# it fails the assembly rather than shipping a picker that 404s.
+filegroup(
+    name = "playground_examples",
+    srcs = glob([
+        "*.dgm",
+        "frames/*.svg",
+    ]),
+    visibility = ["//web/playground:__pkg__"],
+)

@@ -6,5 +6,8 @@ bazel-*
 # preview written into docs/ stays invisible to git.
 !docs/index.html
 !docs/demos/*.html
+# The playground's page is a source file, not something a command emits: the
+# site is assembled from it at deploy time and never committed.
+!web/**/*.html
 .DS_Store
 dist/

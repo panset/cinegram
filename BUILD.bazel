@@ -14,7 +14,7 @@ exports_files(["LICENSE"])
 # fails the build.
 filegroup(
     name = "examples",
-    srcs = glob(["examples/**"]),
+    srcs = ["//examples:all_files"],
     visibility = ["//site:__pkg__"],
 )
 

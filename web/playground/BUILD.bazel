@@ -1,0 +1,40 @@
+# gazelle:ignore
+#
+# Hand-written for two reasons gazelle cannot be told about:
+#
+#   * it names a go_binary after its directory, and `//web/playground:playground`
+#     reads like the site rather than like the tool that assembles it;
+#   * `github.com/bazelbuild/rules_go/go/runfiles` comes from rules_go itself
+#     rather than from a go_deps lockfile — this repo has no third-party Go
+#     dependencies and wants none — so gazelle has nothing to resolve it with.
+
+load("@rules_go//go:def.bzl", "go_binary")
+
+# The four files the playground is, as opposed to the ones it borrows.
+filegroup(
+    name = "static",
+    srcs = [
+        "examples.json",
+        "index.html",
+        "playground.css",
+        "playground.js",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+# Everything is reached through runfiles, so the data list is the whole
+# ingredient list: change it and the assembler notices, rather than silently
+# shipping a page with a missing asset.
+go_binary(
+    name = "site",
+    srcs = ["site.go"],
+    data = [
+        ":static",
+        "//examples:playground_examples",
+        "//pkg/emit/html:browser_assets",
+        "//web/playground/wasm:cinegram_wasm",
+        "@go_sdk//:lib/wasm/wasm_exec.js",
+    ],
+    visibility = ["//visibility:public"],
+    deps = ["@rules_go//go/runfiles"],
+)

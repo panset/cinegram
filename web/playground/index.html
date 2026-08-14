@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cinegram playground</title>
+
+<!--
+  Everything here is served from this directory: the page has to work from a
+  GitHub Pages subpath with no server logic behind it, and the .wasm fetch has
+  to be same-origin for instantiateStreaming.
+
+  The scripts are classic, in order, and not deferred:
+    mermaid.min.js  the renderer runtime.js drives
+    runtime.js      the player, identical to the one `cinegram preview` emits
+    wasm_exec.js    the Go SDK's loader, defining `Go`
+    playground.js   this page
+
+  runtime.css comes first so playground.css can override the few page-level
+  rules it needs to; the body is NOT `.dgm-standalone`, so runtime.css's own
+  page layout stays switched off and this page owns the two panels.
+-->
+<link rel="stylesheet" href="runtime.css">
+<link rel="stylesheet" href="playground.css">
+</head>
+<body class="pg">
+
+<header class="pg-top">
+  <div class="pg-brand">
+    <span class="pg-logo">cinegram</span>
+    <span class="pg-tag">playground</span>
+  </div>
+  <div class="pg-actions">
+    <button type="button" id="pg-share" class="pg-btn">Share link</button>
+    <button type="button" id="pg-download" class="pg-btn">Download HTML</button>
+    <a class="pg-btn pg-btn-ghost" href="https://github.com/panset/cinegram" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</header>
+
+<main class="pg-main">
+  <section class="pg-left" id="pg-left">
+    <div class="pg-row">
+      <label class="pg-label" for="pg-examples">Example</label>
+      <select id="pg-examples" class="pg-select"></select>
+    </div>
+
+    <div class="pg-tabs" id="pg-tabs"></div>
+
+    <textarea id="pg-editor" class="pg-editor" spellcheck="false" autocomplete="off"
+      autocapitalize="off" autocorrect="off" wrap="off"
+      placeholder="Paste a Mermaid diagram, then add a scenario block…"></textarea>
+
+    <div class="pg-attach" id="pg-attach">
+      <div class="pg-attach-head">
+        <span class="pg-label">Attachments</span>
+        <button type="button" id="pg-attach-add" class="pg-btn pg-btn-small">Add files…</button>
+        <input type="file" id="pg-attach-input" multiple hidden
+          accept=".dgm,.svg,.png,.jpg,.jpeg,.gif,.webp">
+      </div>
+      <p class="pg-attach-hint">Drop <code>.dgm</code> files and storyboard images here — <code>view … from</code> and <code>img:</code> resolve against them.</p>
+      <ul class="pg-attach-list" id="pg-attach-list"></ul>
+    </div>
+
+    <div class="pg-diagnostics" id="pg-diagnostics" hidden></div>
+  </section>
+
+  <section class="pg-right">
+    <div id="pg-boot" class="pg-boot">Loading the compiler…</div>
+    <div id="pg-player-host" class="pg-player-host"></div>
+  </section>
+</main>
+
+<script src="mermaid.min.js"></script>
+<script src="runtime.js"></script>
+<script src="wasm_exec.js"></script>
+<script src="playground.js"></script>
+</body>
+</html>
