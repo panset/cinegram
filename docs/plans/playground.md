@@ -242,7 +242,13 @@ go_binary(
     goos = "js",
     pure = "on",
     visibility = ["//web/playground:__subpackages__"],
-    deps = ["//pkg/compile", "//pkg/emit/html", "//pkg/envelope", "//pkg/loader"],
+    deps = [
+        "//pkg/compile",
+        "//pkg/diag",  # SeverityError.String() on the entry-unreadable path
+        "//pkg/emit/html",
+        "//pkg/envelope",
+        "//pkg/loader",
+    ],
 )
 ```
 
@@ -408,11 +414,13 @@ Actions"); (4) re-run the workflow (`gh workflow run pages.yml`) and verify
 
 ## Risks (known and accepted)
 
-1. `use_repo(go_sdk, "go_sdk")` naming regenerates the lockfile — validate
-   first thing in Phase 3; `bazel mod tidy` fixes complaints.
-2. WASM is ~15–20 MB raw (mermaid embed included); Pages gzip cuts it to
-   roughly a third. Accepted for v1 — do NOT "optimize" by dropping
-   `pkg/emit/html`; byte-identical Download HTML is the point.
+1. ~~`use_repo(go_sdk, "go_sdk")` naming regenerates the lockfile~~ —
+   resolved in Phase 3: no lockfile churn at all, `bazel mod tidy` had
+   nothing to say.
+2. WASM measured **6.4 MB** raw (mermaid embed included; the plan's 15–20 MB
+   guess was 3× high), ~2 MB gzipped on Pages. Do NOT "optimize" by dropping
+   `pkg/emit/html`; byte-identical Download HTML is the point (pinned by a
+   `cmp` against `cinegram preview` output in Phase 3 verification).
 3. Synchronous compile on the main thread — ms-scale for real docs; a Worker
    is the v2 fix (leave a comment, don't build it).
 4. `restore` on a reshaped timeline just restarts via try/catch (preview.js
