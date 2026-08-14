@@ -1,0 +1,77 @@
+%% A retelling is the same animation in different words, so this file pins the
+%% three things that has to mean: identical timing and tracks, prose replaced
+%% only where the retelling names a step, and a title inherited unless the
+%% retelling writes its own.
+%%
+%% The last pair pins the ordering guarantee: retellings resolve *after*
+%% variants, so retelling a variant sees the spliced steps.
+flowchart LR
+  browser[Browser]
+  app[Application]
+  auth[Authorization Server]
+
+  browser --> app
+  app --> auth
+
+scenario "engineer" { speed: 1.0 }
+
+  step start "The user asks to sign in" {
+    desc: "The application holds no credentials of its own to check, so it delegates."
+    flow browser -> app { label: "GET /login", dur: 600ms }
+    highlight app { style: active }
+  }
+
+  step redirect "The app redirects to the authorization server" {
+    desc: "The redirect carries a client id and a scope, but no secret."
+    flow app -> auth { label: "302 -> /authorize", dur: 700ms }
+  }
+
+  step done "Consent is recorded" {
+    desc: "The provider writes down what the user allowed."
+    highlight auth { style: busy, dur: 400ms }
+  }
+
+%% Every step overridden, none retitled: the titles come from the base.
+scenario "like you're 5" { retells: "engineer", audience: "kid" }
+
+  step start {
+    desc: "You tell the app you want to come in. It does not keep a list of keys, so it walks you to the front desk."
+  }
+
+  step redirect {
+    desc: "It hands you a note saying who is asking. The note holds no secrets, because anyone could read it on the way."
+  }
+
+  step done {
+    desc: "The front desk writes down what you said yes to."
+  }
+
+%% One step retitled, one step left alone: `done` keeps the engineer's prose.
+scenario "newcomer" { retells: "engineer", audience: "newcomer" }
+
+  step start "Signing in starts at the app" {
+    desc: "The app cannot check a password it never stores, so it sends you somewhere that can."
+  }
+
+  step redirect {
+    desc: "You arrive at the provider carrying only a request, never a credential."
+  }
+
+scenario "the user declines" { variant: "engineer", until: redirect, outcome: fail }
+
+  step refuse "The user says no" {
+    desc: "Consent is refused, and nothing is issued."
+    highlight auth { style: fail, dur: 400ms }
+  }
+
+%% Retelling a variant: the base is already spliced, so `start` and `redirect`
+%% are inherited from "engineer" and `refuse` belongs to the variant itself.
+scenario "declining, for a five year old" { retells: "the user declines", audience: "kid" }
+
+  step start {
+    desc: "You tell the app you want to come in."
+  }
+
+  step refuse "You change your mind" {
+    desc: "You say no thank you, and you get nothing — which is exactly right."
+  }

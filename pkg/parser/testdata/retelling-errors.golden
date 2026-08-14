@@ -1,0 +1,63 @@
+diagram: flowchart (flowchart LR)
+direction: LR
+
+nodes:
+  a          label="A"                      shape=rect      
+  b          label="B"                      shape=rect      
+
+edges:
+  e0   a -> b style=normal head=arrow
+
+scenario "base" {speed="1.0"}
+  step one "First" {desc="The engineer's words."}
+    flow a -> b {dur="500ms"}
+
+scenario "missing base" {retells="nope"}
+  step one "one" {desc="x"}
+
+scenario "self" {retells="self"}
+  step one "one" {desc="x"}
+
+scenario "carries actions" {retells="base"}
+  step one "one" {desc="x"}
+    flow a -> b {dur="200ms"}
+
+scenario "unknown step" {retells="base"}
+  step two "two" {desc="x"}
+
+scenario "anonymous step" {retells="base"}
+  step - "" {desc="x"}
+
+scenario "variant as well" {retells="base" variant="base"}
+  step one "one" {desc="x"}
+
+scenario "retells a retelling" {retells="missing base"}
+  step one "one" {desc="x"}
+
+scenario "overrides nothing" {retells="base"}
+  step one "one"
+
+scenario "overrides no step at all" {retells="base"}
+
+diagnostics:
+  15:36: error: no scenario named "nope" to retell
+    hint: did you mean base?
+    fix: 15:36 "\"nope\"" -> "\"base\""
+  19:28: error: scenario "self" retells itself
+    hint: name the scenario whose animation this one re-explains
+  25:3: error: step "one" of retelling "carries actions" has actions; a retelling overrides narration only
+    hint: keep the animation in "base" and leave only `desc` here
+  32:3: error: scenario "base" has no step "two" to retell
+    hint: known steps: one
+  36:3: error: a step of retelling "anonymous step" has no id to match against
+    hint: write `step <id> { desc: … }` naming the step of "base" to re-explain
+  38:39: error: scenario "variant as well" is both a variant and a retelling
+    hint: a variant changes what happens and a retelling changes what is said about it; split them into two scenarios
+  40:3: error: step id "one" is already inherited from scenario "base"
+    hint: rename this step; the inherited prefix already uses that id
+  42:43: error: scenario "missing base" is itself a retelling; a retelling cannot retell another retelling
+    hint: retell the original instead
+  48:3: warning: step "one" of retelling "overrides nothing" overrides nothing
+    hint: add `desc:` with the words this audience should hear
+  50:1: warning: retelling "overrides no step at all" overrides no narration
+    hint: override a step's `desc` to say it differently, or delete this scenario

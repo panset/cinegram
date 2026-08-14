@@ -149,6 +149,14 @@ type Scenario struct {
 	// rather than merely recolouring its name.
 	Outcome string `json:"outcome,omitempty"`
 
+	// Audience names who this telling of the walkthrough is written for, when a
+	// document carries several — a child, a newcomer, an engineer. It is an open
+	// label rather than a closed vocabulary, because reading levels are not a
+	// fixed set, and it steers no timing: two scenarios differing only in
+	// Audience animate identically and differ in their words. A renderer may
+	// group the picker by it, and a narrator may choose a voice from it.
+	Audience string `json:"audience,omitempty"`
+
 	Steps []Step `json:"steps"`
 
 	// Persistent holds state that outlives the step that set it: a badge, a

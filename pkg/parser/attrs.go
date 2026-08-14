@@ -41,6 +41,14 @@ var scenarioAttrs = map[string]string{
 	// a flow's `status` uses — the picker marks a failure, so an invented word
 	// would silently mark nothing.
 	"variant": "string", "until": "string", "outcome": "status",
+
+	// A retelling is the same animation in different words. `retells` names the
+	// scenario whose steps and timing it adopts wholesale, so an audience ladder
+	// — one diagram explained to a child, a newcomer and an engineer — costs one
+	// copy of the animation rather than three. `audience` labels who the words
+	// are for; it steers nothing in the timeline and exists so tooling can pick
+	// a reading level, or a narrating voice, without parsing the name.
+	"retells": "string", "audience": "string",
 }
 
 var stepAttrs = map[string]string{

@@ -109,7 +109,7 @@ func compileView(doc *ast.Document, table *symbol.Table, id, title string, alias
 		})
 	}
 
-	scenarios := resolveVariants(doc.Scenarios)
+	scenarios := resolveRetellings(resolveVariants(doc.Scenarios))
 	v.Scenarios = make([]ir.Scenario, 0, len(scenarios))
 	for i, sc := range scenarios {
 		v.Scenarios = append(v.Scenarios, compileScenario(sc, i, table, bag))
@@ -225,6 +225,123 @@ func spliceVariant(sc *ast.Scenario, byName map[string]*ast.Scenario) *ast.Scena
 	return &ast.Scenario{Name: sc.Name, Attrs: merged, Steps: steps, StartPos: sc.StartPos}
 }
 
+// resolveRetellings expands a narration overlay into an ordinary scenario.
+//
+// A retelling is the same animation in different words: `retells` names the
+// scenario whose steps, actions and timing it adopts wholesale, and its own
+// `step <id> { desc: … }` entries replace the prose on the steps they name.
+// That is what makes an audience ladder affordable — one diagram explained to a
+// child, a newcomer and an engineer costs one copy of the animation instead of
+// three, and the three cannot drift out of step with each other because there
+// is only one set of steps.
+//
+// It runs *after* resolveVariants, so a retelling of a variant retells the
+// already-spliced result and needs no knowledge of variants at all. Depth-1
+// applies to retellings alone: a retelling's base must not itself be one.
+//
+// An unresolvable retelling has already been reported by validation; here it
+// compiles as its own steps alone, because compilation stays total.
+func resolveRetellings(scenarios []*ast.Scenario) []*ast.Scenario {
+	byName := make(map[string]*ast.Scenario, len(scenarios))
+	for _, sc := range scenarios {
+		if sc.Name != "" && byName[sc.Name] == nil {
+			byName[sc.Name] = sc
+		}
+	}
+
+	out := make([]*ast.Scenario, 0, len(scenarios))
+	for _, sc := range scenarios {
+		out = append(out, spliceRetelling(sc, byName))
+	}
+	return out
+}
+
+func spliceRetelling(sc *ast.Scenario, byName map[string]*ast.Scenario) *ast.Scenario {
+	want, ok := sc.Attrs.Get("retells")
+	if !ok {
+		return sc
+	}
+	base := byName[want.Raw]
+	// Depth-1, for the same reason variants are: a base that is itself a
+	// retelling was rejected during validation, and honouring it here would
+	// compile something the author was told is not allowed.
+	if base == nil || base == sc || base.Attrs.Has("retells") {
+		return sc
+	}
+
+	// The retelling's steps are overrides keyed by the base step they name, not
+	// beats of their own — a retelling never changes what happens, only what is
+	// said about it.
+	override := make(map[string]*ast.Step, len(sc.Steps))
+	for i, st := range sc.Steps {
+		override[st.EffectiveID(i)] = st
+	}
+
+	steps := make([]*ast.Step, 0, len(base.Steps))
+	for i, bst := range base.Steps {
+		ov, has := override[bst.EffectiveID(i)]
+		if !has {
+			// Unchanged steps are shared rather than copied, exactly as a
+			// variant's inherited prefix is: nothing downstream mutates an
+			// ast.Step.
+			steps = append(steps, bst)
+			continue
+		}
+
+		// An overridden step *is* copied, which is the one place this differs
+		// from spliceVariant. Attrs wraps a map, so a shallow copy of the step
+		// would write the new prose through to the base and every other
+		// retelling of it.
+		clone := *bst
+		clone.Attrs = ast.Attrs{}
+		for _, k := range bst.Attrs.Keys() {
+			v, _ := bst.Attrs.Get(k)
+			clone.Attrs.Set(k, v)
+		}
+		for _, k := range ov.Attrs.Keys() {
+			v, _ := ov.Attrs.Get(k)
+			clone.Attrs.Set(k, v)
+		}
+		// A retelling may retitle the step as well as re-explain it, since the
+		// caption shows the name above the prose and "Alice opens a connection"
+		// is not how you say it to a child.
+		//
+		// Writing no title has to keep the base's, though, and parseStep has
+		// already defaulted an untitled step's Name to its ID — so a Name equal
+		// to the ID is one that was never written. Mistaking the two would
+		// replace every inherited title with a bare step id.
+		if ov.Name != "" && ov.Name != ov.ID {
+			clone.Name = ov.Name
+		}
+		steps = append(steps, &clone)
+	}
+
+	// Attributes are inherited and then overridden, which is the opposite of a
+	// variant's "keep only your own" — and it has to be, because a retelling is
+	// the *same* walkthrough. It plays at the base's speed, loops if the base
+	// loops, and above all ends the way the base ends: a retelling of a failure
+	// path that lost `outcome: fail` would lose the ✕ the picker draws, and the
+	// kid's telling of a story that goes wrong would claim to go right.
+	//
+	// The retelling's own attributes win, so any of them can still be restated,
+	// and `retells` itself drops out having been consumed. `audience` is only
+	// ever the retelling's own, since the base is not written for one.
+	merged := ast.Attrs{}
+	for _, k := range base.Attrs.Keys() {
+		v, _ := base.Attrs.Get(k)
+		merged.Set(k, v)
+	}
+	for _, k := range sc.Attrs.Keys() {
+		if k == "retells" {
+			continue
+		}
+		v, _ := sc.Attrs.Get(k)
+		merged.Set(k, v)
+	}
+
+	return &ast.Scenario{Name: sc.Name, Attrs: merged, Steps: steps, StartPos: sc.StartPos}
+}
+
 // compileBindings lowers click bindings and derives the set of elements that
 // start hidden.
 func compileBindings(bindings []*ast.Binding, table *symbol.Table, aliases map[string]string) ([]ir.Binding, []string) {
@@ -313,6 +430,7 @@ func compileScenario(sc *ast.Scenario, index int, table *symbol.Table, bag *diag
 		Poster:   attrMillis(sc.Attrs, "poster", 0, bag),
 		Stepwise: attrBool(sc.Attrs, "stepwise", false, bag),
 		Outcome:  sc.Attrs.String("outcome"),
+		Audience: sc.Attrs.String("audience"),
 	}
 
 	out.Steps = make([]ir.Step, 0, len(sc.Steps))

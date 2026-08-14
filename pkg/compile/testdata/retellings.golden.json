@@ -1,0 +1,400 @@
+{
+  "version": 2,
+  "root": "main",
+  "views": [
+    {
+      "id": "main",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% A retelling is the same animation in different words, so this file pins the\n%% three things that has to mean: identical timing and tracks, prose replaced\n%% only where the retelling names a step, and a title inherited unless the\n%% retelling writes its own.\n%%\n%% The last pair pins the ordering guarantee: retellings resolve *after*\n%% variants, so retelling a variant sees the spliced steps.\nflowchart LR\n  browser[Browser]\n  app[Application]\n  auth[Authorization Server]\n  browser --\u003e app\n  app --\u003e auth\n"
+      },
+      "nodes": [
+        {
+          "id": "browser",
+          "label": "Browser",
+          "shape": "rect"
+        },
+        {
+          "id": "app",
+          "label": "Application",
+          "shape": "rect"
+        },
+        {
+          "id": "auth",
+          "label": "Authorization Server",
+          "shape": "rect"
+        }
+      ],
+      "groups": [],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "browser",
+          "to": "app",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "app",
+          "to": "auth",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "engineer",
+          "duration": 1700,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "start",
+              "name": "The user asks to sign in",
+              "desc": "The application holds no credentials of its own to check, so it delegates.",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "browser",
+                  "to": "app",
+                  "label": "GET /login"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 600,
+                  "target": "app",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "redirect",
+              "name": "The app redirects to the authorization server",
+              "desc": "The redirect carries a client id and a scope, but no secret.",
+              "start": 600,
+              "end": 1300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "app",
+                  "to": "auth",
+                  "label": "302 -\u003e /authorize"
+                }
+              ]
+            },
+            {
+              "id": "done",
+              "name": "Consent is recorded",
+              "desc": "The provider writes down what the user allowed.",
+              "start": 1300,
+              "end": 1700,
+              "tracks": [
+                {
+                  "kind": "highlight",
+                  "start": 1300,
+                  "end": 1700,
+                  "target": "auth",
+                  "style": "busy"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "s1",
+          "name": "like you're 5",
+          "duration": 1700,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "audience": "kid",
+          "steps": [
+            {
+              "id": "start",
+              "name": "The user asks to sign in",
+              "desc": "You tell the app you want to come in. It does not keep a list of keys, so it walks you to the front desk.",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "browser",
+                  "to": "app",
+                  "label": "GET /login"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 600,
+                  "target": "app",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "redirect",
+              "name": "The app redirects to the authorization server",
+              "desc": "It hands you a note saying who is asking. The note holds no secrets, because anyone could read it on the way.",
+              "start": 600,
+              "end": 1300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "app",
+                  "to": "auth",
+                  "label": "302 -\u003e /authorize"
+                }
+              ]
+            },
+            {
+              "id": "done",
+              "name": "Consent is recorded",
+              "desc": "The front desk writes down what you said yes to.",
+              "start": 1300,
+              "end": 1700,
+              "tracks": [
+                {
+                  "kind": "highlight",
+                  "start": 1300,
+                  "end": 1700,
+                  "target": "auth",
+                  "style": "busy"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "s2",
+          "name": "newcomer",
+          "duration": 1700,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "audience": "newcomer",
+          "steps": [
+            {
+              "id": "start",
+              "name": "Signing in starts at the app",
+              "desc": "The app cannot check a password it never stores, so it sends you somewhere that can.",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "browser",
+                  "to": "app",
+                  "label": "GET /login"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 600,
+                  "target": "app",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "redirect",
+              "name": "The app redirects to the authorization server",
+              "desc": "You arrive at the provider carrying only a request, never a credential.",
+              "start": 600,
+              "end": 1300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "app",
+                  "to": "auth",
+                  "label": "302 -\u003e /authorize"
+                }
+              ]
+            },
+            {
+              "id": "done",
+              "name": "Consent is recorded",
+              "desc": "The provider writes down what the user allowed.",
+              "start": 1300,
+              "end": 1700,
+              "tracks": [
+                {
+                  "kind": "highlight",
+                  "start": 1300,
+                  "end": 1700,
+                  "target": "auth",
+                  "style": "busy"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "s3",
+          "name": "the user declines",
+          "duration": 1700,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "outcome": "fail",
+          "steps": [
+            {
+              "id": "start",
+              "name": "The user asks to sign in",
+              "desc": "The application holds no credentials of its own to check, so it delegates.",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "browser",
+                  "to": "app",
+                  "label": "GET /login"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 600,
+                  "target": "app",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "redirect",
+              "name": "The app redirects to the authorization server",
+              "desc": "The redirect carries a client id and a scope, but no secret.",
+              "start": 600,
+              "end": 1300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "app",
+                  "to": "auth",
+                  "label": "302 -\u003e /authorize"
+                }
+              ]
+            },
+            {
+              "id": "refuse",
+              "name": "The user says no",
+              "desc": "Consent is refused, and nothing is issued.",
+              "start": 1300,
+              "end": 1700,
+              "tracks": [
+                {
+                  "kind": "highlight",
+                  "start": 1300,
+                  "end": 1700,
+                  "target": "auth",
+                  "style": "fail"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "s4",
+          "name": "declining, for a five year old",
+          "duration": 1700,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "outcome": "fail",
+          "audience": "kid",
+          "steps": [
+            {
+              "id": "start",
+              "name": "The user asks to sign in",
+              "desc": "You tell the app you want to come in.",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "browser",
+                  "to": "app",
+                  "label": "GET /login"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 600,
+                  "target": "app",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "redirect",
+              "name": "The app redirects to the authorization server",
+              "desc": "The redirect carries a client id and a scope, but no secret.",
+              "start": 600,
+              "end": 1300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "app",
+                  "to": "auth",
+                  "label": "302 -\u003e /authorize"
+                }
+              ]
+            },
+            {
+              "id": "refuse",
+              "name": "You change your mind",
+              "desc": "You say no thank you, and you get nothing — which is exactly right.",
+              "start": 1300,
+              "end": 1700,
+              "tracks": [
+                {
+                  "kind": "highlight",
+                  "start": 1300,
+                  "end": 1700,
+                  "target": "auth",
+                  "style": "fail"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

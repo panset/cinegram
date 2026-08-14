@@ -1,0 +1,50 @@
+%% Every way a narration overlay can be wrong. `retelling-errors.golden` is the
+%% expected diagnostics, so this file is deliberately all mistakes.
+flowchart LR
+  a[A]
+  b[B]
+  a --> b
+
+scenario "base" { speed: 1.0 }
+
+  step one "First" {
+    desc: "The engineer's words."
+    flow a -> b { dur: 500ms }
+  }
+
+scenario "missing base" { retells: "nope" }
+
+  step one { desc: "x" }
+
+scenario "self" { retells: "self" }
+
+  step one { desc: "x" }
+
+scenario "carries actions" { retells: "base" }
+
+  step one {
+    desc: "x"
+    flow a -> b { dur: 200ms }
+  }
+
+scenario "unknown step" { retells: "base" }
+
+  step two { desc: "x" }
+
+scenario "anonymous step" { retells: "base" }
+
+  step { desc: "x" }
+
+scenario "variant as well" { retells: "base", variant: "base" }
+
+  step one { desc: "x" }
+
+scenario "retells a retelling" { retells: "missing base" }
+
+  step one { desc: "x" }
+
+scenario "overrides nothing" { retells: "base" }
+
+  step one { }
+
+scenario "overrides no step at all" { retells: "base" }

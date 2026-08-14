@@ -605,6 +605,215 @@ scenario "orphan" { variant: "nothing named this" }
 	}
 }
 
+// TestRetellingKeepsTheAnimationAndReplacesTheProse is the whole promise of a
+// retelling: an audience ladder is one animation explained several ways, so if
+// the timing or the tracks could differ between tellings, the tellings could
+// drift apart and the promise would be empty.
+func TestRetellingKeepsTheAnimationAndReplacesTheProse(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "engineer"
+  step one "opens" {
+    desc: "Alice sends a SYN."
+    flow a -> b { dur: 400ms }
+    highlight b { style: active }
+  }
+  step two "answers" {
+    desc: "Bob replies SYN-ACK."
+    flow a -> b { dur: 500ms }
+  }
+
+scenario "kid" { retells: "engineer", audience: "kid" }
+  step one { desc: "Alice knocks." }
+  step two { desc: "Bob shouts back." }
+`
+	tl := compileSource(t, src)
+	base, kid := tl.Views[0].Scenarios[0], tl.Views[0].Scenarios[1]
+
+	if base.Duration != kid.Duration {
+		t.Errorf("durations differ: base %d, retelling %d", base.Duration, kid.Duration)
+	}
+	if len(base.Steps) != len(kid.Steps) {
+		t.Fatalf("step counts differ: base %d, retelling %d", len(base.Steps), len(kid.Steps))
+	}
+	for i := range base.Steps {
+		b, k := base.Steps[i], kid.Steps[i]
+		if b.ID != k.ID || b.Start != k.Start || b.End != k.End {
+			t.Errorf("step %d: base %s[%d,%d], retelling %s[%d,%d] — a retelling must not move a beat",
+				i, b.ID, b.Start, b.End, k.ID, k.Start, k.End)
+		}
+		if len(b.Tracks) != len(k.Tracks) {
+			t.Errorf("step %d: base has %d tracks, retelling %d", i, len(b.Tracks), len(k.Tracks))
+		}
+		if b.Desc == k.Desc {
+			t.Errorf("step %d: desc %q was not replaced", i, k.Desc)
+		}
+	}
+	// Overriding copies the step rather than writing through the shared pointer,
+	// so the base still says what it said.
+	if base.Steps[0].Desc != "Alice sends a SYN." {
+		t.Errorf("base desc = %q, want it untouched by the retelling", base.Steps[0].Desc)
+	}
+}
+
+// TestRetellingInheritsWhatItDoesNotOverride pins the three-way distinction that
+// makes a partial overlay usable: silence inherits, a `desc` replaces prose, and
+// a written title replaces the title — while an untitled override keeps the
+// base's, since parseStep has already defaulted an untitled step's name to its id.
+func TestRetellingInheritsWhatItDoesNotOverride(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "engineer"
+  step one "engineer title" {
+    desc: "engineer prose one"
+    flow a -> b { dur: 400ms }
+  }
+  step two "left alone" {
+    desc: "engineer prose two"
+    flow a -> b { dur: 400ms }
+  }
+
+scenario "kid" { retells: "engineer" }
+  step one "kid title" { desc: "kid prose one" }
+`
+	kid := compileSource(t, src).Views[0].Scenarios[1]
+
+	if kid.Steps[0].Name != "kid title" || kid.Steps[0].Desc != "kid prose one" {
+		t.Errorf("overridden step = %q / %q, want both replaced", kid.Steps[0].Name, kid.Steps[0].Desc)
+	}
+	if kid.Steps[1].Name != "left alone" || kid.Steps[1].Desc != "engineer prose two" {
+		t.Errorf("untouched step = %q / %q, want the base's words", kid.Steps[1].Name, kid.Steps[1].Desc)
+	}
+}
+
+func TestRetellingKeepsTheBaseTitleWhenUntitled(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "engineer"
+  step one "the base title" {
+    desc: "engineer prose"
+    flow a -> b { dur: 400ms }
+  }
+
+scenario "kid" { retells: "engineer" }
+  step one { desc: "kid prose" }
+`
+	kid := compileSource(t, src).Views[0].Scenarios[1]
+	if got := kid.Steps[0].Name; got != "the base title" {
+		t.Errorf("name = %q, want the base's title — an untitled override must not fall back to the step id", got)
+	}
+}
+
+// TestRetellingInheritsScenarioAttributes matters most for `outcome`: a retelling
+// of a failure path that lost it would tell a child the story ends well, and the
+// picker would stop marking it.
+func TestRetellingInheritsScenarioAttributes(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "engineer" { speed: 2.0, outcome: fail, loop: true }
+  step one "x" {
+    desc: "engineer prose"
+    flow a -> b { dur: 400ms }
+  }
+
+scenario "kid" { retells: "engineer", audience: "kid" }
+  step one { desc: "kid prose" }
+
+scenario "faster" { retells: "engineer", speed: 3.0 }
+  step one { desc: "other prose" }
+`
+	views := compileSource(t, src).Views[0]
+	kid, faster := views.Scenarios[1], views.Scenarios[2]
+
+	if kid.Outcome != "fail" {
+		t.Errorf("outcome = %q, want fail inherited from the base", kid.Outcome)
+	}
+	if kid.Speed != 2.0 || !kid.Loop {
+		t.Errorf("speed/loop = %v/%v, want the base's 2/true", kid.Speed, kid.Loop)
+	}
+	if kid.Audience != "kid" {
+		t.Errorf("audience = %q, want the retelling's own", kid.Audience)
+	}
+	if views.Scenarios[0].Audience != "" {
+		t.Errorf("base audience = %q, want empty — the base is not written for one", views.Scenarios[0].Audience)
+	}
+	if faster.Speed != 3.0 {
+		t.Errorf("speed = %v, want the retelling's own override to win", faster.Speed)
+	}
+}
+
+// TestRetellingOfAVariantSeesTheSplicedSteps pins the pass ordering. Variants
+// resolve first, so a retelling overlays the merged result and needs to know
+// nothing about variants — which is why `retells` and `variant` never have to
+// compose in a single scenario.
+func TestRetellingOfAVariantSeesTheSplicedSteps(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "happy"
+  step one "first" {
+    desc: "engineer one"
+    flow a -> b { dur: 400ms }
+  }
+  step two "second" {
+    desc: "engineer two"
+    flow a -> b { dur: 400ms }
+  }
+
+scenario "sad" { variant: "happy", until: one, outcome: fail }
+  step boom "it breaks" {
+    desc: "engineer boom"
+    flow a -> b { dur: 300ms }
+  }
+
+scenario "sad for a child" { retells: "sad", audience: "kid" }
+  step one { desc: "kid one" }
+  step boom { desc: "kid boom" }
+`
+	tl := compileSource(t, src)
+	retold := tl.Views[0].Scenarios[2]
+
+	var ids []string
+	for _, st := range retold.Steps {
+		ids = append(ids, st.ID)
+	}
+	if strings.Join(ids, ",") != "one,boom" {
+		t.Errorf("steps = %v, want the variant's spliced steps", ids)
+	}
+	if retold.Duration != 400+300 {
+		t.Errorf("duration = %d, want the variant's %d", retold.Duration, 700)
+	}
+	if retold.Steps[0].Desc != "kid one" || retold.Steps[1].Desc != "kid boom" {
+		t.Errorf("prose = %q / %q, want both retold", retold.Steps[0].Desc, retold.Steps[1].Desc)
+	}
+	if retold.Outcome != "fail" {
+		t.Errorf("outcome = %q, want fail through the variant", retold.Outcome)
+	}
+}
+
+// TestUnresolvableRetellingStillCompiles keeps compilation total, exactly as the
+// variant case does.
+func TestUnresolvableRetellingStillCompiles(t *testing.T) {
+	const src = `flowchart LR
+  a --> b
+
+scenario "orphan" { retells: "nothing named this" }
+  step only { desc: "words with no animation to attach to" }
+`
+	res, bag := parser.Parse("inline.dgm", src)
+	if !bag.HasErrors() {
+		t.Fatal("expected the unresolvable retelling to be reported")
+	}
+	sc := Compile(res.Document, res.Symbols, bag).Views[0].Scenarios[0]
+	if len(sc.Steps) != 1 || sc.Steps[0].ID != "only" {
+		t.Errorf("scenario = %+v, want its own steps alone", sc)
+	}
+}
+
 // TestSceneInASeqCostsNoTime is what makes "the screen changes when the arrow
 // lands" expressible without arithmetic: a scene inside a seq fires where the
 // chain has reached and consumes none of it, so the hops around it keep their

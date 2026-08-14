@@ -19,6 +19,7 @@ import (
 func validateScenarios(scenarios []*ast.Scenario, t *symbol.Table, frames *frameSet, b *diag.Bag) {
 	names := knownNames(t)
 	validateVariants(scenarios, b)
+	validateRetellings(scenarios, b)
 
 	for _, sc := range scenarios {
 		checkAttrs(sc.Attrs, scenarioAttrs, "scenario", b)
@@ -36,7 +37,15 @@ func validateScenarios(scenarios []*ast.Scenario, t *symbol.Table, frames *frame
 		// A variant with no steps of its own is odd but not empty: it inherits
 		// its base's prefix, which is a legitimate way to say "just this much
 		// of the story". Only a scenario with nothing at all is worth reporting.
-		if len(sc.Steps) == 0 && !sc.Attrs.Has("variant") {
+		switch {
+		case len(sc.Steps) > 0 || sc.Attrs.Has("variant"):
+		case sc.Attrs.Has("retells"):
+			// A retelling with no overrides is not empty — it inherits every
+			// step — but it is a word-for-word copy of its base, which is
+			// never what the author meant by writing it.
+			b.WarnHintf(sc.StartPos, "override a step's `desc` to say it differently, or delete this scenario",
+				"retelling %q overrides no narration", sc.Name)
+		default:
 			b.Warnf(sc.StartPos, "scenario %q has no steps", sc.Name)
 		}
 	}
@@ -133,6 +142,105 @@ func checkSpliceCollisions(sc, base *ast.Scenario, prefix int, b *diag.Bag) {
 	}
 }
 
+// validateRetellings checks narration overlays before the compiler splices them.
+//
+// A retelling adopts its base's steps, actions and timing wholesale and replaces
+// only the words: `retells:` names the base, and each `step <id> { desc: … }`
+// re-explains the step of that name. So the same animation can be told to a
+// child, a newcomer and an engineer from one copy of the diagram, and the
+// tellings cannot drift apart because there is only one set of steps.
+//
+// Three rules make the overlay readable, and all three are enforced here rather
+// than left to surprise the author at runtime:
+//
+//   - A step of a retelling must name its base step *explicitly*. An anonymous
+//     step falls back to `step<index>`, so it would silently override whichever
+//     beat happened to sit at that position — a rename of the base would then
+//     move the words to a different step with no diagnostic anywhere.
+//   - A retelling carries no actions. Changing what happens is what a variant
+//     is for; a retelling that could also animate would make "same animation,
+//     different words" untrue and there would be no way to see which it did.
+//   - Depth-1, as with variants: a retelling of a retelling would make the
+//     words a step ends up with a function of an arbitrarily long ancestry.
+//
+// Retelling a *variant* is fine, though, and needs nothing special: the
+// compiler resolves variants first, so the base is already spliced by the time
+// the overlay lands. That is why membership is tested against effectiveStepIDs
+// rather than the base's own step list.
+func validateRetellings(scenarios []*ast.Scenario, b *diag.Bag) {
+	byName := make(map[string]*ast.Scenario, len(scenarios))
+	var names []string
+	for _, sc := range scenarios {
+		if sc.Name == "" || byName[sc.Name] != nil {
+			continue // an unnamed or duplicate scenario cannot be retold
+		}
+		byName[sc.Name] = sc
+		names = append(names, sc.Name)
+	}
+	sort.Strings(names)
+
+	for _, sc := range scenarios {
+		want, ok := sc.Attrs.Get("retells")
+		if !ok {
+			continue
+		}
+
+		if sc.Attrs.Has("variant") {
+			b.ErrorHintf(want.At, "a variant changes what happens and a retelling changes what is said about it; split them into two scenarios",
+				"scenario %q is both a variant and a retelling", sc.Name)
+			continue
+		}
+		if want.Raw == sc.Name {
+			b.ErrorHintf(want.At, "name the scenario whose animation this one re-explains",
+				"scenario %q retells itself", sc.Name)
+			continue
+		}
+		base, ok := byName[want.Raw]
+		if !ok {
+			hint, best := suggestFrom(want.Raw, names, "scenarios")
+			b.ErrorFixf(want.At, valueFix(want, best), hint,
+				"no scenario named %q to retell", want.Raw)
+			continue
+		}
+		if base.Attrs.Has("retells") {
+			b.ErrorHintf(want.At, "retell the original instead",
+				"scenario %q is itself a retelling; a retelling cannot retell another retelling", want.Raw)
+			continue
+		}
+
+		valid := effectiveStepIDs(base, scenarios)
+		known := sortedKeys(valid)
+		for _, st := range sc.Steps {
+			if len(st.Actions) > 0 {
+				b.ErrorHintf(st.StartPos, "keep the animation in "+quote(base.Name)+" and leave only `desc` here",
+					"step %q of retelling %q has actions; a retelling overrides narration only", st.EffectiveID(0), sc.Name)
+				continue
+			}
+			if st.ID == "" {
+				b.ErrorHintf(st.StartPos, "write `step <id> { desc: … }` naming the step of "+quote(base.Name)+" to re-explain",
+					"a step of retelling %q has no id to match against", sc.Name)
+				continue
+			}
+			if !valid[st.ID] {
+				// Hint without a fix, deliberately: the text to replace is the
+				// step's id token, and ast.Step records only the position of the
+				// `step` keyword before it — a fix anchored there would rewrite
+				// the keyword.
+				hint, _ := suggestFrom(st.ID, known, "steps")
+				b.ErrorHintf(st.StartPos, hint,
+					"scenario %q has no step %q to retell", base.Name, st.ID)
+				continue
+			}
+			if !st.Attrs.Has("desc") {
+				b.WarnHintf(st.StartPos, "add `desc:` with the words this audience should hear",
+					"step %q of retelling %q overrides nothing", st.ID, sc.Name)
+			}
+		}
+	}
+}
+
+func quote(s string) string { return `"` + s + `"` }
+
 // stepIndex finds a step of sc by the id it is addressable by.
 func stepIndex(sc *ast.Scenario, id string) int {
 	for i, st := range sc.Steps {
@@ -159,6 +267,18 @@ func effectiveIDs(sc *ast.Scenario) []string {
 // or it will be wrong about exactly the scenarios variants exist for.
 func effectiveStepIDs(sc *ast.Scenario, all []*ast.Scenario) map[string]bool {
 	out := map[string]bool{}
+
+	// A retelling is addressable by its base's step ids, not by its own entries:
+	// those name the steps they re-explain rather than adding beats. Recursion
+	// bottoms out immediately, since a base that is itself a retelling is
+	// rejected.
+	if want, ok := sc.Attrs.Get("retells"); ok {
+		base := findScenario(all, want.Raw)
+		if base == nil || base == sc || base.Attrs.Has("retells") {
+			return out // unresolvable; already reported
+		}
+		return effectiveStepIDs(base, all)
+	}
 
 	prefix := 0
 	if want, ok := sc.Attrs.Get("variant"); ok {
