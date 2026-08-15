@@ -258,7 +258,7 @@ footer { margin-top: 3rem; color: var(--muted); font-size: .85rem; }
 <p class="tagline">Mermaid draws the system; Cinegram plays the story.</p>
 <p class="repo">Animated, explorable architecture diagrams. Every page below is one
 self-contained HTML file compiled from a <code>.dgm</code> source in
-<a href="https://github.com/tejaspanse/cinegram">the repository</a>&rsquo;s
+<a href="https://github.com/panset/cinegram">the repository</a>&rsquo;s
 <code>examples/</code> directory.</p>
 <p class="try"><a href="playground/">Try the playground</a><span>Write your own in
 the browser &mdash; the compiler runs in the tab, nothing is uploaded.</span></p>
