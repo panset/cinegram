@@ -55,6 +55,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return cmdMermaid(rest, stdout, stderr)
 	case "preview":
 		return cmdPreview(rest, stdout, stderr)
+	case "site":
+		return cmdSite(rest, stdout, stderr)
 	case "lint":
 		return cmdLint(rest, stdout, stderr)
 	case "narrate":
@@ -92,6 +94,14 @@ Usage:
   cinegram preview <file.dgm> [-o out.html]   build a self-contained animated page
   cinegram preview <file.dgm> --serve [--watch] [--addr host:port]
                                                  serve it, rebuilding as you edit
+  cinegram site    <folder>   -o out/         a browsable site from a folder
+                                                 tree of .dgm files: nav mirrors
+                                                 the folders, assets are shared,
+                                                 01- filename prefixes order
+                              --serve [--watch]  serve it instead; --watch
+                                                 rebuilds as the folder changes
+                              [--playground URL] [--link Name=URL]...
+                              [--hero TEXT] [--title NAME]
   cinegram frame   <file.dgm> --at 2400ms -o out.png
                                                  screenshot one exact moment
                                                  (--frames N -o dir/ for a sequence)

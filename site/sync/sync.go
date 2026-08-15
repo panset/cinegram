@@ -12,8 +12,10 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/tejaspanse/cinegram/site"
 )
@@ -25,13 +27,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	paths, err := site.Examples(root)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "sync: listing examples: %v\n", err)
-		os.Exit(1)
-	}
-
-	pages, warnings, err := site.Build(paths, os.ReadFile)
+	pages, warnings, err := site.Build(os.DirFS(filepath.Join(root, "examples")))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "sync: %v\n", err)
 		os.Exit(1)
@@ -44,7 +40,7 @@ func main() {
 
 	changed := 0
 	for rel, content := range pages {
-		to := filepath.Join(root, "docs", rel)
+		to := filepath.Join(root, "docs", filepath.FromSlash(rel))
 
 		if existing, err := os.ReadFile(to); err == nil && string(existing) == string(content) {
 			continue
@@ -63,23 +59,56 @@ func main() {
 
 	// A page whose example was renamed or removed must not stay live on the
 	// site. Only docs/demos/ is swept: anything a committer places at the top
-	// level of docs/ (a CNAME, say) is not this tool's to delete.
-	stale, err := os.ReadDir(filepath.Join(root, "docs", "demos"))
+	// level of docs/ (a CNAME, say) is not this tool's to delete. The walk is
+	// recursive because the generated site nests (demos/assets/, subfolders),
+	// and emptied directories go too.
+	demosDir := filepath.Join(root, "docs", "demos")
+	var stale []string
+	var dirs []string
+	err = filepath.WalkDir(demosDir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if p != demosDir {
+				dirs = append(dirs, p)
+			}
+			return nil
+		}
+		rel, err := filepath.Rel(filepath.Join(root, "docs"), p)
+		if err != nil {
+			return err
+		}
+		if _, ok := pages[filepath.ToSlash(rel)]; !ok {
+			stale = append(stale, p)
+		}
+		return nil
+	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "sync: %v\n", err)
 		os.Exit(1)
 	}
-	for _, page := range stale {
-		rel := "demos/" + page.Name()
-		if _, ok := pages[rel]; ok {
-			continue
-		}
-		if err := os.Remove(filepath.Join(root, "docs", rel)); err != nil {
+	for _, p := range stale {
+		if err := os.Remove(p); err != nil {
 			fmt.Fprintf(os.Stderr, "sync: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("removed docs/%s\n", rel)
+		rel, _ := filepath.Rel(filepath.Join(root, "docs"), p)
+		fmt.Printf("removed docs/%s\n", filepath.ToSlash(rel))
 		changed++
+	}
+	// Deepest first, so a chain of emptied folders unwinds in one pass; a
+	// Remove on a non-empty directory fails, which is exactly the guard we
+	// want against deleting something hand-placed.
+	sort.Slice(dirs, func(i, j int) bool { return len(dirs[i]) > len(dirs[j]) })
+	for _, d := range dirs {
+		if entries, err := os.ReadDir(d); err == nil && len(entries) == 0 {
+			if err := os.Remove(d); err == nil {
+				rel, _ := filepath.Rel(filepath.Join(root, "docs"), d)
+				fmt.Printf("removed docs/%s/\n", filepath.ToSlash(rel))
+				changed++
+			}
+		}
 	}
 
 	if changed == 0 {

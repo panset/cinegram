@@ -55,13 +55,20 @@
     ui.editor = document.getElementById('pg-editor');
     ui.tabs = document.getElementById('pg-tabs');
     ui.left = document.getElementById('pg-left');
+    ui.main = document.getElementById('pg-main');
+    ui.divider = document.getElementById('pg-divider');
     ui.host = document.getElementById('pg-player-host');
     ui.bootMsg = document.getElementById('pg-boot');
     ui.diagnostics = document.getElementById('pg-diagnostics');
     ui.examples = document.getElementById('pg-examples');
     ui.attachInput = document.getElementById('pg-attach-input');
     ui.attachAdd = document.getElementById('pg-attach-add');
+    ui.attachFolder = document.getElementById('pg-attach-folder');
+    ui.attachFolderInput = document.getElementById('pg-attach-folder-input');
     ui.attachList = document.getElementById('pg-attach-list');
+    ui.files = document.getElementById('pg-files');
+    ui.viewEditor = document.getElementById('pg-view-editor');
+    ui.viewFiles = document.getElementById('pg-view-files');
     ui.share = document.getElementById('pg-share');
     ui.download = document.getElementById('pg-download');
 
@@ -387,6 +394,7 @@
     syncEditor();
     renderTabs();
     renderAttachments();
+    renderFiles();
   }
 
   function syncEditor() {
@@ -475,16 +483,26 @@
     syncEditor();
     renderTabs();
     renderAttachments();
+    renderFiles();
     schedule();
   }
 
+  // attach takes either plain File objects (from an <input> or a flat drop) or
+  // {file, path} pairs (from the folder walker), because only the walker knows
+  // where in a dropped tree each file sat.
   function attach(fileList) {
     var files = Array.prototype.slice.call(fileList || []);
     var rejected = [];
     var jobs = [];
+    var sawFolder = false;
 
-    files.forEach(function (file) {
-      var path = file.webkitRelativePath || file.name;
+    files.forEach(function (item) {
+      var file = item.file || item;
+      var path = item.path || file.webkitRelativePath || file.name;
+      // A folder pick sweeps in .DS_Store and its ilk; junk nobody chose by
+      // name is skipped without comment rather than reported as rejected.
+      if (path.split('/').some(function (part) { return part.charAt(0) === '.'; })) return;
+      if (path.indexOf('/') >= 0) sawFolder = true;
       if (isSource(path)) {
         jobs.push(file.text().then(function (text) { putText(path, text); }));
       } else if (isImage(path)) {
@@ -502,11 +520,226 @@
       }
       renderTabs();
       renderAttachments();
-      if (rejected.length) {
+      renderFiles();
+      if (rejected.length > 3) {
+        note('Skipped ' + rejected.length + ' files that are neither .dgm nor images.');
+      } else if (rejected.length) {
         note('Not attached (a .dgm or an image is expected): ' + rejected.join(', '));
       }
+      // A whole tree just landed: the tree view is what makes it browsable.
+      if (sawFolder) setLeftView('files');
       schedule();
     });
+  }
+
+  // --- folders --------------------------------------------------------------
+  //
+  // dataTransfer.files flattens a dropped directory to nothing useful; the
+  // webkitGetAsEntry API is what yields the tree. It is prefixed but it is
+  // also the only game in town, in every current browser, and the code falls
+  // back to the flat file list where it is missing.
+
+  function collectDropped(dt) {
+    var items = dt && dt.items;
+    if (!items || !items.length || typeof items[0].webkitGetAsEntry !== 'function') {
+      return Promise.resolve(Array.prototype.slice.call((dt && dt.files) || []));
+    }
+    var jobs = [];
+    for (var i = 0; i < items.length; i++) {
+      var entry = items[i].webkitGetAsEntry();
+      if (entry) {
+        jobs.push(walkEntry(entry));
+      } else if (typeof items[i].getAsFile === 'function') {
+        // A null entry is an item with no filesystem behind it (a synthetic
+        // DataTransfer, some text drags); the plain File is still there.
+        var file = items[i].getAsFile();
+        if (file) jobs.push(Promise.resolve([file]));
+      }
+    }
+    return Promise.all(jobs).then(function (lists) {
+      return Array.prototype.concat.apply([], lists);
+    });
+  }
+
+  function walkEntry(entry) {
+    if (entry.isFile) {
+      return new Promise(function (resolve) {
+        entry.file(function (file) {
+          // fullPath is rooted at the drop ("/frames/x.svg"); the vfs wants
+          // it relative, matching webkitRelativePath from the folder input.
+          resolve([{ file: file, path: entry.fullPath.replace(/^\//, '') }]);
+        }, function () { resolve([]); });
+      });
+    }
+    if (!entry.isDirectory) return Promise.resolve([]);
+    if (entry.name.charAt(0) === '.') return Promise.resolve([]); // a .git is nobody's diagram
+
+    var reader = entry.createReader();
+    return new Promise(function (resolve) {
+      var children = [];
+      (function drain() {
+        // readEntries hands out at most ~100 entries per call and signals the
+        // end with an empty batch; a single call silently truncates big dirs.
+        reader.readEntries(function (batch) {
+          if (batch.length) {
+            children = children.concat(Array.prototype.slice.call(batch));
+            drain();
+            return;
+          }
+          Promise.all(children.map(walkEntry)).then(function (lists) {
+            resolve(Array.prototype.concat.apply([], lists));
+          });
+        }, function () { resolve([]); });
+      })();
+    });
+  }
+
+  // --- the Files view --------------------------------------------------------
+  //
+  // The left pane shows one of two things: the editor (tabs + textarea) or the
+  // file tree. The tree is the site experience for a local folder — entries in
+  // numeric-prefix order, folders collapsible, a click compiles and plays —
+  // without a server and without anything leaving the tab.
+
+  var leftView = 'editor';
+
+  function setLeftView(view) {
+    leftView = view;
+    ui.left.classList.toggle('is-files', view === 'files');
+    ui.viewEditor.classList.toggle('is-on', view === 'editor');
+    ui.viewFiles.classList.toggle('is-on', view === 'files');
+    if (view === 'files') renderFiles();
+  }
+
+  // The same ordering the site generator uses: an optional numeric filename
+  // prefix first (01-intro before 02-deploy before anything unprefixed), then
+  // the name, folders and files interleaved.
+  var ORDER_PREFIX = /^(\d+)[-_. ]\s*/;
+
+  function orderKey(base) {
+    var m = ORDER_PREFIX.exec(base);
+    if (m) return { prefixed: true, num: parseInt(m[1], 10), name: base.slice(m[0].length) };
+    return { prefixed: false, num: 0, name: base };
+  }
+
+  function keyLess(a, b) {
+    if (a.prefixed !== b.prefixed) return a.prefixed ? -1 : 1;
+    if (a.prefixed && a.num !== b.num) return a.num - b.num;
+    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+  }
+
+  function buildFileTree() {
+    var root = { dirs: {}, files: [] };
+    paths().forEach(function (path) {
+      var parts = path.split('/');
+      var node = root;
+      for (var i = 0; i < parts.length - 1; i++) {
+        node = node.dirs[parts[i]] || (node.dirs[parts[i]] = { dirs: {}, files: [] });
+      }
+      node.files.push({ name: parts[parts.length - 1], path: path });
+    });
+    return root;
+  }
+
+  function renderFiles() {
+    ui.files.textContent = '';
+    if (vfs.size === 0) {
+      var empty = document.createElement('p');
+      empty.className = 'pg-files-hint';
+      empty.textContent = 'Nothing here yet — Add folder… below, or drop one anywhere on this panel.';
+      ui.files.appendChild(empty);
+      return;
+    }
+    ui.files.appendChild(treeList(buildFileTree()));
+  }
+
+  function treeList(node) {
+    var list = document.createElement('ul');
+
+    var entries = [];
+    Object.keys(node.dirs).forEach(function (name) {
+      entries.push({ key: orderKey(name), name: name, dir: node.dirs[name] });
+    });
+    node.files.forEach(function (f) {
+      entries.push({ key: orderKey(f.name), file: f });
+    });
+    entries.sort(function (a, b) { return keyLess(a.key, b.key); });
+
+    entries.forEach(function (e) {
+      var item = document.createElement('li');
+      if (e.dir) {
+        var details = document.createElement('details');
+        details.open = true;
+        var summary = document.createElement('summary');
+        summary.textContent = e.name + '/';
+        details.appendChild(summary);
+        details.appendChild(treeList(e.dir));
+        item.appendChild(details);
+      } else {
+        item.appendChild(fileRow(e.file));
+      }
+      list.appendChild(item);
+    });
+    return list;
+  }
+
+  function fileRow(f) {
+    var file = vfs.get(f.path);
+    var row = document.createElement('div');
+    row.className = 'pg-file'
+      + (isSource(f.path) ? ' is-dgm' : '')
+      + (f.path === openPath ? ' is-open' : '');
+
+    var name = document.createElement('button');
+    name.type = 'button';
+    name.className = 'pg-file-name';
+    name.textContent = f.name;
+    if (isSource(f.path)) {
+      name.title = 'Play this document';
+      name.addEventListener('click', function () { playFile(f.path); });
+    } else {
+      name.disabled = true;
+    }
+    row.appendChild(name);
+
+    if (f.path === entryPath) {
+      var mark = document.createElement('span');
+      mark.className = 'pg-file-entry';
+      mark.textContent = 'entry';
+      row.appendChild(mark);
+    }
+
+    var size = document.createElement('span');
+    size.className = 'pg-file-size';
+    size.textContent = human(file.bytes ? file.bytes.length : byteLength(file.text));
+    row.appendChild(size);
+
+    return row;
+  }
+
+  // playFile makes the clicked document the one being played: entry and open
+  // both move, and the player starts over — clicking a file in the tree is
+  // opening a new document, exactly like picking an example, not an edit to
+  // the current one. Toggling back to Editor then edits that same file.
+  function playFile(path) {
+    if (path === entryPath) {
+      openFile(path);
+      return;
+    }
+    saveEditor();
+    entryPath = path;
+    openPath = path;
+
+    stop(player);
+    player = null;
+    compiled = false;
+
+    clearNotice();
+    syncEditor();
+    renderTabs();
+    renderAttachments();
+    renderFiles();
+    compile();
   }
 
   // --- examples -------------------------------------------------------------------------
@@ -587,6 +820,7 @@
     syncEditor();
     renderTabs();
     renderAttachments();
+    renderFiles();
     compile();
   }
 
@@ -692,6 +926,7 @@
       syncEditor();
       renderTabs();
       renderAttachments();
+      renderFiles();
       compile();
       return true;
     }).catch(function (e) {
@@ -816,6 +1051,17 @@
       ui.attachInput.value = '';
     });
 
+    // The folder input's files carry webkitRelativePath, so plain attach()
+    // lands them at their tree positions.
+    ui.attachFolder.addEventListener('click', function () { ui.attachFolderInput.click(); });
+    ui.attachFolderInput.addEventListener('change', function () {
+      attach(ui.attachFolderInput.files);
+      ui.attachFolderInput.value = '';
+    });
+
+    ui.viewEditor.addEventListener('click', function () { setLeftView('editor'); });
+    ui.viewFiles.addEventListener('click', function () { setLeftView('files'); });
+
     ['dragenter', 'dragover'].forEach(function (type) {
       ui.left.addEventListener(type, function (e) {
         e.preventDefault();
@@ -828,7 +1074,7 @@
     ui.left.addEventListener('drop', function (e) {
       e.preventDefault();
       ui.left.classList.remove('is-dropping');
-      attach(e.dataTransfer && e.dataTransfer.files);
+      collectDropped(e.dataTransfer).then(attach);
     });
 
     if (shareSupported()) {
@@ -839,6 +1085,8 @@
     }
 
     ui.download.addEventListener('click', download);
+
+    wireDivider();
 
     // A debug handle, in the spirit of window.CINEGRAM_PLAYER: enough to drive
     // the page from a console or a test without reaching into the DOM.
@@ -853,10 +1101,111 @@
         syncEditor();
         renderTabs();
         renderAttachments();
+        renderFiles();
       },
       example: loadExample,
-      share: encodeDoc
+      share: encodeDoc,
+      view: setLeftView,
+      play: playFile
     };
+  }
+
+  // --- split divider ----------------------------------------------------------
+
+  // The split is the --pg-left CSS variable; dragging rewrites it on .pg-main
+  // as a percentage and localStorage carries it across visits. Double-click
+  // collapses the editor entirely (the divider stays, so double-click also
+  // brings it back). Below the stacked-layout breakpoint the divider is
+  // display:none and none of this runs.
+  var SPLIT_KEY = 'cinegram.playground.split';
+  var SPLIT_MIN = 15;
+  var SPLIT_MAX = 85;
+
+  function wireDivider() {
+    // The last non-collapsed width, so expanding restores where you were.
+    var restore = 42;
+    var dragging = false;
+
+    function clampPct(pct) {
+      return Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, pct));
+    }
+
+    function apply(pct) {
+      ui.main.style.setProperty('--pg-left', pct + '%');
+    }
+
+    function persist(value) {
+      try { localStorage.setItem(SPLIT_KEY, value); } catch (e) { /* private browsing */ }
+    }
+
+    function collapsed() {
+      return ui.main.classList.contains('is-collapsed');
+    }
+
+    function setCollapsed(want) {
+      ui.main.classList.toggle('is-collapsed', want);
+      // The collapsed value keeps the width, so expanding after a reload
+      // still lands where the split was dragged to.
+      if (want) persist('collapsed:' + restore);
+      else { apply(restore); persist(String(restore)); }
+    }
+
+    var saved = null;
+    try { saved = localStorage.getItem(SPLIT_KEY); } catch (e) { /* private browsing */ }
+    if (saved !== null) {
+      var wasCollapsed = saved.indexOf('collapsed') === 0;
+      var pct = parseFloat(wasCollapsed ? saved.slice('collapsed:'.length) : saved);
+      if (isFinite(pct)) {
+        restore = clampPct(pct);
+        if (!wasCollapsed) apply(restore);
+      }
+      if (wasCollapsed) ui.main.classList.add('is-collapsed');
+    }
+
+    ui.divider.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      dragging = true;
+      ui.divider.setPointerCapture(e.pointerId);
+      ui.divider.classList.add('is-dragging');
+    });
+
+    ui.divider.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      var rect = ui.main.getBoundingClientRect();
+      if (rect.width === 0) return;
+      // Dragging out of a collapse is expanding, not a special mode.
+      if (collapsed()) ui.main.classList.remove('is-collapsed');
+      restore = clampPct(((e.clientX - rect.left) / rect.width) * 100);
+      apply(restore);
+    });
+
+    ['pointerup', 'pointercancel'].forEach(function (type) {
+      ui.divider.addEventListener(type, function () {
+        if (!dragging) return;
+        dragging = false;
+        ui.divider.classList.remove('is-dragging');
+        persist(collapsed() ? 'collapsed:' + restore : String(restore));
+      });
+    });
+
+    ui.divider.addEventListener('dblclick', function () {
+      setCollapsed(!collapsed());
+    });
+
+    // The separator is focusable, so the split works without a pointer:
+    // arrows nudge it, Enter/Space toggles the collapse.
+    ui.divider.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        if (collapsed()) ui.main.classList.remove('is-collapsed');
+        restore = clampPct(restore + (e.key === 'ArrowLeft' ? -2 : 2));
+        apply(restore);
+        persist(String(restore));
+        e.preventDefault();
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        setCollapsed(!collapsed());
+        e.preventDefault();
+      }
+    });
   }
 
   // --- odds and ends -----------------------------------------------------------------------------

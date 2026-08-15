@@ -37,11 +37,15 @@
   </div>
 </header>
 
-<main class="pg-main">
+<main class="pg-main" id="pg-main">
   <section class="pg-left" id="pg-left">
     <div class="pg-row">
       <label class="pg-label" for="pg-examples">Example</label>
       <select id="pg-examples" class="pg-select"></select>
+      <div class="pg-switch" role="group" aria-label="Left pane view">
+        <button type="button" id="pg-view-editor" class="pg-switch-btn is-on">Editor</button>
+        <button type="button" id="pg-view-files" class="pg-switch-btn">Files</button>
+      </div>
     </div>
 
     <div class="pg-tabs" id="pg-tabs"></div>
@@ -50,19 +54,27 @@
       autocapitalize="off" autocorrect="off" wrap="off"
       placeholder="Paste a Mermaid diagram, then add a scenario block…"></textarea>
 
+    <nav class="pg-files" id="pg-files" aria-label="Files"></nav>
+
     <div class="pg-attach" id="pg-attach">
       <div class="pg-attach-head">
         <span class="pg-label">Attachments</span>
         <button type="button" id="pg-attach-add" class="pg-btn pg-btn-small">Add files…</button>
+        <button type="button" id="pg-attach-folder" class="pg-btn pg-btn-small">Add folder…</button>
         <input type="file" id="pg-attach-input" multiple hidden
           accept=".dgm,.svg,.png,.jpg,.jpeg,.gif,.webp">
+        <input type="file" id="pg-attach-folder-input" webkitdirectory hidden>
       </div>
-      <p class="pg-attach-hint">Drop <code>.dgm</code> files and storyboard images here — <code>view … from</code> and <code>img:</code> resolve against them.</p>
+      <p class="pg-attach-hint">Drop <code>.dgm</code> files, storyboard images or a whole folder here — <code>view … from</code> and <code>img:</code> resolve against them, and a folder browses like the demo site.</p>
       <ul class="pg-attach-list" id="pg-attach-list"></ul>
     </div>
 
     <div class="pg-diagnostics" id="pg-diagnostics" hidden></div>
   </section>
+
+  <div class="pg-divider" id="pg-divider" role="separator" aria-orientation="vertical"
+    aria-label="Resize editor" tabindex="0"
+    title="Drag to resize · double-click to collapse the editor"></div>
 
   <section class="pg-right">
     <div id="pg-boot" class="pg-boot">Loading the compiler…</div>

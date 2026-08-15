@@ -88,7 +88,7 @@
           "duration": 3650,
           "speed": 1,
           "loop": true,
-          "autoplay": true,
+          "autoplay": false,
           "steps": [
             {
               "id": "admit",

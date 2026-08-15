@@ -50,7 +50,7 @@
           "duration": 1500,
           "speed": 1,
           "loop": false,
-          "autoplay": true,
+          "autoplay": false,
           "outcome": "ok",
           "steps": [
             {
@@ -119,7 +119,7 @@
           "duration": 1800,
           "speed": 1,
           "loop": false,
-          "autoplay": true,
+          "autoplay": false,
           "outcome": "fail",
           "steps": [
             {

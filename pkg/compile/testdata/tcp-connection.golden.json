@@ -216,7 +216,7 @@
           "duration": 5600,
           "speed": 1,
           "loop": false,
-          "autoplay": true,
+          "autoplay": false,
           "steps": [
             {
               "id": "nothing",
@@ -432,7 +432,7 @@
           "duration": 2500,
           "speed": 1,
           "loop": false,
-          "autoplay": true,
+          "autoplay": false,
           "outcome": "fail",
           "steps": [
             {
