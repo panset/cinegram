@@ -20,8 +20,10 @@ Or skip the build entirely: every example is playable at
 
 **Try it in the browser.** <https://panset.github.io/cinegram/playground/> is
 the compiler itself, built to WASM and running in the tab — paste a diagram,
-watch it animate, share the link. Nothing is uploaded; the document lives in
-the URL fragment. Locally that page is `bazel run //web/playground:site --
+watch it animate, share the link. Drop in a whole folder of `.dgm` files (or
+*Add folder…*) and the *Files* view browses it like the demo site, numeric
+prefixes ordering the tree. Nothing is uploaded; the document lives in the
+URL fragment. Locally that page is `bazel run //web/playground:site --
 --serve`.
 
 ## The language
@@ -120,7 +122,9 @@ suggestion rather than a silent no-op.
 | `desc` | step | Prose narration for the step. Shown in the caption; `\n` works. |
 | `speed` | scenario | Initial playback rate, e.g. `1.5`. The player starts here; the speed button cycles from it. |
 | `loop` | scenario | Restart at the end. |
-| `autoplay` | scenario | Start playing once the diagram has rendered. Defaults to **true**, and is skipped when the system asks for reduced motion. |
+| `autoplay` | scenario | Start playing once the diagram has rendered. Defaults to **false** — a page opens at rest — and is skipped when the system asks for reduced motion. |
+| `poster` | scenario | The moment the page rests at before anyone presses play, e.g. `1600ms`. Defaults to the start. A shared link's `t=` wins over it. |
+| `stepwise` | scenario | Play advances exactly one step and stops at its end — the presenter transport without presenter mode. |
 | `variant`, `until` | scenario | Inherit another scenario's opening steps — see [Failure paths](#failure-paths). |
 | `outcome` | scenario | `ok` or `fail`. A failure is marked `✕` in the scenario picker. |
 | `img`, `caption` | storyboard frame | The picture to show and the line under it. At least one is required. |
@@ -653,6 +657,7 @@ illustration.
 cinegram compile <file.dgm> [-o out.json]   # animation timeline JSON
 cinegram mermaid <file.dgm> [-o out.mmd]    # the diagram as plain Mermaid
 cinegram preview <file.dgm> [-o out.html]   # self-contained animated page
+cinegram site    <folder>   -o out/         # a browsable site from a folder tree
 cinegram frame   <file.dgm> --at 1620ms -o still.png   # one exact moment
 cinegram record  <file.dgm> -o out.gif      # a GIF, mp4 or webm of one scenario
 cinegram narrate <file.dgm> [--format=md|json]   # the animation, written out
@@ -689,6 +694,31 @@ a race against the animation. The browser is found on `PATH`
 out to one the machine already has is what keeps the no-dependencies rule.
 
 `--frames N -o dir/` captures N evenly spaced moments as a numbered sequence.
+
+### A site from a folder
+
+```
+cinegram site diagrams/ --serve --watch     # browse a folder tree, live
+cinegram site diagrams/ -o site/            # or export it as static files
+```
+
+Point `site` at a folder of `.dgm` files and it becomes a browsable site: one
+page per document at the same relative path, an index per folder, a sidebar
+carrying the whole tree, breadcrumbs, and prev/next arrows walking the site in
+depth-first order. Folders are the hierarchy; an optional numeric filename
+prefix (`01-intro.dgm`) forces order within one and is stripped from
+everything a reader sees. A file another document pulls in via `view … from`
+is reached by drill-down rather than listed.
+
+Unlike `preview`, site pages share one copy of the runtime from `assets/`
+instead of inlining 2.8 MB each — a 30-diagram site is a few megabytes, not
+ninety. The export still works over `file://`.
+
+Presentation is flags: `--title`, `--link Name=URL` for header links,
+`--playground URL` to give every page an *Edit in playground* button whose
+link carries the whole document (the playground's own share-link format,
+minted at build time — nothing is uploaded), and `--hero` for the card on the
+root index.
 
 ### Recording
 
@@ -756,9 +786,10 @@ mean parsing the prose back apart.
 unchanged — warnings 0, errors 1 — so a caller can branch on the status *and*
 read the detail instead of choosing between them.
 
-The preview page plays itself: after a view renders, a scenario with
-`autoplay` (the default) starts, unless the reader's system asks for reduced
-motion. `window.CINEGRAM_PLAYER` is the same player, so
+The page opens at rest — on the scenario's `poster` moment if it names one —
+and plays only when asked: pressing Play, or a scenario that declares
+`autoplay: true` (still skipped when the reader's system asks for reduced
+motion). `window.CINEGRAM_PLAYER` is the same player, so
 `CINEGRAM_PLAYER.seek(2400)` lands on a moment deterministically.
 
 ### Driving the player

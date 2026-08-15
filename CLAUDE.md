@@ -56,6 +56,7 @@ Exercise the CLI (relative paths work; the binary resolves them against
 
 ```sh
 bazel run //cmd/cinegram -- preview examples/k8s-request.dgm -o /tmp/k8s.html
+bazel run //cmd/cinegram -- site examples -o /tmp/site   # folder tree → browsable site
 bazel run //cmd/cinegram -- compile examples/k8s-request.dgm
 bazel run //cmd/cinegram -- mermaid examples/k8s-request.dgm
 bazel run //cmd/cinegram -- lint    examples/k8s-request.dgm

@@ -127,16 +127,47 @@ body.pg {
 
 .pg-left {
   flex: 0 0 var(--pg-left);
-  min-width: 260px;
-  max-width: 720px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 10px;
   box-sizing: border-box;
-  border-right: 1px solid var(--dgm-border);
   background: var(--dgm-panel);
   min-height: 0;
+}
+
+/* The divider owns the line between the panes (it replaces the border-right
+   the editor used to draw), so the hit area can be wider than the line
+   without the seam moving. The split itself is the --pg-left variable; the
+   drag handler rewrites it on .pg-main and localStorage remembers it. */
+.pg-divider {
+  flex: 0 0 9px;
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.pg-divider::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  background: var(--dgm-border);
+}
+
+.pg-divider:hover::before,
+.pg-divider:focus-visible::before,
+.pg-divider.is-dragging::before {
+  left: 3px;
+  width: 3px;
+  background: var(--dgm-accent);
+}
+
+.pg-main.is-collapsed .pg-left {
+  display: none;
 }
 
 /* The drop target is the whole left panel, so a file dropped anywhere near the
@@ -178,6 +209,140 @@ body.pg {
   border: 1px solid var(--dgm-border);
   background: var(--dgm-bg);
   color: var(--dgm-fg);
+}
+
+/* --- the Editor | Files switch ------------------------------------------ */
+
+.pg-switch {
+  flex: 0 0 auto;
+  display: flex;
+  border: 1px solid var(--dgm-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.pg-switch-btn {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 0;
+  background: var(--dgm-bg);
+  color: var(--dgm-muted);
+  cursor: pointer;
+}
+
+.pg-switch-btn + .pg-switch-btn {
+  border-left: 1px solid var(--dgm-border);
+}
+
+.pg-switch-btn.is-on {
+  background: var(--dgm-accent-soft);
+  color: var(--dgm-accent);
+}
+
+/* The switch swaps the middle of the panel: Editor shows the tabs and the
+   textarea, Files shows the tree. The attachments list is hidden in Files
+   mode because the tree *is* that list with hierarchy; the Add buttons and
+   the hint stay. */
+.pg-left:not(.is-files) .pg-files {
+  display: none;
+}
+
+.pg-left.is-files .pg-tabs,
+.pg-left.is-files .pg-editor,
+.pg-left.is-files .pg-attach-list {
+  display: none;
+}
+
+/* --- the file tree ------------------------------------------------------ */
+
+.pg-files {
+  flex: 1 1 auto;
+  min-height: 120px;
+  overflow: auto;
+  box-sizing: border-box;
+  border: 1px solid var(--dgm-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--dgm-bg);
+  font: 13px/1.8 var(--pg-code);
+}
+
+.pg-files ul {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 16px;
+}
+
+.pg-files > ul {
+  padding-left: 0;
+}
+
+.pg-files summary {
+  cursor: pointer;
+  color: var(--dgm-muted);
+  user-select: none;
+}
+
+.pg-files summary:hover {
+  color: var(--dgm-fg);
+}
+
+.pg-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pg-file-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  font: inherit;
+  border: 0;
+  background: none;
+  color: var(--dgm-muted);
+  padding: 0;
+}
+
+.pg-file.is-dgm .pg-file-name {
+  cursor: pointer;
+  color: var(--dgm-fg);
+}
+
+.pg-file.is-dgm .pg-file-name:hover {
+  color: var(--dgm-accent);
+}
+
+.pg-file.is-open .pg-file-name {
+  color: var(--dgm-accent);
+  font-weight: 600;
+}
+
+.pg-file-entry {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--dgm-accent);
+  border: 1px solid var(--dgm-accent-soft);
+  background: var(--dgm-accent-soft);
+  border-radius: 999px;
+  padding: 0 7px;
+}
+
+.pg-file-size {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--dgm-muted);
+}
+
+.pg-files-hint {
+  margin: 0;
+  color: var(--dgm-muted);
+  font: 12px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 /* --- open files --------------------------------------------------------- */
@@ -247,6 +412,7 @@ body.pg {
 
 .pg-attach-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
@@ -409,9 +575,17 @@ body.pg {
 
   .pg-left {
     flex: 0 0 auto;
-    max-width: none;
-    border-right: 0;
     border-bottom: 1px solid var(--dgm-border);
+  }
+
+  /* Stacked panes have no split to drag, and a collapse persisted from a wide
+     window must not hide the editor here. */
+  .pg-divider {
+    display: none;
+  }
+
+  .pg-main.is-collapsed .pg-left {
+    display: flex;
   }
 
   .pg-editor {

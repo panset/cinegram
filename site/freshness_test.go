@@ -2,6 +2,7 @@ package site
 
 import (
 	"bytes"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,18 +22,13 @@ import (
 func TestDocsAreFresh(t *testing.T) {
 	root := repotest.Root(t, "examples")
 
-	paths, err := Examples(root)
-	if err != nil {
-		t.Fatalf("listing examples: %v", err)
-	}
-
-	want, _, err := Build(paths, os.ReadFile)
+	want, _, err := Build(os.DirFS(filepath.Join(root, "examples")))
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 
 	for _, rel := range sortedKeys(want) {
-		got, err := os.ReadFile(filepath.Join(root, "docs", rel))
+		got, err := os.ReadFile(filepath.Join(root, "docs", filepath.FromSlash(rel)))
 		if err != nil {
 			t.Errorf("docs/%s is missing\nrun: bazel run //site:sync", rel)
 			continue
@@ -44,16 +40,24 @@ func TestDocsAreFresh(t *testing.T) {
 	}
 
 	// A demo page whose example was renamed or removed would otherwise stay
-	// live on the site forever.
-	demos, err := os.ReadDir(filepath.Join(root, "docs", "demos"))
-	if err != nil {
-		t.Fatalf("reading docs/demos: %v", err)
-	}
-	for _, page := range demos {
-		rel := "demos/" + page.Name()
-		if _, ok := want[rel]; !ok {
-			t.Errorf("docs/%s has no example behind it\nrun: bazel run //site:sync", rel)
+	// live on the site forever. The walk is recursive: the generated site
+	// nests (demos/assets/, subfolders).
+	demosDir := filepath.Join(root, "docs", "demos")
+	err = filepath.WalkDir(demosDir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
 		}
+		rel, err := filepath.Rel(filepath.Join(root, "docs"), p)
+		if err != nil {
+			return err
+		}
+		if _, ok := want[filepath.ToSlash(rel)]; !ok {
+			t.Errorf("docs/%s has no example behind it\nrun: bazel run //site:sync", filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking docs/demos: %v", err)
 	}
 }
 

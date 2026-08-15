@@ -85,7 +85,7 @@
           "duration": 2800,
           "speed": 1,
           "loop": false,
-          "autoplay": true,
+          "autoplay": false,
           "steps": [
             {
               "id": "submit",
@@ -189,7 +189,7 @@
           "duration": 4000,
           "speed": 1,
           "loop": false,
-          "autoplay": true,
+          "autoplay": false,
           "outcome": "fail",
           "steps": [
             {

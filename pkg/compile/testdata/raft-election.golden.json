@@ -120,7 +120,7 @@
           "duration": 3350,
           "speed": 1,
           "loop": false,
-          "autoplay": true,
+          "autoplay": false,
           "steps": [
             {
               "id": "steady",

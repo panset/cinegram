@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "sitegen",
+    srcs = [
+        "chrome.go",
+        "playdoc.go",
+        "sitegen.go",
+    ],
+    embedsrcs = ["assets/site.css"],
+    importpath = "github.com/tejaspanse/cinegram/pkg/sitegen",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/compile",
+        "//pkg/emit/html",
+        "//pkg/ir",
+        "//pkg/loader",
+    ],
+)

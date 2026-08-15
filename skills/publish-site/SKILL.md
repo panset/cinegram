@@ -14,8 +14,12 @@ description: >
 `bazel test //...`, uploads the committed `docs/` **verbatim** (it never
 rebuilds it), and assembles the playground beside it at `/playground/` — so
 committing `docs/` to `main` is still what publishes the demo pages. The
-generator lives in `site/`; it renders one self-contained page per standalone
-example plus an index.
+generator is `pkg/sitegen` — the same one `cinegram site` exposes — wrapped
+by `site/` with the repo's presentation (title, hero, playground and GitHub
+links) and rooted at `docs/demos/`, so every demo URL ever shared keeps
+working. Pages share one runtime copy from `demos/assets/` instead of
+inlining mermaid per page; the generated `demos/index.html` is the landing
+page, and the top-level `docs/index.html` is only a redirect into it.
 
 ## Update
 
@@ -45,9 +49,16 @@ Done when the test passes and `git status` shows nothing unstaged under
   referencing each other still publish: the first alphabetically.)
 - The index blurb is the example's leading `%%` comment block, up to a
   `%% ---` separator. Write that block for a site visitor.
-- Two examples must not share a basename; `sync` fails naming the collision.
-- The sweep touches only `docs/demos/`; a hand-placed top-level file in
-  `docs/` (a `CNAME`, say) survives.
+- Subfolders of `examples/` become site folders with their own index; an
+  optional numeric filename prefix (`01-name.dgm`) orders entries and is
+  stripped from links, titles and page names.
+- Two examples must not publish as the same page (same folder, same
+  prefix-stripped name); `sync` fails naming the collision.
+- Every demo page carries an *Edit in playground* button whose link encodes
+  the whole document — the same format as the playground's Share button,
+  minted at build time.
+- The sweep touches only `docs/demos/` (recursively — it nests now); a
+  hand-placed top-level file in `docs/` (a `CNAME`, say) survives.
 
 ## If the site is not live at all
 

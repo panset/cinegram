@@ -5,9 +5,16 @@ bazel-*
 # fresh. Only the exact files the generator writes are un-ignored, so a stray
 # preview written into docs/ stays invisible to git.
 !docs/index.html
-!docs/demos/*.html
+# demos/ nests since the sitegen rewrite: a subfolder of examples/ becomes a
+# subfolder of demos/ with its own index.
+!docs/demos/**/*.html
 # The playground's page is a source file, not something a command emits: the
 # site is assembled from it at deploy time and never committed.
 !web/**/*.html
 .DS_Store
 dist/
+# Tool droppings: the Playwright MCP server's session logs and its npm cache.
+.playwright-mcp/
+.npm/
+# Repo-local GitHub identity, referenced by core.sshCommand. Never committed.
+.ssh/

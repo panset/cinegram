@@ -63,7 +63,7 @@
           "duration": 400,
           "speed": 1,
           "loop": false,
-          "autoplay": true,
+          "autoplay": false,
           "steps": [
             {
               "id": "s1",

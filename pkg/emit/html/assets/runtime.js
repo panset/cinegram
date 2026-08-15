@@ -640,6 +640,9 @@
     this.help = this.buildHelp();
     this.root.appendChild(this.help);
 
+    this.lightbox = this.buildLightbox();
+    this.root.appendChild(this.lightbox);
+
     document.documentElement.setAttribute('data-theme', this.theme);
 
     // Follow the system theme until the reader overrides it. Without this a
@@ -730,6 +733,9 @@
         this.time = Math.max(0, ms);
         this.pendingAutoplay = false;
       }
+    } else {
+      // No deep link: rest at the scenario's poster moment, not a blank 0ms.
+      this.time = this.restingTime();
     }
 
     this.render();
@@ -744,6 +750,7 @@
     ['1 – 9', 'Jump to step n'],
     ['Esc', 'Leave presenter mode, or back out of a drilled-in view'],
     ['Click stage', 'In presenter mode, advance one step'],
+    ['Click scene', 'Open the storyboard frame full size — scroll zooms, Esc closes'],
     ['?', 'Show or hide this list'],
     ['Scroll', 'Zoom the diagram; drag to pan, ⌂ to reset']
   ];
@@ -757,6 +764,7 @@
 
     if (ev.key === '?') { ev.preventDefault(); this.toggleHelp(); return; }
     if (ev.key === 'Escape') {
+      if (this.lightboxIsOpen()) { ev.preventDefault(); this.closeLightbox(); return; }
       if (this.helpOpen()) { ev.preventDefault(); this.toggleHelp(); return; }
       // Escape means "get me out of the mode I am in", innermost first.
       if (this.present) { ev.preventDefault(); this.setPresenter(false); return; }
@@ -856,6 +864,7 @@
   // ---------------------------------------------------------------------
 
   Player.prototype.buildBoard = function () {
+    var self = this;
     this.board = el('div', 'dgm-board');
     this.board.style.display = 'none';
 
@@ -876,6 +885,11 @@
     }
     this.boardFront = 0;
     this.boardLayers[0].classList.add('is-front');
+    // The panel is a preview; the lightbox is the full-size look at it.
+    stack.addEventListener('click', function () {
+      var frame = self.boardKey ? self.frames[self.boardKey] : null;
+      if (frame && frame.image) self.openLightbox(frame);
+    });
     this.board.appendChild(stack);
 
     this.boardCaption = el('div', 'dgm-board-caption');
@@ -978,6 +992,198 @@
     // A caption-only frame is text, not a picture with a label under it, so it
     // gets the room the image box would have taken.
     this.board.classList.toggle('is-wordy', !!(frame && !frame.image));
+    this.board.classList.toggle('is-pictorial', !!(frame && frame.image));
+
+    // An open lightbox shows *the current scene*, not a snapshot of one: when
+    // the sticky frame changes underneath it, it follows (and closes if the
+    // scenario moves onto a frame with no picture).
+    if (this.lightboxIsOpen()) {
+      if (frame && frame.image) this.openLightbox(frame);
+      else this.closeLightbox();
+    }
+  };
+
+  // --- storyboard lightbox ----------------------------------------------
+  //
+  // The board panel is a thumbnail-sized preview; this is the full-size look.
+  // It is the same overlay pattern as the help dialog — fixed, backdrop,
+  // click-out or Esc to leave — plus the stage's own zoom conventions. One
+  // deliberate difference from the stage: inside a modal there is no page
+  // behind the pointer to scroll, so a bare wheel zooms with no modifier.
+  //
+  // Fit is PhotoSwipe's rule: a raster frame never opens larger than its own
+  // pixels (min(1, viewport/image)) because upscaling raster is only blur; an
+  // SVG frame fills the viewport, because it can.
+
+  Player.prototype.buildLightbox = function () {
+    var self = this;
+    var box = el('div', 'dgm-lightbox');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', 'Storyboard frame');
+    box.setAttribute('tabindex', '-1');
+    box.style.display = 'none';
+
+    this.lbImg = document.createElement('img');
+    this.lbImg.className = 'dgm-lightbox-img';
+    this.lbImg.alt = '';
+    this.lbImg.draggable = false;
+    box.appendChild(this.lbImg);
+
+    this.lbCaption = el('div', 'dgm-lightbox-caption');
+    box.appendChild(this.lbCaption);
+
+    // Zoom state: lbBase is the fitted layout size (crisp: it is real layout,
+    // not a transform, so an SVG frame re-rasterises at it), lbK the zoom on
+    // top of it, lbX/lbY the pan in screen pixels.
+    this.lbFrame = null;
+    this.lbBase = { w: 0, h: 0 };
+    this.lbK = 1;
+    this.lbKMax = 1;
+    this.lbX = 0;
+    this.lbY = 0;
+
+    box.addEventListener('wheel', function (ev) {
+      ev.preventDefault();
+      self.lightboxZoomAt(ev.clientX, ev.clientY, Math.exp(-ev.deltaY * 0.0015));
+    }, { passive: false });
+
+    var panning = false, px = 0, py = 0;
+    this.lbImg.addEventListener('pointerdown', function (ev) {
+      if (ev.button !== 0) return;
+      panning = true;
+      px = ev.clientX; py = ev.clientY;
+      self.lbImg.setPointerCapture(ev.pointerId);
+      self.lbImg.classList.add('is-panning');
+      ev.preventDefault();
+    });
+    this.lbImg.addEventListener('pointermove', function (ev) {
+      if (!panning) return;
+      self.lbX += ev.clientX - px;
+      self.lbY += ev.clientY - py;
+      px = ev.clientX; py = ev.clientY;
+      self.clampLightboxPan();
+      self.applyLightbox();
+    });
+    ['pointerup', 'pointercancel'].forEach(function (type) {
+      self.lbImg.addEventListener(type, function () {
+        panning = false;
+        self.lbImg.classList.remove('is-panning');
+      });
+    });
+
+    // Double-click toggles between fit and the secondary zoom, anchored where
+    // the pointer is, exactly like the wheel.
+    this.lbImg.addEventListener('dblclick', function (ev) {
+      var target = self.lbK > 1.001 ? 1 : Math.min(self.lbKMax, 3);
+      self.lightboxZoomAt(ev.clientX, ev.clientY, target / self.lbK);
+    });
+
+    box.addEventListener('click', function (ev) {
+      if (ev.target === box) self.closeLightbox();
+    });
+
+    // The fit is a function of the viewport, so a resize while open re-fits.
+    own(self, window, 'resize', function () {
+      if (self.lightboxIsOpen()) self.layoutLightbox();
+    });
+
+    return box;
+  };
+
+  Player.prototype.lightboxIsOpen = function () {
+    return this.lightbox && this.lightbox.style.display !== 'none';
+  };
+
+  Player.prototype.openLightbox = function (frame) {
+    var self = this;
+    // Frame ids are per view, so the image is part of the identity: the same
+    // id in another view is a different picture.
+    var fresh = !this.lbFrame || this.lbFrame.id !== frame.id ||
+      this.lbFrame.image !== frame.image;
+    this.lbFrame = frame;
+    if (fresh) {
+      this.lbK = 1;
+      this.lbX = 0;
+      this.lbY = 0;
+      if (this.lbImg.src !== frame.image) this.lbImg.src = frame.image;
+    }
+    this.lbCaption.textContent = frame.caption || '';
+    this.lightbox.style.display = '';
+
+    if (this.lbImg.complete && this.lbImg.naturalWidth) {
+      this.layoutLightbox();
+    } else {
+      this.lbImg.onload = function () {
+        self.lbImg.onload = null;
+        self.layoutLightbox();
+      };
+    }
+    this.lightbox.focus();
+  };
+
+  Player.prototype.closeLightbox = function () {
+    if (!this.lightboxIsOpen()) return;
+    this.lightbox.style.display = 'none';
+    this.lbFrame = null;
+    // Hand the keys back to the player the reader was in.
+    if (this.opts.keys === 'scoped') this.root.focus();
+  };
+
+  // layoutLightbox computes the fit and writes it as real width/height. The
+  // zoom on top stays a transform: layout at fit keeps the resting view crisp
+  // (an SVG re-rasterises), and transform while zooming keeps the gesture
+  // cheap.
+  Player.prototype.layoutLightbox = function () {
+    var w = this.lbImg.naturalWidth, h = this.lbImg.naturalHeight;
+    if (!w || !h || !this.lbFrame) return;
+    var fit = Math.min(
+      (window.innerWidth * 0.94) / w,
+      (window.innerHeight * 0.88) / h
+    );
+    var vector = /^data:image\/svg/.test(this.lbFrame.image);
+    if (!vector) fit = Math.min(1, fit);
+    this.lbBase.w = w * fit;
+    this.lbBase.h = h * fit;
+    // Raster earns zoom up to its own pixels (1:1), vector as far as useful.
+    this.lbKMax = vector ? 8 : Math.max(2, 1 / fit);
+    this.lbImg.style.width = this.lbBase.w + 'px';
+    this.lbImg.style.height = this.lbBase.h + 'px';
+    this.lbK = Math.min(this.lbK, this.lbKMax);
+    this.clampLightboxPan();
+    this.applyLightbox();
+  };
+
+  // Cursor-anchored zoom: the image point under the pointer stays put. The
+  // image is flex-centred, so its displayed centre is centre-plus-pan; scaling
+  // about that centre moves the anchor by (anchor − centre)·(factor − 1), and
+  // the pan absorbs exactly that.
+  Player.prototype.lightboxZoomAt = function (cx, cy, factor) {
+    var k = Math.min(this.lbKMax, Math.max(1, this.lbK * factor));
+    factor = k / this.lbK;
+    if (factor === 1) return;
+    var rect = this.lbImg.getBoundingClientRect();
+    var ccx = rect.left + rect.width / 2;
+    var ccy = rect.top + rect.height / 2;
+    this.lbK = k;
+    this.lbX -= (cx - ccx) * (factor - 1);
+    this.lbY -= (cy - ccy) * (factor - 1);
+    if (k === 1) { this.lbX = 0; this.lbY = 0; }
+    this.clampLightboxPan();
+    this.applyLightbox();
+  };
+
+  // Panning may push the image around, never lose it: at least an edge stays
+  // within reach of the viewport.
+  Player.prototype.clampLightboxPan = function () {
+    var mx = Math.max(0, (this.lbBase.w * this.lbK - window.innerWidth) / 2) + 40;
+    var my = Math.max(0, (this.lbBase.h * this.lbK - window.innerHeight) / 2) + 40;
+    this.lbX = Math.min(mx, Math.max(-mx, this.lbX));
+    this.lbY = Math.min(my, Math.max(-my, this.lbY));
+  };
+
+  Player.prototype.applyLightbox = function () {
+    this.lbImg.style.transform =
+      'translate(' + this.lbX + 'px,' + this.lbY + 'px) scale(' + this.lbK + ')';
   };
 
   // --- pan and zoom -----------------------------------------------------
@@ -1063,10 +1269,18 @@
     });
   };
 
-  // Presenter mode and reel mode share the one-beat transport: Space, →, and
-  // a stage click all mean "play exactly the next step, then stop".
+  // Presenter mode, reel mode and a `stepwise` scenario share the one-beat
+  // transport: Space, →, a stage click and the Play button all mean "play
+  // exactly the next step, then stop".
   Player.prototype.stepwise = function () {
-    return this.present || this.reel;
+    return this.present || this.reel || !!this.scenario().stepwise;
+  };
+
+  // restingTime is where an idle page sits: the author's poster moment, or the
+  // start. The deep link wins over both — see build().
+  Player.prototype.restingTime = function () {
+    var sc = this.scenario();
+    return (sc && sc.poster) || 0;
   };
 
   Player.prototype.zoomAt = function (clientX, clientY, factor) {
@@ -1557,12 +1771,12 @@
 
   Player.prototype.selectScenario = function (i) {
     this.scenarioIndex = i;
-    this.time = 0;
+    this.time = this.restingTime();
     this.stopAt = null;
     this.adoptScenarioSpeed();
     this.buildSteps();
     this.syncBoard();
-    this.apply(0);
+    this.apply(this.time);
     this.syncChrome();
   };
 
@@ -1575,7 +1789,7 @@
     this.pause();
     this.viewIndex = next;
     this.scenarioIndex = 0;
-    this.time = 0;
+    this.time = this.restingTime();
     this.stopAt = null;
     this.revealed = {};
     this.svg = null;
@@ -2033,7 +2247,12 @@
   // Playback
   // ---------------------------------------------------------------------
 
-  Player.prototype.toggle = function () { this.playing ? this.pause() : this.play(); };
+  Player.prototype.toggle = function () {
+    if (this.playing) { this.pause(); return; }
+    // In the one-beat transport, Play is the beat key by another name.
+    if (this.stepwise()) { this.advanceStep(); return; }
+    this.play();
+  };
 
   Player.prototype.play = function () {
     var sc = this.scenario();

@@ -139,7 +139,7 @@
           "duration": 4700,
           "speed": 1,
           "loop": true,
-          "autoplay": true,
+          "autoplay": false,
           "steps": [
             {
               "id": "edge",

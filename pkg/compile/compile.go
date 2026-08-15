@@ -294,11 +294,16 @@ func expand(name string, table *symbol.Table) []string {
 
 func compileScenario(sc *ast.Scenario, index int, table *symbol.Table, bag *diag.Bag) ir.Scenario {
 	out := ir.Scenario{
-		ID:       "s" + strconv.Itoa(index),
-		Name:     sc.Name,
-		Speed:    attrFloat(sc.Attrs, "speed", 1.0, bag),
-		Loop:     attrBool(sc.Attrs, "loop", false, bag),
-		Autoplay: attrBool(sc.Attrs, "autoplay", true, bag),
+		ID:    "s" + strconv.Itoa(index),
+		Name:  sc.Name,
+		Speed: attrFloat(sc.Attrs, "speed", 1.0, bag),
+		Loop:  attrBool(sc.Attrs, "loop", false, bag),
+		// Off unless the author asks: a page that is already moving when the
+		// reader arrives is noise, and every surface agrees (the reduced-motion
+		// media query, presenter mode and reels already all suppressed it).
+		Autoplay: attrBool(sc.Attrs, "autoplay", false, bag),
+		Poster:   attrMillis(sc.Attrs, "poster", 0, bag),
+		Stepwise: attrBool(sc.Attrs, "stepwise", false, bag),
 		Outcome:  sc.Attrs.String("outcome"),
 	}
 

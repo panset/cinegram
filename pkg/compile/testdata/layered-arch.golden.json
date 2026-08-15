@@ -200,7 +200,7 @@
           "duration": 3300,
           "speed": 1,
           "loop": false,
-          "autoplay": true,
+          "autoplay": false,
           "steps": [
             {
               "id": "arrive",

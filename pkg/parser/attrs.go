@@ -28,6 +28,12 @@ import (
 var scenarioAttrs = map[string]string{
 	"speed": "float", "loop": "bool", "autoplay": "bool", "style": "string",
 
+	// A page opens at rest; these say where and how it rests. `poster` is the
+	// moment the resting frame shows — a walkthrough's most telling instant
+	// rather than its blank first millisecond. `stepwise` makes Play advance
+	// one step and stop, the presenter transport without presenter mode.
+	"poster": "duration", "stepwise": "bool",
+
 	// A failure path is usually the happy path up to a point and then not.
 	// `variant` names the scenario to inherit from and `until` the last step to
 	// take from it, so the divergence is written once instead of the prefix

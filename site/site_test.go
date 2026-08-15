@@ -4,17 +4,16 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
-// mem builds a ReadFileFunc over an in-memory tree, the same way the loader
-// tests avoid a filesystem.
-func mem(files map[string]string) func(string) ([]byte, error) {
-	return func(path string) ([]byte, error) {
-		if content, ok := files[path]; ok {
-			return []byte(content), nil
-		}
-		return nil, fmt.Errorf("no such file: %s", path)
+// mem builds an fs.FS over an in-memory tree, paths relative to examples/.
+func mem(files map[string]string) fstest.MapFS {
+	fsys := fstest.MapFS{}
+	for p, content := range files {
+		fsys[p] = &fstest.MapFile{Data: []byte(content)}
 	}
+	return fsys
 }
 
 const plainExample = `%% A tiny demo.
@@ -50,18 +49,21 @@ scenario "run" { speed: 1.0 }
 }
 
 func TestBuildRendersAPagePerStandaloneExample(t *testing.T) {
-	out, _, err := Build(
-		[]string{"examples/linked.dgm", "examples/plain.dgm", "examples/sub.dgm"},
-		mem(map[string]string{
-			"examples/linked.dgm": linkedTo("sub.dgm"),
-			"examples/plain.dgm":  plainExample,
-			"examples/sub.dgm":    plainExample,
-		}))
+	out, _, err := Build(mem(map[string]string{
+		"linked.dgm": linkedTo("sub.dgm"),
+		"plain.dgm":  plainExample,
+		"sub.dgm":    plainExample,
+	}))
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 
-	for _, want := range []string{"index.html", ".nojekyll", "demos/linked.html", "demos/plain.html"} {
+	for _, want := range []string{
+		"index.html", ".nojekyll",
+		"demos/index.html", "demos/linked.html", "demos/plain.html",
+		"demos/assets/mermaid.min.js", "demos/assets/runtime.js",
+		"demos/assets/runtime.css", "demos/assets/site.css",
+	} {
 		if _, ok := out[want]; !ok {
 			t.Errorf("missing output %s; have %v", want, sortedKeys(out))
 		}
@@ -74,16 +76,25 @@ func TestBuildRendersAPagePerStandaloneExample(t *testing.T) {
 	}
 }
 
+func TestTopLevelIndexRedirectsIntoDemos(t *testing.T) {
+	out, _, err := Build(mem(map[string]string{"plain.dgm": plainExample}))
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	stub := string(out["index.html"])
+	if !strings.Contains(stub, `url=demos/`) {
+		t.Errorf("top-level index does not redirect into demos/: %q", stub)
+	}
+}
+
 func TestMutuallyReferencingExamplesStillPublish(t *testing.T) {
 	// a.dgm and b.dgm drill into each other, which the loader supports (a
 	// cycle terminates on its own). Each is the other's sub-view, so a naive
 	// "referenced means no page" rule would drop both from the site.
-	out, _, err := Build(
-		[]string{"examples/a.dgm", "examples/b.dgm"},
-		mem(map[string]string{
-			"examples/a.dgm": linkedTo("b.dgm"),
-			"examples/b.dgm": linkedTo("a.dgm"),
-		}))
+	out, _, err := Build(mem(map[string]string{
+		"a.dgm": linkedTo("b.dgm"),
+		"b.dgm": linkedTo("a.dgm"),
+	}))
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -97,13 +108,13 @@ func TestMutuallyReferencingExamplesStillPublish(t *testing.T) {
 	}
 }
 
-func TestExamplesSharingABasenameAreAnError(t *testing.T) {
-	_, _, err := Build(
-		[]string{"examples/api/dup.dgm", "examples/web/dup.dgm"},
-		mem(map[string]string{
-			"examples/api/dup.dgm": plainExample,
-			"examples/web/dup.dgm": plainExample,
-		}))
+func TestStrippedNamesCollidingInAFolderAreAnError(t *testing.T) {
+	// The numeric prefix is display order, not identity: once stripped,
+	// these both want dup.html and one would silently shadow the other.
+	_, _, err := Build(mem(map[string]string{
+		"01-dup.dgm": plainExample,
+		"02-dup.dgm": plainExample,
+	}))
 	if err == nil {
 		t.Fatal("Build accepted two examples that would publish as the same page")
 	}
@@ -112,10 +123,26 @@ func TestExamplesSharingABasenameAreAnError(t *testing.T) {
 	}
 }
 
-func TestDemoPagesAreCompleteDocuments(t *testing.T) {
-	out, _, err := Build(
-		[]string{"examples/plain.dgm"},
-		mem(map[string]string{"examples/plain.dgm": plainExample}))
+func TestSameBasenameInDifferentFoldersIsFine(t *testing.T) {
+	out, _, err := Build(mem(map[string]string{
+		"api/dup.dgm": plainExample,
+		"web/dup.dgm": plainExample,
+	}))
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	for _, want := range []string{"demos/api/dup.html", "demos/web/dup.html", "demos/api/index.html"} {
+		if _, ok := out[want]; !ok {
+			t.Errorf("missing output %s; have %v", want, sortedKeys(out))
+		}
+	}
+}
+
+func TestDemoPagesShareAssetsAndCarryChrome(t *testing.T) {
+	out, _, err := Build(mem(map[string]string{
+		"plain.dgm":      plainExample,
+		"deep/other.dgm": plainExample,
+	}))
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -127,19 +154,37 @@ func TestDemoPagesAreCompleteDocuments(t *testing.T) {
 	if !strings.Contains(page, "CINEGRAM_TIMELINE") {
 		t.Error("demo page carries no timeline payload")
 	}
+	// Shared, not inlined: the page references the assets folder and does
+	// not carry mermaid's megabytes.
+	if !strings.Contains(page, `src="assets/mermaid.min.js"`) {
+		t.Error("demo page does not reference the shared mermaid copy")
+	}
+	if len(page) > 200_000 {
+		t.Errorf("demo page is %d bytes; shared assets should keep it small", len(page))
+	}
+	if !strings.Contains(page, "dgm-site-nav") {
+		t.Error("demo page carries no sidebar")
+	}
+	if !strings.Contains(page, "Edit in playground") {
+		t.Error("demo page carries no Edit-in-playground button")
+	}
+
+	// A page one folder down reaches the same assets one level up.
+	deep := string(out["demos/deep/other.html"])
+	if !strings.Contains(deep, `src="../assets/mermaid.min.js"`) {
+		t.Error("nested page does not reach the shared assets via ../")
+	}
 }
 
 func TestIndexLinksEveryDemoWithItsBlurb(t *testing.T) {
-	out, _, err := Build(
-		[]string{"examples/plain.dgm"},
-		mem(map[string]string{"examples/plain.dgm": plainExample}))
+	out, _, err := Build(mem(map[string]string{"plain.dgm": plainExample}))
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 
-	index := string(out["index.html"])
-	if !strings.Contains(index, `href="demos/plain.html"`) {
-		t.Error("index does not link demos/plain.html")
+	index := string(out["demos/index.html"])
+	if !strings.Contains(index, `href="plain.html"`) {
+		t.Error("index does not link plain.html")
 	}
 	// The first %% comment line is the example's own description of itself.
 	if !strings.Contains(index, "A tiny demo.") {
@@ -150,6 +195,36 @@ func TestIndexLinksEveryDemoWithItsBlurb(t *testing.T) {
 	if !strings.Contains(index, "run") {
 		t.Error("index does not name the demo by its title")
 	}
+	// The repo's presentation: the hero card links the playground.
+	if !strings.Contains(index, "Try the playground") {
+		t.Error("index carries no playground hero card")
+	}
+}
+
+func TestNumericPrefixesOrderAndDisappear(t *testing.T) {
+	out, _, err := Build(mem(map[string]string{
+		"02-second.dgm": plainExample,
+		"01-first.dgm":  plainExample,
+		"also.dgm":      plainExample,
+	}))
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	index := string(out["demos/index.html"])
+	first := strings.Index(index, `href="first.html"`)
+	second := strings.Index(index, `href="second.html"`)
+	also := strings.Index(index, `href="also.html"`)
+	if first < 0 || second < 0 || also < 0 {
+		t.Fatalf("index is missing prefix-stripped links; have:\n%s", index)
+	}
+	if !(first < second && second < also) {
+		t.Error("index does not order by numeric prefix before the alphabet")
+	}
+	// The .source span deliberately shows the real filename, prefix and all;
+	// links and page names must not.
+	if strings.Contains(index, `href="01-first`) {
+		t.Error("the numeric prefix leaked into a link")
+	}
 }
 
 func TestBlurbIsTheLeadingCommentBlock(t *testing.T) {
@@ -159,14 +234,12 @@ func TestBlurbIsTheLeadingCommentBlock(t *testing.T) {
 	wrapped := "%% A demo whose summary\n%% wraps across two lines.\n%% ---\n%% Internal notes.\n" +
 		strings.TrimPrefix(plainExample, "%% A tiny demo.\n")
 
-	out, _, err := Build(
-		[]string{"examples/wrapped.dgm"},
-		mem(map[string]string{"examples/wrapped.dgm": wrapped}))
+	out, _, err := Build(mem(map[string]string{"wrapped.dgm": wrapped}))
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 
-	index := string(out["index.html"])
+	index := string(out["demos/index.html"])
 	if !strings.Contains(index, "A demo whose summary wraps across two lines.") {
 		t.Error("blurb does not join the wrapped comment lines")
 	}
@@ -181,14 +254,12 @@ func TestDirectivesAreNotBlurbs(t *testing.T) {
 	directive := "%%{init: {\"theme\":\"dark\"}}%%\n" +
 		strings.TrimPrefix(plainExample, "%% A tiny demo.\n")
 
-	out, _, err := Build(
-		[]string{"examples/directive.dgm"},
-		mem(map[string]string{"examples/directive.dgm": directive}))
+	out, _, err := Build(mem(map[string]string{"directive.dgm": directive}))
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 
-	if index := string(out["index.html"]); strings.Contains(index, "init:") {
+	if index := string(out["demos/index.html"]); strings.Contains(index, "init:") {
 		t.Error("index shows a %%{init} directive as a blurb")
 	}
 }
@@ -196,13 +267,11 @@ func TestDirectivesAreNotBlurbs(t *testing.T) {
 func TestBuildFailsOnAnExampleThatDoesNotCompile(t *testing.T) {
 	broken := strings.Replace(plainExample, "flow a -> b", "flow a -> zz", 1)
 
-	_, _, err := Build(
-		[]string{"examples/broken.dgm"},
-		mem(map[string]string{"examples/broken.dgm": broken}))
+	_, _, err := Build(mem(map[string]string{"broken.dgm": broken}))
 	if err == nil {
 		t.Fatal("Build accepted an example that does not compile")
 	}
-	if !strings.Contains(err.Error(), "examples/broken.dgm") {
+	if !strings.Contains(err.Error(), "broken.dgm") {
 		t.Errorf("error does not name the broken file: %v", err)
 	}
 }

@@ -557,6 +557,11 @@ body.dgm-standalone {
   display: block;
 }
 
+/* The panel is a preview; a frame with a picture invites the full-size look. */
+.dgm-board.is-pictorial .dgm-board-stack {
+  cursor: zoom-in;
+}
+
 .dgm-board-caption {
   font-size: 13px;
   color: var(--dgm-fg);
@@ -568,6 +573,65 @@ body.dgm-standalone {
   padding: 24px 8px;
   text-align: center;
   color: var(--dgm-muted);
+}
+
+/* --- storyboard lightbox --------------------------------------------------
+ *
+ * Same overlay tier as the help dialog, one layer above it: Esc closes the
+ * innermost thing first, and that order is the player's, not the stylesheet's.
+ * The image's *layout* size is the fit (so an SVG frame re-rasterises crisp at
+ * any viewport); zooming is a transform on top of that, so the wheel gesture
+ * never causes layout. No transition on the transform — a cursor-anchored
+ * zoom that lags its cursor feels broken.
+ */
+
+.dgm-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.72);
+  overscroll-behavior: contain;
+  touch-action: none;
+}
+
+.dgm-lightbox:focus {
+  outline: none;
+}
+
+.dgm-lightbox-img {
+  display: block;
+  flex: 0 0 auto;
+  transform-origin: center center;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+
+.dgm-lightbox-img.is-panning {
+  cursor: grabbing;
+}
+
+.dgm-lightbox-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 14px 18px;
+  text-align: center;
+  font-size: 13px;
+  color: #fff;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.55));
+  white-space: pre-line;
+  pointer-events: none;
+}
+
+.dgm-lightbox-caption:empty {
+  display: none;
 }
 
 /* --- step list ---------------------------------------------------------- */

@@ -136,6 +136,13 @@ type Scenario struct {
 	Loop     bool    `json:"loop"`
 	Autoplay bool    `json:"autoplay"`
 
+	// Poster is the millisecond the page rests at before anyone presses play —
+	// a walkthrough's most telling moment rather than its blank opening. Zero
+	// means the start. Stepwise turns Play into the presenter transport: each
+	// press plays exactly one step and stops at its end.
+	Poster   int  `json:"poster,omitempty"`
+	Stepwise bool `json:"stepwise,omitempty"`
+
 	// Outcome is how this walkthrough ended: empty when unstated, "ok", or
 	// "fail". It uses the same closed vocabulary as a flow's Status, and for
 	// the same reason — a renderer marks a failure in the scenario picker

@@ -170,7 +170,7 @@
           "duration": 2000,
           "speed": 1,
           "loop": false,
-          "autoplay": true,
+          "autoplay": false,
           "steps": [
             {
               "id": "only",
