@@ -9,9 +9,15 @@
 // copies.
 //
 // The heavy lifting is pkg/sitegen — the same generator `cinegram site`
-// exposes — rooted at docs/demos/ so every demo URL that has ever been shared
-// keeps working. What remains here is the repo's own presentation (title,
-// playground, links) and the top-level redirect into demos/.
+// exposes — rooted at docs/demos/, which is where the demo pages have always
+// lived. What remains here is the repo's own presentation (title, playground,
+// links) and the top-level redirect into demos/.
+//
+// A page's URL is its source's path under examples/, so reorganising that
+// folder republishes the demos at new URLs and sync deletes the old pages.
+// The examples were grouped into a tour (01-basics/, 02-storytelling/, …)
+// knowing that, and no redirects were left behind: the site is a gallery
+// people arrive at through the index, not a set of deep links under warranty.
 package site
 
 import (

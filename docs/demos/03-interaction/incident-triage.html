@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>the cascade</title>
+<link rel="stylesheet" href="../assets/runtime.css">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body class="dgm-standalone dgm-sited">
+<nav class="dgm-site-nav">
+<p class="dgm-site-name"><a href="../index.html">Cinegram</a></p>
+<ul>
+<li class="is-folder"><details open><summary><a href="../01-basics/index.html">basics</a></summary>
+<ul>
+<li><a href="../01-basics/k8s-request.html">GET /api/orders</a></li>
+<li><a href="../01-basics/deploy-pipeline.html">ship a release</a></li>
+</ul>
+</details></li>
+<li class="is-folder"><details open><summary><a href="../02-storytelling/index.html">storytelling</a></summary>
+<ul>
+<li><a href="../02-storytelling/payment-checkout.html">payment checkout</a></li>
+<li><a href="../02-storytelling/blue-green-deploy.html">cut over to v1.5</a></li>
+<li><a href="../02-storytelling/oauth-login.html">authorization code flow</a></li>
+<li><a href="../02-storytelling/oidc-login.html">sign in with an external IdP</a></li>
+</ul>
+</details></li>
+<li class="is-folder"><details open><summary><a href="../03-interaction/index.html">interaction</a></summary>
+<ul>
+<li><a class="is-current" href="../03-interaction/incident-triage.html">the cascade</a></li>
+<li><a href="../03-interaction/layered-arch.html">a priced order request</a></li>
+<li><a href="../03-interaction/data-platform.html">a row&#39;s journey</a></li>
+</ul>
+</details></li>
+<li class="is-folder"><details open><summary><a href="../04-diagram-types/index.html">diagram types</a></summary>
+<ul>
+<li><a href="../04-diagram-types/websocket-handshake.html">the upgrade</a></li>
+<li><a href="../04-diagram-types/tcp-connection.html">tcp connection</a></li>
+<li><a href="../04-diagram-types/raft-election.html">leader failure and re-election</a></li>
+</ul>
+</details></li>
+</ul>
+</nav>
+<div class="dgm-site-main">
+<header class="dgm-site-top">
+<nav class="dgm-site-crumbs">
+<a href="../index.html">Cinegram</a>
+<span>/</span> <a href="../03-interaction/index.html">interaction</a>
+<span>/</span> <span class="is-here">the cascade</span>
+</nav>
+<div class="dgm-site-actions">
+<a class="dgm-site-edit" href="../../playground/#doc=nFfbbttGE36VAX8YfwtIsuykSay7JA6KFEGSJilyIeZiyB2RCy932d2hZcIw0IfoE_ZJitmlKMqHIG4uInJ2Z4bzfXPydXaZrU5mGVn2fbbKlk_m2jJ5LFk7e7w8mWtbakWW5-w1VrRQVZPNMteSfcT1jTYUstX6OmsfocXZKmO64myWqWyVHR3BSwjkL3VJ0GALG-eBawLekuUeGm07pgDbmixohgaZyYdFbo-OYD6fx983l-T70YrR9iKA6xjYiZ4n6F0HW9cZBVhyh8b0UDmwdMXwz19_g-YACkNdOPQqWnQ-Cn1nC-cu4qWCSuwCAYLSWHlsoHQ2dIZJgeq8thWghV3QoANgNGXxUlcooEDo_AZLmoF1HC8b0wX28XABX2qCUJJFrx14ag32IUJRYihREQQXDWKMUIJzlqBxjbijq9agtkE-m8xmkduNcduyRs_w7lNuAbpAPqz_kP-_yTupitZvVEVwDK_P33_LrUhDV1Qe2xpK52n92nmCzwnXpAWArV6__PgWfkWmLfaD1Hkl5j_En0Gm7SVZdr5fv909Jc9W3XKmqA3rc2rJKrKlHn2pYv1TMgnnr34ehH921NH6N1fA7_J0aLLFivz6g52XaAx8lLchshg_zOd5t1w-oRj-Doa9FFstQmz1XpZCuyMeo5OTdGd_qAqRjlf2B_Hj79OIHy5fuqsiuJZrpdHlRXSc_u2ud95AntXMbVgdH9MVNq2hRema4zGRwzG2el4lmvIMrsFgQWYFeTbhb5L4GdzsXQ7f90MuhzIJxwNUB74G_oY7h04mAD0mrj30B57GLHsoJlXAf4ExRTVXxb2Bnb96yF2k9AfdOSsJe-jga-2kjTgLw9lNbm8kRcYukWeT_hCVQ0ukVnCyWMLNUGRMLVjnGxTfXzxuNroUu0kmWkOxUSjF7SsMZLSlBXx1nmtAKAgZkGMzCiwtJbj0UmNL4DZQExque-C9eel3pSeyUNBG-gjanmtpk5WThu6drRZ5lnxLs9pV6KRAYVKXU2ROTi_AtyHPZtJ6V3C2XDYhQT_YiqV6UMBT_bKm8sJ1PBr4ZW9gClsQU3kmnXkwopCxwDDgEIB1IyFFW7eBFLWN9oHBExoIurJoZoBWySSLDMQxQN47Dx6ZhmkkZwaZbNkv4L1LqNUYYIPakIKeeAbbWpe13KQrLNn0sK37QZcw9DIfGh3CHmJXdiF22glMuy40tq0pSu3ZGZwunt6CeQalM87Lhf-ps-fPl892WQ9QYVfdY0UMXKLpSN6TxZ2GdRwV8qx01lJcHqB1zuS5DcidoKJSZmtFKyhIPvsOUZ7Y95NmQ-w1hYR1gxckcxG2zge6S9OndBmwkgHKgDA6FrjSTOoBlQLjUAmwcUGJrHCNadYbT6j6eFI4ZkOWygsZ6jrIuciHUS2P45oQ2LUBCorrQxGXlprGLDusj--SlRC4ejKS9SKRFRi5C6uYOo-h6cXiZEJTIN6XkZikFSiqPCpSDyfEQSm1AtBQFcNQ-r_gEsXCOGy0MeEuP_u2rsPYaITYwNoY6KwnLGssDK2G_I9DVkFBtbYKhpzQFjD54Zp6aV2eFvDW7ijm3QIZZnGxihcUeAqu87K0ibAwKOWMSne3K0sWpj1YqWEVqKqI5iSVZ9_Frzx9djopqDu9bD8xJ9yleEfmnz_MfCw3sZdnQ3wTAiZlhoW7pLskykQbKEzDLbZyt9ncM0VSLbBuKD6gIc_SDmm31MoyrVMGENRSBhvvmjRX-qZl1yzgdVp_7H67l7W3jX8LTHb2pCmr_ncrJn3zBLjP7z5A0XkLJ0-vRvie3elyt0g5KIaR4oiNRx0OSXZb-7Ctm9xmN99u_g0AAP__">Edit in playground</a>
+<a href="../../playground/">Playground</a>
+<a href="https://github.com/panset/cinegram">GitHub</a>
+</div>
+</header>
+<div id="cinegram"></div>
+<nav class="dgm-site-prevnext">
+<a class="dgm-site-prev" href="../02-storytelling/oidc-login.html">← sign in with an external IdP</a>
+<a class="dgm-site-next" href="../03-interaction/layered-arch.html">a priced order request →</a>
+</nav>
+</div>
+<script src="../assets/mermaid.min.js"></script>
+<script src="../assets/runtime.js"></script>
+<script>
+var CINEGRAM_TIMELINE = JSON.parse("{\"version\":2,\"root\":\"01-incident-triage\",\"views\":[{\"id\":\"01-incident-triage\",\"title\":\"the cascade\",\"diagram\":{\"type\":\"flowchart\",\"direction\":\"LR\",\"mermaid\":\"%% A service map for the twenty minutes when it matters.\\n%% ---\\n%% Every service links out to where you would actually go next — its dashboard\\n%% or its runbook — because a diagram consulted during an incident is a\\n%% navigation surface, not an illustration. The scenario replays the cascade so\\n%% a link to one moment explains itself.\\nflowchart LR\\n  users[Users]\\n  edge[Edge / CDN]\\n  subgraph core[Core Services]\\n    api[API Gateway]\\n    orders[Orders]\\n    inventory[Inventory]\\n  end\\n  subgraph deps[Dependencies]\\n    db[(Orders DB)]\\n    queue[Job Queue]\\n  end\\n  pager[On-call Pager]\\n  users --\\u003e edge\\n  edge --\\u003e api\\n  api --\\u003e orders\\n  api --\\u003e inventory\\n  orders --\\u003e db\\n  inventory --\\u003e queue\\n  orders --\\u003e pager\\n\"},\"nodes\":[{\"id\":\"users\",\"label\":\"Users\",\"shape\":\"rect\"},{\"id\":\"edge\",\"label\":\"Edge / CDN\",\"shape\":\"rect\"},{\"id\":\"api\",\"label\":\"API Gateway\",\"shape\":\"rect\",\"group\":\"core\"},{\"id\":\"orders\",\"label\":\"Orders\",\"shape\":\"rect\",\"group\":\"core\"},{\"id\":\"inventory\",\"label\":\"Inventory\",\"shape\":\"rect\",\"group\":\"core\"},{\"id\":\"db\",\"label\":\"Orders DB\",\"shape\":\"cylinder\",\"group\":\"deps\"},{\"id\":\"queue\",\"label\":\"Job Queue\",\"shape\":\"rect\",\"group\":\"deps\"},{\"id\":\"pager\",\"label\":\"On-call Pager\",\"shape\":\"rect\"}],\"groups\":[{\"id\":\"core\",\"label\":\"Core Services\",\"children\":[\"api\",\"orders\",\"inventory\"]},{\"id\":\"deps\",\"label\":\"Dependencies\",\"children\":[\"db\",\"queue\"]}],\"edges\":[{\"id\":\"e0\",\"from\":\"users\",\"to\":\"edge\",\"style\":\"normal\",\"head\":\"arrow\"},{\"id\":\"e1\",\"from\":\"edge\",\"to\":\"api\",\"style\":\"normal\",\"head\":\"arrow\"},{\"id\":\"e2\",\"from\":\"api\",\"to\":\"orders\",\"style\":\"normal\",\"head\":\"arrow\"},{\"id\":\"e3\",\"from\":\"api\",\"to\":\"inventory\",\"style\":\"normal\",\"head\":\"arrow\"},{\"id\":\"e4\",\"from\":\"orders\",\"to\":\"db\",\"style\":\"normal\",\"head\":\"arrow\"},{\"id\":\"e5\",\"from\":\"inventory\",\"to\":\"queue\",\"style\":\"normal\",\"head\":\"arrow\"},{\"id\":\"e6\",\"from\":\"orders\",\"to\":\"pager\",\"style\":\"normal\",\"head\":\"arrow\"}],\"scenarios\":[{\"id\":\"s0\",\"name\":\"the cascade\",\"duration\":3900,\"speed\":1,\"loop\":false,\"autoplay\":false,\"steps\":[{\"id\":\"normal\",\"name\":\"Traffic is normal\",\"desc\":\"Baseline. Worth a beat at the start so the shape of healthy traffic is on screen before anything goes wrong.\",\"start\":0,\"end\":900,\"tracks\":[{\"kind\":\"flow\",\"start\":0,\"end\":450,\"edge\":\"e0\",\"from\":\"users\",\"to\":\"edge\",\"label\":\"12k rps\"},{\"kind\":\"flow\",\"start\":450,\"end\":900,\"edge\":\"e1\",\"from\":\"edge\",\"to\":\"api\",\"label\":\"12k rps\"},{\"kind\":\"flow\",\"start\":0,\"end\":500,\"edge\":\"e2\",\"from\":\"api\",\"to\":\"orders\",\"label\":\"checkout\"}]},{\"id\":\"slow\",\"name\":\"The orders database starts timing out\",\"desc\":\"The first real signal, and it is not an error rate — it is latency. Nothing has failed yet, which is exactly why it is easy to miss.\",\"start\":900,\"end\":1800,\"tracks\":[{\"kind\":\"focus\",\"start\":900,\"end\":1800,\"target\":\"deps\"},{\"kind\":\"flow\",\"start\":900,\"end\":1800,\"edge\":\"e4\",\"from\":\"orders\",\"to\":\"db\",\"label\":\"p99 2.4s\",\"color\":\"#d97706\"},{\"kind\":\"note\",\"start\":900,\"end\":1800,\"target\":\"db\",\"text\":\"connection pool\\nsaturated\",\"side\":\"below\"}]},{\"id\":\"retry\",\"name\":\"Orders retries, and makes it worse\",\"desc\":\"Retries against a saturated dependency add load to the thing that is already the bottleneck. This is the moment the incident stops being about the database.\",\"start\":1800,\"end\":2600,\"tracks\":[{\"kind\":\"flow\",\"start\":1800,\"end\":2600,\"edge\":\"e4\",\"from\":\"orders\",\"to\":\"db\",\"label\":\"retry x3\",\"status\":\"fail\"}]},{\"id\":\"spread\",\"name\":\"The gateway's thread pool fills\",\"desc\":\"Inventory is healthy and still unreachable: it is queued behind Orders in a pool they share. Independent services, one shared resource, one blast radius.\",\"start\":2600,\"end\":3300,\"tracks\":[{\"kind\":\"focus\",\"start\":2600,\"end\":3300,\"target\":\"core\"},{\"kind\":\"flow\",\"start\":2600,\"end\":3300,\"edge\":\"e3\",\"from\":\"api\",\"to\":\"inventory\",\"label\":\"queued\",\"status\":\"fail\"},{\"kind\":\"note\",\"start\":2600,\"end\":3300,\"target\":\"api\",\"text\":\"shared thread pool\",\"side\":\"above\"}]},{\"id\":\"page\",\"name\":\"The pager goes off\",\"desc\":\"By the time the alert fires the cause is three hops from the symptom. Click any service to open its dashboard from here.\",\"start\":3300,\"end\":3900,\"tracks\":[{\"kind\":\"flow\",\"start\":3300,\"end\":3900,\"edge\":\"e6\",\"from\":\"orders\",\"to\":\"pager\",\"label\":\"SLO burn 14x\",\"color\":\"#dc2626\"}]}],\"persistent\":[{\"kind\":\"gauge\",\"start\":900,\"end\":1800,\"target\":\"db\",\"label\":\"p99\",\"value\":\"2.4s\"},{\"kind\":\"gauge\",\"start\":1800,\"end\":3900,\"target\":\"db\",\"label\":\"p99\",\"value\":\"8.1s\"},{\"kind\":\"set\",\"start\":1800,\"end\":3300,\"target\":\"orders\",\"value\":\"degraded\",\"color\":\"#d97706\"},{\"kind\":\"set\",\"start\":2600,\"end\":3900,\"target\":\"api\",\"label\":\"saturated\",\"value\":\"degraded\",\"color\":\"#dc2626\"},{\"kind\":\"set\",\"start\":3300,\"end\":3900,\"target\":\"orders\",\"label\":\"page raised\",\"value\":\"down\",\"color\":\"#dc2626\"}]}],\"bindings\":[{\"source\":\"api\",\"kind\":\"url\",\"url\":\"https://example.com/dashboards/api-gateway\",\"label\":\"API Gateway dashboard\"},{\"source\":\"orders\",\"kind\":\"url\",\"url\":\"https://example.com/runbooks/orders\",\"label\":\"Orders runbook\"},{\"source\":\"inventory\",\"kind\":\"url\",\"url\":\"https://example.com/dashboards/inventory\",\"label\":\"Inventory dashboard\"},{\"source\":\"db\",\"kind\":\"url\",\"url\":\"https://example.com/dashboards/orders-db\",\"label\":\"Orders DB dashboard\"},{\"source\":\"pager\",\"kind\":\"url\",\"url\":\"https://example.com/oncall\",\"label\":\"Who is on call\"}]}],\"title\":\"the cascade\"}");
+window.CINEGRAM_PLAYER = Cinegram.mount(document.getElementById('cinegram'), CINEGRAM_TIMELINE);
+</script>
+</body>
+</html>

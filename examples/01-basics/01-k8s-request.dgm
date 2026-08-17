@@ -26,7 +26,7 @@ flowchart LR
   svc --> pod2
   api --> etcd
 
-view podA "Inside Pod A" from "pod-a.dgm"
+view podA "Inside Pod A" from "../pod-a.dgm"
 
 interact {
   %% Pod A is a door: clicking it opens the diagram of what happens inside.

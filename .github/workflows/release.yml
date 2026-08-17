@@ -127,10 +127,10 @@ jobs:
           chmod +x "$BIN"
           V="${GITHUB_REF_NAME#v}"
           test "$("$BIN" version)" = "cinegram $V"
-          "$BIN" lint examples/k8s-request.dgm
-          "$BIN" compile examples/k8s-request.dgm -o smoke.json
-          "$BIN" preview examples/k8s-request.dgm -o smoke.html
-          "$BIN" record examples/payment-checkout.dgm -o smoke.gif --fps 2
+          "$BIN" lint examples/01-basics/01-k8s-request.dgm
+          "$BIN" compile examples/01-basics/01-k8s-request.dgm -o smoke.json
+          "$BIN" preview examples/01-basics/01-k8s-request.dgm -o smoke.html
+          "$BIN" record examples/02-storytelling/01-payment-checkout.dgm -o smoke.gif --fps 2
           test -s smoke.gif
 
   channel-github-binaries:

@@ -17,8 +17,8 @@ filegroup(
 filegroup(
     name = "playground_examples",
     srcs = glob([
-        "*.dgm",
-        "frames/*.svg",
+        "**/*.dgm",
+        "**/frames/*.svg",
     ]),
     visibility = ["//web/playground:__pkg__"],
 )

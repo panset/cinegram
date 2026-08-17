@@ -144,8 +144,12 @@ func renderIndex(out map[string][]byte, root, cur *folder, cfg Config) error {
 	b.WriteString("<ul class=\"dgm-site-demos\">\n")
 	for _, e := range cur.entries {
 		if e.dir != nil {
-			fmt.Fprintf(&b, "<li class=\"is-folder\"><a class=\"title\" href=\"%s\">%s/</a></li>\n",
+			fmt.Fprintf(&b, "<li class=\"is-folder\"><a class=\"title\" href=\"%s\">%s/</a>\n",
 				stdhtml.EscapeString(up(n)+path.Join(e.dir.rel, "index.html")), stdhtml.EscapeString(e.dir.name))
+			if inside := contents(e.dir, n); inside != "" {
+				fmt.Fprintf(&b, "<p class=\"blurb\">%s</p>\n", inside)
+			}
+			b.WriteString("</li>\n")
 			continue
 		}
 		fmt.Fprintf(&b, "<li><a class=\"title\" href=\"%s\">%s</a><span class=\"source\">%s</span>\n",
@@ -160,6 +164,35 @@ func renderIndex(out map[string][]byte, root, cur *folder, cfg Config) error {
 
 	out[outPath] = []byte(b.String())
 	return nil
+}
+
+// contentsShown caps how much of a folder its parent's listing spells out. A
+// folder entry is a way in, not a second copy of the tree the sidebar already
+// carries whole.
+const contentsShown = 6
+
+// contents links a folder's direct children under its entry in the parent
+// index. Without it a site whose root holds only folders greets a reader with
+// nothing but folder names, where a flat one showed every demo and its blurb —
+// this keeps any demo one click from the landing page either way. Blurbs stay
+// on the folder's own index: a listing of listings has to stay scannable.
+func contents(f *folder, n int) string {
+	var parts []string
+	for _, e := range f.entries {
+		if len(parts) == contentsShown {
+			return strings.Join(parts, " · ") +
+				fmt.Sprintf(" · and %d more", len(f.entries)-contentsShown)
+		}
+		href, text := "", ""
+		if e.dir != nil {
+			href, text = up(n)+path.Join(e.dir.rel, "index.html"), e.dir.name+"/"
+		} else {
+			href, text = up(n)+e.page.out, e.page.title
+		}
+		parts = append(parts, fmt.Sprintf("<a href=\"%s\">%s</a>",
+			stdhtml.EscapeString(href), stdhtml.EscapeString(text)))
+	}
+	return strings.Join(parts, " · ")
 }
 
 // sidebar renders the whole tree, marking the current output path. Folders

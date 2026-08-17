@@ -217,6 +217,17 @@ ul.dgm-site-demos .blurb {
   font-size: 0.92rem;
 }
 
+/* A folder entry's blurb is what it contains, linked. Without this the links
+   fall back to the browser's own blue, which reads as a different site. */
+ul.dgm-site-demos .blurb a {
+  color: var(--dgm-accent);
+  text-decoration: none;
+}
+
+ul.dgm-site-demos .blurb a:hover {
+  text-decoration: underline;
+}
+
 /* --- narrow screens ------------------------------------------------------ */
 
 @media (max-width: 860px) {

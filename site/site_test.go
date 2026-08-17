@@ -201,6 +201,54 @@ func TestIndexLinksEveryDemoWithItsBlurb(t *testing.T) {
 	}
 }
 
+func TestAFolderEntryLinksWhatIsInsideIt(t *testing.T) {
+	// A site organised into folders would otherwise greet a reader with a
+	// landing page of bare folder names, where a flat one listed every demo.
+	out, _, err := Build(mem(map[string]string{
+		"01-basics/01-first.dgm":  plainExample,
+		"01-basics/02-second.dgm": plainExample,
+	}))
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	index := listing(string(out["demos/index.html"]))
+	if !strings.Contains(index, `href="01-basics/index.html"`) {
+		t.Error("root index does not link the folder itself")
+	}
+	for _, want := range []string{`href="01-basics/first.html"`, `href="01-basics/second.html"`} {
+		if !strings.Contains(index, want) {
+			t.Errorf("root index does not reach %s in one click; have:\n%s", want, index)
+		}
+	}
+}
+
+// listing is an index page's <main> — the sidebar carries the whole tree on
+// every page, so a claim about what the listing itself shows has to exclude it.
+func listing(page string) string {
+	_, main, _ := strings.Cut(page, "<main")
+	return main
+}
+
+func TestAFolderEntryStopsListingAfterSix(t *testing.T) {
+	files := map[string]string{}
+	for _, name := range []string{"a", "b", "c", "d", "e", "f", "g", "h"} {
+		files["deep/"+name+".dgm"] = plainExample
+	}
+	out, _, err := Build(mem(files))
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	index := listing(string(out["demos/index.html"]))
+	if !strings.Contains(index, "and 2 more") {
+		t.Errorf("root index does not say how much of the folder it left out; have:\n%s", index)
+	}
+	if strings.Contains(index, `href="deep/g.html"`) {
+		t.Error("root index spells out a folder past the cap")
+	}
+}
+
 func TestNumericPrefixesOrderAndDisappear(t *testing.T) {
 	out, _, err := Build(mem(map[string]string{
 		"02-second.dgm": plainExample,
