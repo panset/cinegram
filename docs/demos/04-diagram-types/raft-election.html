@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>leader failure and re-election</title>
+<link rel="stylesheet" href="../assets/runtime.css">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body class="dgm-standalone dgm-sited">
+<nav class="dgm-site-nav">
+<p class="dgm-site-name"><a href="../index.html">Cinegram</a></p>
+<ul>
+<li class="is-folder"><details open><summary><a href="../01-basics/index.html">basics</a></summary>
+<ul>
+<li><a href="../01-basics/k8s-request.html">GET /api/orders</a></li>
+<li><a href="../01-basics/deploy-pipeline.html">ship a release</a></li>
+</ul>
+</details></li>
+<li class="is-folder"><details open><summary><a href="../02-storytelling/index.html">storytelling</a></summary>
+<ul>
+<li><a href="../02-storytelling/payment-checkout.html">payment checkout</a></li>
+<li><a href="../02-storytelling/blue-green-deploy.html">cut over to v1.5</a></li>
+<li><a href="../02-storytelling/oauth-login.html">authorization code flow</a></li>
+<li><a href="../02-storytelling/oidc-login.html">sign in with an external IdP</a></li>
+</ul>
+</details></li>
+<li class="is-folder"><details open><summary><a href="../03-interaction/index.html">interaction</a></summary>
+<ul>
+<li><a href="../03-interaction/incident-triage.html">the cascade</a></li>
+<li><a href="../03-interaction/layered-arch.html">a priced order request</a></li>
+<li><a href="../03-interaction/data-platform.html">a row&#39;s journey</a></li>
+</ul>
+</details></li>
+<li class="is-folder"><details open><summary><a href="../04-diagram-types/index.html">diagram types</a></summary>
+<ul>
+<li><a href="../04-diagram-types/websocket-handshake.html">the upgrade</a></li>
+<li><a href="../04-diagram-types/tcp-connection.html">tcp connection</a></li>
+<li><a class="is-current" href="../04-diagram-types/raft-election.html">leader failure and re-election</a></li>
+</ul>
+</details></li>
+</ul>
+</nav>
+<div class="dgm-site-main">
+<header class="dgm-site-top">
+<nav class="dgm-site-crumbs">
+<a href="../index.html">Cinegram</a>
+<span>/</span> <a href="../04-diagram-types/index.html">diagram types</a>
+<span>/</span> <span class="is-here">leader failure and re-election</span>
+</nav>
+<div class="dgm-site-actions">
+<a class="dgm-site-edit" href="../../playground/#doc=rFZPb9vGEv8qAz4YuUiKZMoJnm55D36nhx7SoD1YATwih-TWy1l2Z2mGNQL0Q_QT9pMUsyvRsmU7TtGLvVoOh7O_P7Nzl91mm9UsIw5-zDbZcj0vDdYe23kYO5K3y3zusQpzslQE43hR1m02y1xH_B3hlbEk2ebqLuu-462QbbJAX0I2y8psk52dwUesAljCkjwcgsEwIFTmlubsSoLC9hLIL7Z8dgbz-Tz-_9QQdM5wAFdBaIwAfcG2swRGIDQYIDTTq28EJGCIzyzVZmcJMADyGHNJ4fsddE5MrBV-blyK1LJmMMRs5FsYCNBTrI9LaNwALfIIty6QAMZcBXJpSv1WgwKFs3ooKuN77LQqw7XA6HoNBcMVeai8awGhQx9MYSnWH7NpDrSesByhdkzQoQT48_c_QJwecIx5r4XCdSzpusa-put0Wq3cFI3GpdJc2xlLHm6IOgFlHHoOxoK4lmJh4KmzWJCACYstV9YNRYM-wKf_bBlA-l3tsWsOuF5F-v6bfnzWCABeXfHqsD6_4vPDOr_i_LBeX_H6sL644ou4Ji63rAtewXy-7ZfLnIDPT3byk531yc7FPlN-tLc62Tk_2Vmf7MRMUhCjNw622V6sFRrbe4qoe5qEvs3gDqQjKjewWizha6pDAnX6R3ncZry6l1dSEqEPO8IgUbWVs9YN5EWzJZRKkmID2-zDA8c0zpZKlUzihd0IAe2N4XoBl7fkxylbcoV-SgAZPnQdcXnJwRsSGIzyH1NNNgymJdcHFdMo6sh9osU2S0UJBUX9DnZY1rSZwNlms6TAzeShwlnnNeJfq3eYr3GbKTSaJCo2pbG4I6tBajZNcou2pw2sDrGqx8jzRODxWw9OpK-Xvd_AxXLZyrMJcrh7Tdj6dWEXT4QdK6B0Ayf-JbhOwJN0jkvD9SnTP7jkSGR2PaslER5qbxGb4CQWcGxHcDshf6u6BNwJcTG1ASMwNGMU2NA4S9B5F1zhrD7Z9cYGcNp4D7R7DE1SDacH7IKpTIGxSR400HNSwb54007rJ7GeyJokD9ZJmNh6p8Al9fSyiSc9hfFQ4Tbj_M0jwXqojCfRv5r2MaqXj8QtsYF65NK1RqiEzlNhhOyYOiwqKNq5S4JeerR2BE9YNCTwG3mXvrPQwxkuPLXEexOrhmf7q6FyXq1FtppFv6PcpCCnEAsEB1h7oofOyo-dNd0rR-aa9o79Vf77_fvluxN_5S_46_yl2HiCo-BttoK3cHH_gVPO82cM-pF-7UnCTy6d4jlD5S_77lgJCV5tiy3-4rwJIyDL063zEovmvhnWHpUpDNA6SSRrMuhU8pE65X9w9yCL3vtKmmCb6NVneqfvXGhgMKyG9EQ6kej0or7C48LKJCidVdj1dTPR_Trc82_hfv6M1-JZqZwwX1_sTTZa2uybkNBDEtb_QK5jpmg_B6lnYUeFa2m6AtUeEc_zU9a0xUUTQOtuSfRV7IUiEV67mG6XC-DVm0M-aUwHA2p7DcZTGWNbp9YEE2DQ_2IscUhu5H2n3dO7n2RBgrEWCoumlWTUwchLFv37l983iH-a8663cpiGjpHWEU67NME2-7-rp9_a9TxJr8D3XMbWTsA0wKHwx9j_T8fShjwdz9LxtsDiRptWdEOaavbzdZwWvBJteBZdFYm1GPajztRN9S5cwI9x9I759GnlfGg2MW-EVeJuRElAcEyzuE74vo8jfDRU4nYW5-sY0KCOAsq8A2TTamkWJUzkvb5nvXqoyF83LeTfnBayr5-__hUAAP__">Edit in playground</a>
+<a href="../../playground/">Playground</a>
+<a href="https://github.com/panset/cinegram">GitHub</a>
+</div>
+</header>
+<div id="cinegram"></div>
+<nav class="dgm-site-prevnext">
+<a class="dgm-site-prev" href="../04-diagram-types/tcp-connection.html">← tcp connection</a>
+</nav>
+</div>
+<script src="../assets/mermaid.min.js"></script>
+<script src="../assets/runtime.js"></script>
+<script>
+var CINEGRAM_TIMELINE = JSON.parse("{\"version\":2,\"root\":\"03-raft-election\",\"views\":[{\"id\":\"03-raft-election\",\"title\":\"leader failure and re-election\",\"diagram\":{\"type\":\"flowchart\",\"direction\":\"TB\",\"mermaid\":\"%% Raft leader election in a five-node cluster.\\n%% ---\\n%% The point of this example is that the cluster's state is legible at any\\n%% scrub position. Who is leader, what term we are in and how many votes a\\n%% candidate has collected are not things you can infer from a particle that\\n%% has already gone past — so they are `set` and `gauge` state, which the\\n%% compiler keeps open until something replaces it.\\nflowchart TB\\n  subgraph cluster[Raft Cluster]\\n    n1[n1]\\n    n2[n2]\\n    n3[n3]\\n    n4[n4]\\n    n5[n5]\\n  end\\n  n1 --\\u003e n2\\n  n1 --\\u003e n3\\n  n1 --\\u003e n4\\n  n1 --\\u003e n5\\n  n3 --\\u003e n1\\n  n3 --\\u003e n2\\n  n3 --\\u003e n4\\n  n3 --\\u003e n5\\n\"},\"nodes\":[{\"id\":\"n1\",\"label\":\"n1\",\"shape\":\"rect\",\"group\":\"cluster\"},{\"id\":\"n2\",\"label\":\"n2\",\"shape\":\"rect\",\"group\":\"cluster\"},{\"id\":\"n3\",\"label\":\"n3\",\"shape\":\"rect\",\"group\":\"cluster\"},{\"id\":\"n4\",\"label\":\"n4\",\"shape\":\"rect\",\"group\":\"cluster\"},{\"id\":\"n5\",\"label\":\"n5\",\"shape\":\"rect\",\"group\":\"cluster\"}],\"groups\":[{\"id\":\"cluster\",\"label\":\"Raft Cluster\",\"children\":[\"n1\",\"n2\",\"n3\",\"n4\",\"n5\"]}],\"edges\":[{\"id\":\"e0\",\"from\":\"n1\",\"to\":\"n2\",\"style\":\"normal\",\"head\":\"arrow\"},{\"id\":\"e1\",\"from\":\"n1\",\"to\":\"n3\",\"style\":\"normal\",\"head\":\"arrow\"},{\"id\":\"e2\",\"from\":\"n1\",\"to\":\"n4\",\"style\":\"normal\",\"head\":\"arrow\"},{\"id\":\"e3\",\"from\":\"n1\",\"to\":\"n5\",\"style\":\"normal\",\"head\":\"arrow\"},{\"id\":\"e4\",\"from\":\"n3\",\"to\":\"n1\",\"style\":\"normal\",\"head\":\"arrow\"},{\"id\":\"e5\",\"from\":\"n3\",\"to\":\"n2\",\"style\":\"normal\",\"head\":\"arrow\"},{\"id\":\"e6\",\"from\":\"n3\",\"to\":\"n4\",\"style\":\"normal\",\"head\":\"arrow\"},{\"id\":\"e7\",\"from\":\"n3\",\"to\":\"n5\",\"style\":\"normal\",\"head\":\"arrow\"}],\"scenarios\":[{\"id\":\"s0\",\"name\":\"leader failure and re-election\",\"duration\":3350,\"speed\":1,\"loop\":false,\"autoplay\":false,\"steps\":[{\"id\":\"steady\",\"name\":\"n1 is leader and heartbeats the followers\",\"desc\":\"A Raft leader holds its position by talking. Every follower that hears an AppendEntries within its election timeout stays a follower.\",\"start\":0,\"end\":500,\"tracks\":[{\"kind\":\"flow\",\"start\":0,\"end\":500,\"edge\":\"e0\",\"from\":\"n1\",\"to\":\"n2\",\"label\":\"AppendEntries\"},{\"kind\":\"flow\",\"start\":0,\"end\":500,\"edge\":\"e1\",\"from\":\"n1\",\"to\":\"n3\"},{\"kind\":\"flow\",\"start\":0,\"end\":500,\"edge\":\"e2\",\"from\":\"n1\",\"to\":\"n4\"},{\"kind\":\"flow\",\"start\":0,\"end\":500,\"edge\":\"e3\",\"from\":\"n1\",\"to\":\"n5\"}]},{\"id\":\"down\",\"name\":\"n1 stops responding\",\"desc\":\"Nothing announces a leader failure. The followers only observe an absence, which is why the whole protocol is built on a timeout rather than on a notification.\",\"start\":500,\"end\":1100,\"tracks\":[{\"kind\":\"dim\",\"start\":500,\"end\":1100,\"target\":\"n1\"},{\"kind\":\"flow\",\"start\":500,\"end\":1100,\"edge\":\"e1\",\"from\":\"n1\",\"to\":\"n3\",\"label\":\"heartbeat lost\",\"status\":\"fail\"}]},{\"id\":\"timeout\",\"name\":\"n3's election timer fires first\",\"desc\":\"Election timeouts are randomised precisely so that one node usually reaches zero first. n3 increments the term, votes for itself, and asks the others to agree.\",\"start\":1100,\"end\":1600,\"tracks\":[{\"kind\":\"dim\",\"start\":1100,\"end\":1600,\"target\":\"n1\"},{\"kind\":\"flow\",\"start\":1100,\"end\":1600,\"edge\":\"e5\",\"from\":\"n3\",\"to\":\"n2\",\"label\":\"RequestVote\"},{\"kind\":\"flow\",\"start\":1100,\"end\":1600,\"edge\":\"e6\",\"from\":\"n3\",\"to\":\"n4\"}]},{\"id\":\"votes\",\"name\":\"A majority answers\",\"desc\":\"Each follower grants at most one vote per term, so two candidates in the same term cannot both win. Three of five is a majority and that is enough.\",\"start\":1600,\"end\":2050,\"tracks\":[{\"kind\":\"dim\",\"start\":1600,\"end\":2050,\"target\":\"n1\"},{\"kind\":\"flow\",\"start\":1600,\"end\":2050,\"edge\":\"e5\",\"from\":\"n2\",\"to\":\"n3\",\"reverse\":true,\"label\":\"granted\",\"style\":\"response\"},{\"kind\":\"flow\",\"start\":1600,\"end\":2050,\"edge\":\"e6\",\"from\":\"n4\",\"to\":\"n3\",\"reverse\":true,\"label\":\"granted\",\"style\":\"response\"}]},{\"id\":\"elected\",\"name\":\"n3 becomes leader for term 2\",\"desc\":\"The badge moves because the role moved. n1's leadership was retired the moment it went silent, and nothing in the diagram still claims otherwise.\",\"start\":2050,\"end\":2850,\"tracks\":[{\"kind\":\"dim\",\"start\":2050,\"end\":2850,\"target\":\"n1\"},{\"kind\":\"pulse\",\"start\":2050,\"end\":2850,\"target\":\"n3\"}]},{\"id\":\"replicate\",\"name\":\"Log replication resumes under the new leader\",\"desc\":\"From here the cluster is back to the steady state it started in, one term later and one node down. Scrub back and forth: the badges and gauges say what is true at that moment, not what happened to animate last.\",\"start\":2850,\"end\":3350,\"tracks\":[{\"kind\":\"dim\",\"start\":2850,\"end\":3350,\"target\":\"n1\"},{\"kind\":\"flow\",\"start\":2850,\"end\":3350,\"edge\":\"e5\",\"from\":\"n3\",\"to\":\"n2\",\"label\":\"AppendEntries\"},{\"kind\":\"flow\",\"start\":2850,\"end\":3350,\"edge\":\"e6\",\"from\":\"n3\",\"to\":\"n4\"},{\"kind\":\"flow\",\"start\":2850,\"end\":3350,\"edge\":\"e7\",\"from\":\"n3\",\"to\":\"n5\"}]}],\"persistent\":[{\"kind\":\"set\",\"start\":0,\"end\":500,\"target\":\"n1\",\"label\":\"leader\",\"value\":\"leader\",\"color\":\"#16a34a\"},{\"kind\":\"gauge\",\"start\":0,\"end\":500,\"target\":\"n1\",\"label\":\"term\",\"value\":\"1\"},{\"kind\":\"set\",\"start\":1100,\"end\":2050,\"target\":\"n3\",\"label\":\"candidate\",\"value\":\"candidate\",\"color\":\"#d97706\"},{\"kind\":\"gauge\",\"start\":1100,\"end\":3350,\"target\":\"n3\",\"label\":\"term\",\"value\":\"2\"},{\"kind\":\"gauge\",\"start\":1100,\"end\":1600,\"target\":\"n3\",\"label\":\"votes\",\"value\":\"1 / 5\"},{\"kind\":\"gauge\",\"start\":1600,\"end\":2050,\"target\":\"n3\",\"label\":\"votes\",\"value\":\"3 / 5\"},{\"kind\":\"set\",\"start\":2050,\"end\":3350,\"target\":\"n3\",\"label\":\"leader\",\"value\":\"leader\",\"color\":\"#16a34a\"}]}]}],\"title\":\"leader failure and re-election\"}");
+window.CINEGRAM_PLAYER = Cinegram.mount(document.getElementById('cinegram'), CINEGRAM_TIMELINE);
+</script>
+</body>
+</html>

@@ -16,8 +16,10 @@ rebuilds it), and assembles the playground beside it at `/playground/` — so
 committing `docs/` to `main` is still what publishes the demo pages. The
 generator is `pkg/sitegen` — the same one `cinegram site` exposes — wrapped
 by `site/` with the repo's presentation (title, hero, playground and GitHub
-links) and rooted at `docs/demos/`, so every demo URL ever shared keeps
-working. Pages share one runtime copy from `demos/assets/` instead of
+links) and rooted at `docs/demos/`. A page's URL is its source's path under
+`examples/`, so **moving an example moves its published URL** — the sweep
+deletes the page at the old path and nothing redirects. Weigh that before
+reorganising the tree. Pages share one runtime copy from `demos/assets/` instead of
 inlining mermaid per page; the generated `demos/index.html` is the landing
 page, and the top-level `docs/index.html` is only a redirect into it.
 
@@ -44,7 +46,7 @@ Done when the test passes and `git status` shows nothing unstaged under
 
 ## What the generator decides for you
 
-- Every `examples/*.dgm` gets a page **except** one that another example
+- Every `examples/**/*.dgm` gets a page **except** one that another example
   pulls in via `view … from` — readers reach it by drill-down. (Two examples
   referencing each other still publish: the first alphabetically.)
 - The index blurb is the example's leading `%%` comment block, up to a

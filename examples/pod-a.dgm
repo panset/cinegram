@@ -1,5 +1,7 @@
 %% What Pod A does with a request once kube-proxy has picked it.
-%% Reached by clicking Pod A in k8s-request.dgm, and previewable on its own.
+%% Reached by clicking Pod A in 01-basics/01-k8s-request.dgm — and by clicking
+%% the server in 04-diagram-types/01-websocket-handshake.dgm, which is why this
+%% file sits at the root rather than inside either folder. Previewable alone.
 flowchart LR
   in[Request from Service]
 

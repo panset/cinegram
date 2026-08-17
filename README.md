@@ -11,12 +11,19 @@ LB → Ingress → Service → Pod and back. Cinegram adds a small animation
 language on top of Mermaid so that path becomes something you can watch.
 
 ```
-bazel run //cmd/cinegram -- preview examples/k8s-request.dgm -o /tmp/k8s.html
+bazel run //cmd/cinegram -- preview examples/01-basics/01-k8s-request.dgm -o /tmp/k8s.html
 open /tmp/k8s.html
 ```
 
 Or skip the build entirely: every example is playable at
 <https://panset.github.io/cinegram/>.
+
+`examples/` is a tour, and the site mirrors it folder for folder:
+`01-basics/` is a request path and a pipeline, `02-storytelling/` adds
+failure paths, narration and storyboards, `03-interaction/` is clicking and
+drilling in, `04-diagram-types/` proves the same language over `sequence-`
+and `stateDiagram`. The numeric prefixes are ordering only — readers never
+see them.
 
 **Try it in the browser.** <https://panset.github.io/cinegram/playground/> is
 the compiler itself, built to WASM and running in the tab — paste a diagram,
@@ -137,7 +144,7 @@ colour tints the same parts the default would have, in both light and dark.
 evaluates it at the current time rather than integrating between frames, so
 scrubbing to a moment shows exactly what playing to it would.
 
-`examples/deploy-pipeline.dgm` puts them together — a green deploy easing into
+`examples/01-basics/02-deploy-pipeline.dgm` puts them together — a green deploy easing into
 production, a red rollback coming back out:
 
 ```
@@ -202,7 +209,7 @@ step attempt "The primary gateway never answers" {
 }
 ```
 
-`examples/payment-checkout.dgm` runs the same checkout twice — one scenario
+`examples/02-storytelling/01-payment-checkout.dgm` runs the same checkout twice — one scenario
 where the gateway answers and one where it times out and traffic fails over to
 a backup provider. Failure paths are first-class, not an afterthought in red.
 
@@ -233,7 +240,7 @@ Participants become nodes and each message becomes its own edge; `Note`,
 `activate`, `loop`/`alt`/`opt`/`end` and `box` round-trip verbatim as
 unmodelled syntax. Everything on top — `desc`, `set`/`gauge`, `focus`,
 `click … -> view`, `narrate`, `frame` — is the same code it was for flowcharts.
-A bundle can mix the two: `examples/websocket-handshake.dgm` drills from an
+A bundle can mix the two: `examples/04-diagram-types/01-websocket-handshake.dgm` drills from an
 actor into a flowchart of the server's internals.
 
 Two things are worth knowing when animating one:
@@ -282,7 +289,7 @@ composite behaves like a subgraph, so `highlight`, `dim` and `reveal` on one
 cover everything inside it, however deeply nested. `note`, `direction`,
 `classDef` and the `--` concurrency divider round-trip verbatim as unmodelled
 syntax. The plain `stateDiagram` header works too and renders identically.
-`examples/tcp-connection.dgm` is the worked example.
+`examples/04-diagram-types/02-tcp-connection.dgm` is the worked example.
 
 Three things are worth knowing when animating one:
 
@@ -329,7 +336,7 @@ rather than only seeing it. It is rewritten when the step changes, not when the
 frame does — otherwise the same sentence would be announced sixty times a
 second for the length of the step.
 
-`examples/oauth-login.dgm` is the worked example: an OAuth 2.0 authorization
+`examples/02-storytelling/03-oauth-login.dgm` is the worked example: an OAuth 2.0 authorization
 code flow where every step explains what the protocol is buying with it.
 
 ## Persistent state
@@ -369,7 +376,7 @@ The windows are half-open. When one reading replaces another they share an
 instant, and treating both ends as inclusive would show the old and new value
 together on that one frame.
 
-`examples/raft-election.dgm` is the worked example: a leader dies, an election
+`examples/04-diagram-types/03-raft-election.dgm` is the worked example: a leader dies, an election
 runs, and the badges and gauges say what is true at whatever moment you stop.
 
 ## Attention
@@ -404,7 +411,7 @@ saying how much is folded away (`+3`), which flips to `–` once it is open; a
 `view` source carries a `⤢`. Both are clickable, and both do exactly what
 clicking the element does. A reveal nobody can see is a reveal nobody finds.
 
-`examples/layered-arch.dgm` walks a request down four layers, focusing one at a
+`examples/03-interaction/02-layered-arch.dgm` walks a request down four layers, focusing one at a
 time, with the cross-cutting concerns folded away behind a chip.
 
 ## Storyboard
@@ -471,8 +478,8 @@ paths resolve relative to the file that declares them. The panel appears only
 for scenarios that actually use a scene, so a document can storyboard its happy
 path and give the failure path the full width.
 
-`examples/oidc-login.dgm` is the worked example, with its frames in
-`examples/frames/`.
+`examples/02-storytelling/04-oidc-login.dgm` is the worked example, with its frames in
+`examples/02-storytelling/frames/`.
 
 ## Failure paths
 
@@ -512,7 +519,7 @@ failing flow draws — a reader should be able to see that one of the alternativ
 ends badly before choosing it. Choosing a scenario also rewrites the address, so
 the link you copy names what you are looking at.
 
-`examples/payment-checkout.dgm` tells checkout twice: the path everyone draws,
+`examples/02-storytelling/01-payment-checkout.dgm` tells checkout twice: the path everyone draws,
 and the one that costs money.
 
 ## Presenter mode
@@ -522,7 +529,7 @@ button, which toggles in place without reloading — switches Space from "play"
 to "play exactly the next step, then stop":
 
 ```sh
-cinegram preview examples/oidc-login.dgm --serve
+cinegram preview examples/02-storytelling/04-oidc-login.dgm --serve
 # then open http://127.0.0.1:8731/?present
 ```
 
@@ -565,8 +572,8 @@ moment rather than accumulated between frames, so scrubbing, deep links and
 recording all see exactly what playing does — mid-glide included.
 
 ```
-cinegram record examples/oidc-login.dgm --reel -o login.mp4
-cinegram frame  examples/oidc-login.dgm --reel --at 6500ms -o beat.png
+cinegram record examples/02-storytelling/04-oidc-login.dgm --reel -o login.mp4
+cinegram frame  examples/02-storytelling/04-oidc-login.dgm --reel --at 6500ms -o beat.png
 ```
 
 `--reel` shoots the `?reel` page at 1080×1920 — the portrait clip LinkedIn,
@@ -612,7 +619,7 @@ and a seek resets them. Reveal is interaction state that persists until the
 viewer leaves the view. Being the target of a reveal is what makes an element
 start hidden — there is no separate declaration.
 
-`examples/blue-green-deploy.dgm` is the timeline side of that distinction: the
+`examples/02-storytelling/02-blue-green-deploy.dgm` is the timeline side of that distinction: the
 green pods are hidden while blue serves, appear when the controller starts them
 (a `seq` chains the launches, a `wait` stands in for each readiness probe), and
 scrubbing backwards removes them again. Edges into a hidden node conceal
@@ -646,7 +653,7 @@ still works when the frame has focus.
         width="100%" height="520" style="border:0" title="Incident cascade"></iframe>
 ```
 
-`examples/incident-triage.dgm` is the worked example — a service map where
+`examples/03-interaction/01-incident-triage.dgm` is the worked example — a service map where
 every service links out to its dashboard or runbook, because a diagram
 consulted during an incident is a navigation surface rather than an
 illustration.
@@ -667,7 +674,7 @@ cinegram lint    <file.dgm> [--format=text|json] # diagnostics only
 ### Authoring
 
 ```
-cinegram preview examples/k8s-request.dgm --serve --watch
+cinegram preview examples/01-basics/01-k8s-request.dgm --serve --watch
 ```
 
 Serves the page at `http://127.0.0.1:8731/`, compiled from source on every
@@ -683,10 +690,10 @@ the reload loop is the fastest way to read it.
 For a still of one exact moment:
 
 ```
-cinegram frame examples/payment-checkout.dgm --at 1620ms --scenario s1 -o fail.png
+cinegram frame examples/02-storytelling/01-payment-checkout.dgm --at 1620ms --scenario s1 -o fail.png
 ```
 
-That is `examples/payment-checkout.fail.png` — the gateway timing out, ✕ and
+That is `examples/02-storytelling/01-payment-checkout.fail.png` — the gateway timing out, ✕ and
 all. It works by opening the Phase-6 deep link in a headless Chrome, and
 because a deep link lands *paused*, the screenshot is deterministic rather than
 a race against the animation. The browser is found on `PATH`
@@ -725,8 +732,8 @@ root index.
 `record` is `frame` in a loop, encoded:
 
 ```
-cinegram record examples/payment-checkout.dgm -o checkout.gif --fps 10
-cinegram record examples/oidc-login.dgm -o login.mp4 --scenario s0
+cinegram record examples/02-storytelling/01-payment-checkout.dgm -o checkout.gif --fps 10
+cinegram record examples/02-storytelling/04-oidc-login.dgm -o login.mp4 --scenario s0
 ```
 
 Because every frame is an independent deep link that lands paused, the
@@ -776,7 +783,7 @@ what proves the exchange is genuine.
 - **auth → tokens** carries "mint & record" (3.2s–3.7s)
 ```
 
-`examples/oauth-login.narrate.md` is that output, committed. `--format=json`
+`examples/02-storytelling/03-oauth-login.narrate.md` is that output, committed. `--format=json`
 emits the same walkthrough as data — each event carries both the sentence and
 the fields it was built from, so filtering for "every failing flow" does not
 mean parsing the prose back apart.
@@ -927,10 +934,11 @@ way: a hand-rolled lexer and recursive-descent parser need nothing beyond the
 standard library.
 
 The demo site at <https://panset.github.io/cinegram/> is the same story
-one level up: GitHub Pages serves `docs/` straight from `main` (Settings →
-Pages → deploy from branch, `/docs` folder — a one-time repository setting),
-so there is no CI build anywhere. `docs/` holds one committed, self-contained
-page per example plus an index; `bazel run //site:sync` regenerates it, and
+one level up: the `pages` workflow uploads the committed `docs/` verbatim and
+never rebuilds it, so nothing but `bazel run //site:sync` on a committer's
+machine writes that folder. `docs/demos/` mirrors the `examples/` tree — a
+page per example, an index per folder, one shared copy of mermaid and the
+runtime under `demos/assets/` rather than 2.8 MB inlined per page — and
 `//site:site_test` fails the build whenever the committed copy has fallen
 behind the examples or the renderer.
 

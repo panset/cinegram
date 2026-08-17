@@ -44,6 +44,12 @@ bazel run //site:sync
 The full publish workflow — what gets a page, how the index blurb is chosen —
 is `skills/publish-site/SKILL.md`.
 
+`examples/` is a tour, not a bag of files: `01-basics/` → `04-diagram-types/`,
+and `docs/demos/` mirrors it folder for folder. A page's URL **is** its
+source's path under `examples/`, so moving an example republishes it elsewhere
+and the sweep deletes the page it left behind. `pod-a.dgm` stays at the root
+because two demos in different folders drill into it (`../pod-a.dgm`).
+
 Formatting — `gofmt` exists only inside the hermetic SDK, and Bazel does not
 check it, so run it manually before finishing:
 
@@ -55,12 +61,12 @@ Exercise the CLI (relative paths work; the binary resolves them against
 `BUILD_WORKING_DIRECTORY`):
 
 ```sh
-bazel run //cmd/cinegram -- preview examples/k8s-request.dgm -o /tmp/k8s.html
+bazel run //cmd/cinegram -- preview examples/01-basics/01-k8s-request.dgm -o /tmp/k8s.html
 bazel run //cmd/cinegram -- site examples -o /tmp/site   # folder tree → browsable site
-bazel run //cmd/cinegram -- compile examples/k8s-request.dgm
-bazel run //cmd/cinegram -- mermaid examples/k8s-request.dgm
-bazel run //cmd/cinegram -- lint    examples/k8s-request.dgm
-bazel run //cmd/cinegram -- record  examples/payment-checkout.dgm -o /tmp/out.gif --fps 10
+bazel run //cmd/cinegram -- compile examples/01-basics/01-k8s-request.dgm
+bazel run //cmd/cinegram -- mermaid examples/01-basics/01-k8s-request.dgm
+bazel run //cmd/cinegram -- lint    examples/01-basics/01-k8s-request.dgm
+bazel run //cmd/cinegram -- record  examples/02-storytelling/01-payment-checkout.dgm -o /tmp/out.gif --fps 10
 ```
 
 `record` shells out to the same headless Chrome `frame` uses, once per frame in
@@ -385,7 +391,7 @@ Chrome extension blocks `file://` — and drive the player, which is exposed as
 `window.CINEGRAM_PLAYER`:
 
 ```sh
-bazel run //cmd/cinegram -- preview examples/k8s-request.dgm --serve --watch
+bazel run //cmd/cinegram -- preview examples/01-basics/01-k8s-request.dgm --serve --watch
 # http://127.0.0.1:8731/ — edit the .dgm and the page reloads itself
 ```
 
@@ -404,7 +410,7 @@ For a still, `frame` captures one exact millisecond with no race against the
 animation, because the deep link it opens lands paused:
 
 ```sh
-bazel run //cmd/cinegram -- frame examples/payment-checkout.dgm \
+bazel run //cmd/cinegram -- frame examples/02-storytelling/01-payment-checkout.dgm \
   --at 1620ms --scenario s1 -o /tmp/fail.png
 ```
 

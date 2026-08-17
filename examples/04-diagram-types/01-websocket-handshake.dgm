@@ -19,7 +19,7 @@ sequenceDiagram
   S-->>C: pong
   C->>S: close
 
-view internals "Inside the server" from "pod-a.dgm"
+view internals "Inside the server" from "../pod-a.dgm"
 
 interact {
   click S -> view internals { label: "What the server is doing" }
