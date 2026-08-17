@@ -20,6 +20,11 @@ _site/
 www/assets/cinegram/*
 !www/assets/cinegram/timelines/
 
+# The local Zensical install. Bazel cannot run a Python package, so previewing
+# the site is a virtualenv of your own — see the publish-site skill. A
+# developer's tool, and no part of the build.
+.venv/
+
 .DS_Store
 dist/
 # Tool droppings: the Playwright MCP server's session logs and its npm cache.
