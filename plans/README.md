@@ -15,3 +15,5 @@ instead.
 | [workstreams.md](workstreams.md) | the what-and-why, settled in review (2026-08-15) |
 | [prior-art.md](prior-art.md) | the research behind those choices, cited to primary sources |
 | [playground.md](playground.md) | the zero-install playground, from problem to shipped |
+| [player-followups.md](player-followups.md) | the debt PR #25's review deferred, in six phases (2026-08-16) |
+| [player-chrome-and-theme.md](player-chrome-and-theme.md) | the mainframe skin everywhere, and the bar down to Play + Present (2026-08-17) |
