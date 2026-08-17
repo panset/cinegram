@@ -12,6 +12,14 @@
  * with `.json` appended — subfolders and all. Compile one with
  * `cinegram compile path/to.dgm -o timelines/name.json`.
  *
+ * A site with a look of its own can hand the player its skin, which is a
+ * declaration in the site's own stylesheet rather than anything in the markup:
+ *
+ *   :root { --cinegram-skin: mainframe; }
+ *
+ * See `skin` below for why the switch is a custom property. Off by default: a
+ * site that declares nothing gets the player's neutral palette, unchanged.
+ *
  * `data-height` is the space the box reserves before the player mounts, and
  * only until then: the player replaces it with its own height, measured from
  * the diagram, the step list and the caption. Set it to roughly what the
@@ -77,6 +85,40 @@
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
       ? 'dark'
       : 'light';
+  }
+
+  /**
+   * The skin the page asks the player's chrome to wear — a palette and a type
+   * face, named by runtime.css, applied by stamping `data-dgm-skin` on <html>.
+   *
+   * Why the switch is a CSS custom property and not markup: a skin is a fact
+   * about the *site*, and the site already states its facts in a stylesheet.
+   * The alternative was an attribute per host, which nobody would remember on
+   * the next page they wrote — and one player on one page wearing a different
+   * palette from its neighbours is precisely the mismatch this exists to fix.
+   * Declared in the same file as the palette it belongs to, the switch cannot
+   * drift from it and cannot be half-applied. It is also the one page-level
+   * hook a Markdown page has: a theme's `extra_css` reaches <html>, its
+   * Markdown does not.
+   *
+   * Read from the document root rather than per host for the same reason, and
+   * because that is where runtime.css binds the skin's tokens and where the
+   * runtime already stamps `data-theme`. Nothing but the player reads
+   * `--dgm-*`, so the attribute changes no other pixel of the page.
+   *
+   * A value is honoured only if it looks like a skin name; the page's word for
+   * it ends up in an attribute selector, and `''` — the answer on every site
+   * that has not opted in — must stay the neutral default.
+   */
+  function skin() {
+    if (!window.getComputedStyle) return '';
+    var asked = getComputedStyle(document.documentElement)
+      .getPropertyValue('--cinegram-skin')
+      .trim()
+      // A custom property carries whatever tokens it was written with, and
+      // `"mainframe"` is as reasonable a way to write a name as `mainframe`.
+      .replace(/^['"]|['"]$/g, '');
+    return /^[a-z][a-z0-9-]*$/.test(asked) ? asked : '';
   }
 
   function fail(host, message) {
@@ -164,6 +206,10 @@
     var hosts = [].slice.call(document.querySelectorAll(HOSTS));
     if (!hosts.length) return;
     solo = hosts.length === 1;
+
+    // After the early return, so a page with no diagram still touches nothing.
+    var wearing = skin();
+    if (wearing) document.documentElement.setAttribute('data-dgm-skin', wearing);
 
     hosts.forEach(function (host) {
       var h = host.getAttribute('data-height');

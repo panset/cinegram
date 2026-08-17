@@ -742,47 +742,44 @@ input:focus-visible,
    phosphor bloom on the border so it reads as lit glass rather than a cut-out.
 
    Untuned, the player is the one thing on the page that still looks like a
-   different website — stock blue accent, grey chrome. The fix is not to reach
-   inside it. runtime.css defines its colours as `--dgm-*` tokens on :root and
-   says in its own header that "the tokens above are safe to share; laying out
-   the page is not", so this sets the tokens on the host and touches nothing
-   else. Custom properties inherit, so a value set here beats the runtime's
-   :root for everything the player draws, and presenter mode — which the
-   runtime owns end to end — keeps working untouched.
+   different website — stock blue accent, grey chrome. The palette that fixes
+   that is not written here: runtime.css carries this same theme as a **skin**,
+   `[data-dgm-skin="mainframe"]`, which the standalone page and the playground
+   already wear, and the whole of this file's job is to ask for it. One
+   declaration does that — cinegram-embed.js reads it and stamps the attribute
+   on <html> — and it is a custom property rather than an attribute per diagram
+   because a skin is a fact about the site, stated in the file that owns the
+   site's colours. See www/embedding.md; any site may declare it.
 
-   The mapping is the field palette applied to a story: the moving request is
-   the actionable green, the return leg turquoise, waiting is yellow, a failure
-   is red. That is the same four colours the prose above already uses, and more
-   separation than the stock blue/green/amber/red carried. */
+   This block used to set the `--dgm-*` tokens on the host itself, and must not
+   again. Custom properties inherit, so a value here beats the skin for
+   everything inside the box, and the two would have to be kept equal by hand
+   in a file the skin's own drift test could not see — while reading, in the
+   meantime, as a palette with two homes. The skin is the home; the pair is
+   pinned by site/palette_test.go, which is also why the player's chrome bands
+   in `--cg-bar` and not `--cg-field`: the bar is the printed band, the same one
+   the tables on these pages are striped with.
+
+   What is left here is the box, which is the page's business and not the
+   player's: the rule, the ground it sits on, and the family — the player's
+   chrome takes `--dgm-font` from the skin, but the box also holds the
+   "Loading diagram…" line and a failure message, which are ours. */
 .cinegram {
   border: 1px solid var(--cg-rule-strong);
   border-radius: 0;
   background: var(--cg-ground);
-
-  /* One family on the page includes the player's own chrome. */
   font-family: var(--md-text-font-family);
-
-  --dgm-bg: var(--cg-ground);
-  --dgm-panel: var(--cg-field);
-  --dgm-border: var(--cg-rule-strong);
-  --dgm-fg: var(--cg-ink);
-  --dgm-muted: var(--cg-dim);
-  --dgm-accent: var(--cg-green);
-  --dgm-accent-soft: var(--md-accent-fg-color--transparent);
-  --dgm-busy: var(--cg-yellow);
-  --dgm-response: var(--cg-turquoise);
-  --dgm-fail: var(--cg-red);
-  --dgm-warn-bg: var(--cg-field);
-  --dgm-warn-fg: var(--cg-yellow);
-}
-
-[data-md-color-scheme="default"] .cinegram {
-  --dgm-shadow: rgba(23, 32, 28, 0.14);
 }
 
 [data-md-color-scheme="slate"] .cinegram {
-  --dgm-shadow: rgba(0, 0, 0, 0.55);
   box-shadow: 0 0 0 1px var(--cg-rule), 0 0 1.6rem rgba(52, 217, 106, 0.05);
+}
+
+/* The switch. On :root because that is where the loader looks and where the
+   skin's tokens bind; the value is the skin's name in runtime.css. Nothing
+   reads it on a page with no diagram on it. */
+:root {
+  --cinegram-skin: mainframe;
 }
 
 /* ------------------------------------------------------------------ *

@@ -4,16 +4,30 @@
  * Colours are defined as tokens on bare :root so the light palette always has
  * a value, then overridden for the dark theme. The runtime stamps
  * data-theme on <html>, and prefers-color-scheme covers the untouched default.
+ *
+ * The type face is a token for the same reason the colours are: a surface that
+ * wants the mainframe skin below has to be able to reset it without hunting
+ * through the rules that draw the chrome.
  */
 
 :root {
+  --dgm-font: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --dgm-bg: #ffffff;
   --dgm-panel: #f6f7f9;
+  /* The panel colour with the diagram showing through it. Only the tool rail
+     wants it — a control floating on the stage has to admit what it is
+     covering — and it is a token rather than an rgba() in place because a
+     panel and its translucent form must change together. */
+  --dgm-panel-soft: rgba(246, 247, 249, 0.72);
   --dgm-border: #dfe3e8;
   --dgm-fg: #1c2024;
   --dgm-muted: #6b7480;
   --dgm-accent: #2f6feb;
   --dgm-accent-soft: rgba(47, 111, 235, 0.14);
+  /* What is written *on* the accent — Play, the active step's number. White
+     against both blues, and a token because a skin is free to pick an accent
+     white cannot be read on. Scheme-independent, so it is stated once. */
+  --dgm-on-accent: #ffffff;
   --dgm-busy: #d97706;
   --dgm-response: #16a34a;
   --dgm-fail: #dc2626;
@@ -26,6 +40,7 @@
 :root:not([data-theme='light']) {
   --dgm-bg: #0f1216;
   --dgm-panel: #171b21;
+  --dgm-panel-soft: rgba(23, 27, 33, 0.72);
   --dgm-border: #2a313a;
   --dgm-fg: #e6e9ee;
   --dgm-muted: #98a2b0;
@@ -43,6 +58,7 @@
   :root:not([data-theme='dark']) {
     --dgm-bg: #ffffff;
     --dgm-panel: #f6f7f9;
+    --dgm-panel-soft: rgba(246, 247, 249, 0.72);
     --dgm-border: #dfe3e8;
     --dgm-fg: #1c2024;
     --dgm-muted: #6b7480;
@@ -57,6 +73,114 @@
   }
 }
 
+/* --- the mainframe skin ------------------------------------------------- *
+ *
+ * Cinegram's own theme, applied to the player's chrome. The palette's home is
+ * www/assets/stylesheets/mainframe.css, which sets it as --cg-* for the
+ * website and documents what every colour means: light is greenbar, the
+ * fanfold paper a line printer banded pale green; dark is an IBM 3279 colour
+ * display, blue-black glass with the seven-colour field palette it actually
+ * had, where colour *was* the field attribute — green is a field you can act
+ * on, turquoise is protected text you read, yellow is a literal, red went
+ * wrong. So the mapping here is semantic rather than decorative: the accent is
+ * the actionable green, a response is turquoise, waiting is yellow (ochre on
+ * paper, where yellow is illegible), a failure is red.
+ *
+ * site/palette_test.go pins the hexes that must agree with mainframe.css,
+ * because the palette now lives in two files that no build step connects.
+ *
+ * Opt-in, on the root element, and never the default: the whole stylesheet is
+ * byte-synced into editors/vscode/media/, and a branded monospace player
+ * inside someone's Markdown preview reads as a broken font. The surfaces that
+ * ask for it are the ones cinegram owns end to end — the emitted page, the
+ * pages `cinegram site` builds, the playground.
+ *
+ * The three blocks mirror the three above, and for the same reason: an
+ * attribute selector already outranks bare :root, so the resolution order has
+ * to come from position in the file, not from specificity. Light values first
+ * so a skinned page always has a colour, the dark override second, and the
+ * prefers-color-scheme guard last for the page whose theme nobody has stamped
+ * yet. */
+
+:root[data-dgm-skin='mainframe'] {
+  /* One family, both schemes — a 3270 had one, and the roles separate by
+     weight, case and colour instead. Ordered so a machine with IBM Plex Mono
+     installed gets the face IBM drew looking at exactly these terminals, and
+     every other machine still lands on a real monospace. No @font-face: a
+     webfont this page cannot fetch is a silent fallback to something
+     arbitrary, and the page has to work from the filesystem. */
+  --dgm-font:
+    "IBM Plex Mono", "SF Mono", SFMono-Regular, "Berkeley Mono", ui-monospace,
+    Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+
+  --dgm-bg: #f4f4ec;            /* fanfold stock, warm off-white */
+  --dgm-panel: #dfe9d8;         /* the printed band */
+  --dgm-panel-soft: rgba(223, 233, 216, 0.72);
+  --dgm-border: #8b9c85;
+  --dgm-fg: #17201c;            /* never quite black; ribbon on paper */
+  --dgm-muted: #5a6a60;
+  --dgm-accent: #14713d;
+  --dgm-accent-soft: rgba(20, 113, 61, 0.12);
+  /* A field the cursor has landed on inverts — that is what a 3270 does, and it
+     is also the only legible answer for type on the dark scheme's phosphor
+     green, which white would sit on at less than 2:1. var() rather than a
+     literal so the one declaration follows the ground into both schemes. */
+  --dgm-on-accent: var(--dgm-bg);
+  --dgm-busy: #8a6212;          /* yellow is illegible on paper; ochre is its ink */
+  --dgm-response: #10666a;
+  --dgm-fail: #a9261b;
+  /* The warning banner is a recessed field with ochre type, not a coloured
+     card: on paper the printer had one ribbon and severity was the wording. */
+  --dgm-warn-bg: #e9ebe0;
+  --dgm-warn-fg: #8a6212;
+  --dgm-shadow: rgba(23, 32, 28, 0.14);
+}
+
+:root[data-dgm-skin='mainframe'][data-theme='dark'],
+:root[data-dgm-skin='mainframe']:not([data-theme='light']) {
+  /* Not #000: a CRT face in a lit room is a blue-black, and the whole palette
+     is keyed off that cast so the greens do not read as neon. */
+  --dgm-bg: #080d0c;
+  --dgm-panel: #0e1614;
+  --dgm-panel-soft: rgba(14, 22, 20, 0.72);
+  --dgm-border: #2a3e39;
+  --dgm-fg: #c9d6ce;
+  --dgm-muted: #6c918a;
+  --dgm-accent: #34d96a;
+  --dgm-accent-soft: rgba(52, 217, 106, 0.16);
+  --dgm-busy: #e8b646;
+  --dgm-response: #45c9c0;
+  --dgm-fail: #f2604f;
+  --dgm-warn-bg: #0e1614;
+  --dgm-warn-fg: #e8b646;
+  --dgm-shadow: rgba(0, 0, 0, 0.55);
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-dgm-skin='mainframe']:not([data-theme='dark']) {
+    --dgm-bg: #f4f4ec;
+    --dgm-panel: #dfe9d8;
+    --dgm-panel-soft: rgba(223, 233, 216, 0.72);
+    --dgm-border: #8b9c85;
+    --dgm-fg: #17201c;
+    --dgm-muted: #5a6a60;
+    --dgm-accent: #14713d;
+    --dgm-accent-soft: rgba(20, 113, 61, 0.12);
+    --dgm-busy: #8a6212;
+    --dgm-response: #10666a;
+    --dgm-fail: #a9261b;
+    --dgm-warn-bg: #e9ebe0;
+    --dgm-warn-fg: #8a6212;
+    --dgm-shadow: rgba(23, 32, 28, 0.14);
+  }
+}
+
+/* The diagram itself is deliberately not in scope. It renders through
+   mermaid's own light and dark themes, and restyling nodes and edges to
+   phosphor would mean a themeVariables set per skin plus design work on what
+   the 3279's semantic colours mean in mermaid's class model. The skin recolours
+   the chrome around the picture. */
+
 /* Everything that claims the page is scoped to .dgm-standalone, which only the
    emitted page sets on <body>. This stylesheet is also loaded whole into hosts
    that own the document around the diagram — the VS Code Markdown preview
@@ -67,7 +191,7 @@ body.dgm-standalone {
   margin: 0;
   background: var(--dgm-bg);
   color: var(--dgm-fg);
-  font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font: 14px/1.5 var(--dgm-font);
 }
 
 .dgm {
@@ -78,7 +202,7 @@ body.dgm-standalone {
   gap: 12px;
   /* Not inherited from the host: the runtime's own sizing is in px throughout,
      and an editor's prose font would leave the controls at the wrong scale. */
-  font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font: 14px/1.5 var(--dgm-font);
   color: var(--dgm-fg);
 }
 
@@ -162,7 +286,7 @@ body.dgm-standalone {
 .dgm-btn-primary {
   background: var(--dgm-accent);
   border-color: var(--dgm-accent);
-  color: #fff;
+  color: var(--dgm-on-accent);
   min-width: 72px;
   font-weight: 600;
 }
@@ -231,7 +355,12 @@ body.dgm-standalone {
    diagram, not while showing one; they carry .dgm-authoring so this rule names
    them rather than guessing from the shape of their other classes. Exit,
    Restart — taking a demo from the top is presenting, not building — the
-   scenario picker, zoom reset, theme and help stay. */
+   scenario picker, zoom reset, theme and help stay.
+
+   The set is the same now that most of it lives in the tool rail instead of the
+   bar: the classes moved with the buttons, so this rule thins the rail rather
+   than emptying it. Nothing in the rail section may state a `display` for a
+   button, or this would stop being true — see the note there. */
 .dgm-present .dgm-authoring { display: none; }
 
 /* Except in a document, where inline mode has already restored Play at
@@ -408,13 +537,6 @@ body.dgm-standalone {
   opacity: 0;
 }
 
-.dgm-btn-icon {
-  min-width: 34px;
-  padding: 6px 8px;
-  text-align: center;
-}
-
-.dgm-btn-icon.is-on,
 .dgm-btn.is-on {
   border-color: var(--dgm-accent);
   color: var(--dgm-accent);
@@ -683,12 +805,30 @@ body.dgm-standalone {
   border: 1px solid var(--dgm-border);
   border-radius: 12px;
   padding: 20px;
+  /* The tool rail floats over this edge, and a floating control that covers
+     the picture also swallows the clicks meant for it: a node with a
+     `click … view` binding near the right edge — examples/03-interaction has
+     several — would simply not be reachable. So the strip is reserved rather
+     than shared: 56px of rail, 10px of inset and 10px of breath, which is
+     enough that a diagram scaled to fit never lands underneath it.
+
+     Only at fit. Zooming or panning can still put a node under the rail, and
+     that is the reader's own doing, undone by the same gesture or a
+     double-click; the rail's translucency is there to admit it. */
+  padding-right: 76px;
   overflow: hidden;
   min-height: 320px;
   align-self: stretch;
   cursor: grab;
   touch-action: none;
 }
+
+/* No rail in these three, so no strip to reserve — and an embed or a reel is
+   already short of room. Same list, in the same order, as the rule that hides
+   the column further down. */
+.dgm-inline .dgm-stage,
+.dgm-embed .dgm-stage,
+.dgm-reel .dgm-stage { padding-right: 20px; }
 
 .dgm-stage:active { cursor: grabbing; }
 
@@ -728,16 +868,21 @@ body.dgm-standalone {
  * diagram's aspect ratio; the caps here are the share of the stage it fits
  * into, stated twice so a slow first layout is never oversized.
  *
- * The z-index puts it above pills and notes. A pill anchored to a node in the
- * top-right corner can therefore end up underneath it — accepted: the map is
- * only on screen while zoomed, and it is the smaller claim on that corner.
+ * The z-index puts it above pills and notes — and above the tool rail, which
+ * would otherwise cover the map's own corner on any stage short enough for the
+ * map to hit its 40% height cap, and take the clicks meant for it. A pill
+ * anchored to a node in the top-right corner, and the rail's topmost buttons,
+ * can therefore end up underneath the map — both accepted, and for the same
+ * reason: the map is only on screen while something has zoomed past fit, it is
+ * the instrument the reader is using at that moment, and it is the smaller
+ * claim on that corner.
  */
 
 .dgm-map {
   position: absolute;
   top: 10px;
   right: 10px;
-  z-index: 6;
+  z-index: 9;
   max-width: 28%;
   max-height: 40%;
   box-sizing: border-box;
@@ -767,6 +912,201 @@ body.dgm-standalone {
   border: 1.5px solid var(--dgm-accent);
   background: var(--dgm-accent-soft);
   pointer-events: none;
+}
+
+/* --- the tool rail -------------------------------------------------------
+ *
+ * Everything the bar used to carry except Play and Present, in one column over
+ * the stage's right edge: Restart, speed, Cine, Copy link, reset zoom, theme,
+ * help. See buildRail in runtime.js for what each of them is and why the
+ * classes stayed with them.
+ *
+ * Vertically centred rather than pinned to a corner, because both corners are
+ * taken — the minimap top-right, the presenter storyboard top-left.
+ *
+ * z-index 8 puts it over the overlay's notes and pills, under the minimap (9),
+ * which is the instrument in use whenever it is on screen, and under the help
+ * sheet (20) and the lightbox (30) — those are children of the root rather than
+ * the stage, so they cover it whatever it says here.
+ *
+ * Translucent rather than hover-to-reveal: a control nobody can see is a
+ * control nobody knows exists. It goes solid on hover or when something inside
+ * it takes focus, which is exactly when the diagram behind it stops mattering.
+ *
+ * The width is stated rather than derived, and that is the point: the speed
+ * button's label is its own state, so the column would otherwise be one width
+ * at "1x" and another at "0.25x" — every target moving under a cursor
+ * mid-interaction, which is the exact resize .dgm-rail-note goes out of its way
+ * to avoid. So it is sized once, for the widest thing it will ever hold: 56px
+ * is 42px of button inside 6px of padding and a 1px border on each side, and
+ * 42px is "0.25x" — 33px of it in the mainframe skin's monospace, which is the
+ * widest of the two faces — inside 2px of side padding and its own border. The
+ * buttons stretch into that; the column never measures its contents. Shrinking
+ * the type instead was the other way out, and it does not reach: at 10px the
+ * same label is 30px, which still does not fit a 32px button with any padding
+ * worth the name.
+ */
+.dgm-rail {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 8;
+  width: 56px;
+  padding: 6px;
+  box-sizing: border-box;
+  border: 1px solid var(--dgm-border);
+  border-radius: 10px;
+  /* Opaque by default, so a browser with no backdrop-filter still gets a
+     legible panel rather than a wash. The @supports below is what trades that
+     for the blur where there is one — stated in this order because a fallback
+     that has to be undone is a fallback that works. */
+  background: var(--dgm-panel);
+  box-shadow: 0 2px 10px var(--dgm-shadow);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+@supports ((backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px))) {
+  .dgm-rail {
+    background: var(--dgm-panel-soft);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+}
+
+/* (0,2,0), so it wins over the @supports block above wherever it applies
+   regardless of source order. */
+.dgm-rail:hover,
+.dgm-rail:focus-within {
+  background: var(--dgm-panel);
+  border-color: var(--dgm-accent);
+}
+
+/* The column and the collapsible group inside it stack the same way; only the
+   rail's own box — where it sits, how wide, what it is drawn as — differs, and
+   that stays in its rule above. align-items is left out: stretch is already the
+   default, and a rail button that did not fill the width would be a target that
+   moves with its label. */
+.dgm-rail,
+.dgm-rail-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Nothing at (0,2,0) or above may state a `display` on an element that might
+   carry dgm-authoring. `.dgm-present .dgm-authoring { display: none }` is
+   (0,2,0) and stands earlier in this sheet, so a `display` here — on
+   `.dgm-rail .dgm-btn`, which matches the speed and Copy link buttons — would
+   quietly put them back in the middle of a presentation. The box is sized by
+   padding instead: a 16px glyph inside 7px of padding and a 1px border is 32px
+   tall, with no flex container needed to centre it. The width comes from the
+   column, which the buttons stretch to fill.
+
+   `.dgm-rail-more` does state one, further down, and is allowed to: the toggle
+   is never an authoring control, and its rules are (0,1,0), so a presenter rule
+   would outrank them anyway if it ever grew one. */
+.dgm-rail .dgm-btn {
+  position: relative;
+  min-width: 32px;
+  height: 32px;
+  /* 7px down each side of a 16px glyph is the 32px height; across, the width
+     comes from the column, and the padding only has to keep the widest label
+     off the border. */
+  padding: 7px 2px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  /* Transparent at rest, so the panel behind them is the panel the reader sees:
+     the base .dgm-btn paints var(--dgm-panel), which is the rail's own
+     background *and* the stage's, so seven opaque buttons turned the blur into
+     a wash nobody could tell from the ground, and left :hover's background
+     swap with nothing to swap. The panel treatment comes back on hover and on
+     focus, where it is what says which target the press will land on. */
+  background: transparent;
+  border-color: transparent;
+  /* The two buttons whose label is text — speed and theme — sit on the same
+     16px line the glyphs are drawn on, so a column of pictures and a column of
+     words are one column. */
+  line-height: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.dgm-rail .dgm-btn:hover,
+.dgm-rail .dgm-btn:focus-visible {
+  background: var(--dgm-panel);
+  border-color: var(--dgm-accent);
+}
+
+/* is-on is a state rather than a pointer's whereabouts — the camera is
+   following, the diagram is zoomed — so it is drawn as one at rest too, and
+   more strongly than a hover: the accent tints the box, not just its edge. */
+.dgm-rail .dgm-btn.is-on {
+  background: var(--dgm-accent-soft);
+  border-color: var(--dgm-accent);
+  color: var(--dgm-accent);
+}
+
+.dgm-rail .dgm-btn svg {
+  display: block;
+  margin: 0 auto;
+}
+
+/* The copy confirmation. Absolutely positioned inside the button, to the left
+   of the column: it says a word without the rail changing width, which on a
+   button the reader has just clicked would move the next click's target. */
+.dgm-rail-note {
+  position: absolute;
+  right: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--dgm-fg);
+  color: var(--dgm-bg);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  box-shadow: 0 2px 8px var(--dgm-shadow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.dgm-rail-note.is-on { opacity: 1; }
+
+/* The collapse toggle is hidden at every width but the narrow one below, so it
+   never stands beside the tools it exists to stand in for. */
+.dgm-rail-more { display: none; }
+
+/* Hosts that show no chrome show no rail either, and each for the reason it
+   hides the bar: a diagram inline in a document is a reader's, not an author's;
+   an embed's page has its own furniture — and every recording photographs
+   `?embed`, so a rail here would appear in every GIF the recorder makes; a reel
+   is watched rather than operated. Named separately rather than left to
+   `.dgm-embed` covering inline, because the inline contract is the one that
+   must not move. */
+.dgm-inline .dgm-rail,
+.dgm-embed .dgm-rail,
+.dgm-reel .dgm-rail { display: none; }
+
+/* Narrow screens: seven targets stacked over a phone-sized diagram is most of
+   the diagram. The column folds behind the "more" toggle, which puts it back —
+   the runtime toggles is-open and keeps aria-expanded with it. */
+@media (max-width: 520px) {
+  .dgm-rail-more { display: block; }
+  .dgm-rail-items { display: none; }
+  .dgm-rail.is-open .dgm-rail-items { display: flex; }
+
+  /* And the reserved strip goes back to ordinary padding. What stands here is
+     one toggle, and 76px of a phone's width is a worse trade than the
+     little the toggle covers — a diagram fitted into what is left would be
+     small enough that the overlap is the cheaper of the two. Later in the
+     sheet than .dgm-stage and at the same specificity, which is what makes it
+     win. */
+  .dgm-stage { padding-right: 20px; }
 }
 
 /* --- storyboard ----------------------------------------------------------
@@ -978,7 +1318,7 @@ body.dgm-standalone {
 .dgm-step.is-active::before {
   background: var(--dgm-accent);
   border-color: var(--dgm-accent);
-  color: #fff;
+  color: var(--dgm-on-accent);
 }
 
 .dgm-step.is-done .dgm-step-name { color: var(--dgm-muted); }
@@ -1348,7 +1688,7 @@ body.dgm-standalone {
   border: 1px solid var(--dgm-accent);
   border-radius: 999px;
   background: var(--dgm-accent);
-  color: #fff;
+  color: var(--dgm-on-accent);
   font: inherit;
   font-size: 11px;
   font-weight: 700;
@@ -1503,6 +1843,8 @@ body.dgm-standalone {
 
   .dgm-btn,
   .dgm-select,
+  .dgm-rail,
+  .dgm-rail-note,
   .dgm-step,
   .dgm-chip,
   .dgm-caption,

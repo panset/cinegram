@@ -118,7 +118,9 @@ func renderIndex(out map[string][]byte, root, cur *Group, cfg Config) error {
 	}
 
 	var b strings.Builder
-	b.WriteString("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n")
+	// The same skin attribute html.Render writes, because a listing sits beside
+	// the diagram pages and has to be the same product.
+	fmt.Fprintf(&b, "<!doctype html>\n<html lang=\"en\" data-dgm-skin=%q>\n<head>\n<meta charset=\"utf-8\">\n", html.Skin)
 	b.WriteString("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
 	fmt.Fprintf(&b, "<title>%s</title>\n", stdhtml.EscapeString(title))
 	fmt.Fprintf(&b, "<link rel=\"stylesheet\" href=\"%sassets/runtime.css\">\n", up(n))
