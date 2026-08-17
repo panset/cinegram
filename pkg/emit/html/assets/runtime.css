@@ -82,10 +82,15 @@ body.dgm-standalone {
   color: var(--dgm-fg);
 }
 
-/* Filling the window is the standalone page's job. Embedded, the diagram is one
-   element among others and takes the height its content asks for. */
+/* Filling the window is the standalone page's job, and filling it *exactly* is
+   what keeps the narration on screen: a definite height is what the shell rules
+   in the layout section need to divide up, so the caption and the transport
+   stay put and the diagram scales into what is left rather than growing the
+   page out from under them. Embedded, the diagram is one element among others
+   and takes the height its content asks for. */
 .dgm-standalone .dgm {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   max-width: 1400px;
   margin: 0 auto;
 }
@@ -222,10 +227,11 @@ body.dgm-standalone {
   grid-template-columns: minmax(0, 1fr) minmax(240px, 380px);
 }
 
-/* Play, Restart, the speed cycle and Copy link are things you do while
-   building a diagram, not while showing one; they carry .dgm-authoring so this
-   rule names them rather than guessing from the shape of their other classes.
-   Exit, the scenario picker, zoom reset, theme and help stay. */
+/* Play, the speed cycle and Copy link are things you do while building a
+   diagram, not while showing one; they carry .dgm-authoring so this rule names
+   them rather than guessing from the shape of their other classes. Exit,
+   Restart — taking a demo from the top is presenting, not building — the
+   scenario picker, zoom reset, theme and help stay. */
 .dgm-present .dgm-authoring { display: none; }
 
 /* Except in a document, where inline mode has already restored Play at
@@ -235,11 +241,70 @@ body.dgm-standalone {
    which wins where they meet. */
 .dgm-inline.dgm-present .dgm-controls > .dgm-authoring { display: none; }
 
-.dgm-present .dgm-stage { min-height: 60vh; }
+/* No floor. This once had one, to make the stage big after the chrome went
+   away; the shell now hands it everything the caption leaves, and a 60vh
+   minimum could only overflow a short window. */
+.dgm-present .dgm-stage { min-height: 0; }
 
-.dgm-present .dgm-caption { min-height: 0; padding: 16px 20px; }
+/* Long narration must not fight the stage for the window. The caption keeps
+   its content height up to a third of the screen and scrolls internally past
+   that; it is exempt from the shell's flex squeeze, because when someone is
+   presenting, the words being said are the one thing that must never be
+   clipped — the diagram scales, the text does not. */
+.dgm-present .dgm-caption {
+  min-height: 0;
+  padding: 16px 20px;
+  flex: 0 0 auto;
+  max-height: 34vh;
+  overflow-y: auto;
+}
 .dgm-present .dgm-caption-name { font-size: 18px; }
 .dgm-present .dgm-caption-desc { font-size: 1.45rem; line-height: 1.45; }
+
+/* Presenting into one pane of a split view is not presenting, so Present asks
+   the browser for the screen. Three selectors saying the same thing, written
+   as three rules rather than one list: an unknown pseudo-class invalidates the
+   whole selector list it appears in, so grouping them would drop the fallback
+   in any browser missing either prefix. Fullscreen's own backdrop is black, so
+   the surface has to paint itself; the page's max-width and centring go, and
+   the shell rules then divide the screen exactly as they divide a window. */
+.dgm:fullscreen {
+  background: var(--dgm-bg);
+  height: 100%;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.dgm:-webkit-full-screen {
+  background: var(--dgm-bg);
+  height: 100%;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* The fallback, for the hosts that refuse the request — a webview, an iframe
+   without allowfullscreen, a mode entered with no user gesture behind it. Same
+   box, pinned by hand, minus the browser chrome going away. The z-index only
+   has to beat the host's page: the help sheet (20) and the lightbox (30) are
+   children of the root, so they stack inside it either way. */
+.dgm.dgm-present-fill {
+  background: var(--dgm-bg);
+  height: 100%;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
 
 /* Reel mode: the diagram as a vertical story. Entered by URL (`?reel`) like
    embed, never toggled in page; a tap plays exactly one step, the segmented
@@ -281,21 +346,10 @@ body.dgm-standalone {
   box-sizing: border-box;
 }
 
-/* The holder needs a height of its own for the svg clamp below to mean
-   anything, and centering the diagram vertically is what a story frame
-   expects. The svg's inline height:auto (set by the runtime) plus this
-   max-height keeps a tall sequence diagram inside the shot instead of
-   cropped by the stage's overflow:hidden. */
-.dgm-reel .dgm-svg-holder {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.dgm-reel .dgm-svg-holder svg {
-  max-height: 100%;
-  width: auto;
-}
+/* The holder's own height and the svg clamp that reads it used to live here.
+   They are unscoped now, in the layout section: fitting the diagram to the
+   room it has is what every host that bounds the player wants, and the reel
+   was only the first one to need it. */
 
 /* The caption is the reel's narration track, at a FIXED height — not a
    minimum. The reel column is viewport-sized, so a caption that grew with
@@ -360,7 +414,8 @@ body.dgm-standalone {
   text-align: center;
 }
 
-.dgm-btn-icon.is-on {
+.dgm-btn-icon.is-on,
+.dgm-btn.is-on {
   border-color: var(--dgm-accent);
   color: var(--dgm-accent);
 }
@@ -449,13 +504,39 @@ body.dgm-standalone {
   font-size: 13px;
 }
 
-/* --- layout ------------------------------------------------------------- */
+/* --- layout -------------------------------------------------------------
+ *
+ * The bounded shell. Where a host gives the player root a definite height —
+ * the standalone page, a generated site page, the playground pane — the body
+ * takes whatever the bar, the caption and the transport leave, the stage
+ * stretches into that, and the diagram scales down to fit. Without it a tall
+ * diagram grows the stage to its natural height and pushes the narration and
+ * the scrubber below the fold, which is the one thing a walkthrough cannot
+ * afford. Reel mode has worked this way from the start; the rules are simply
+ * not scoped to it any more.
+ *
+ * None of it fires in a host that owns the document around an auto-height
+ * diagram — a VS Code Markdown preview, an inline block in a page: flex-grow
+ * has no free space to take, and a percentage height against an auto-height
+ * parent is not a length.
+ */
 
+/* The rows are left implicit, and that is deliberate rather than an oversight.
+   The reel names its rows because it always has one or two of them; here the
+   count depends on the mode, and an explicit minmax(0, 1fr) first row would
+   only be right when the stage is the sole item. Wherever the narrow layout
+   stacks the stage, the storyboard and the step list into one column, a 1fr
+   first row is measured after the two auto rows have taken what they need and
+   collapses to nothing, which the stage's own min-height then overflows —
+   worse than the implicit auto rows, which stretch to share a definite height
+   between them. */
 .dgm-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;
   gap: 16px;
   align-items: start;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* With a storyboard the stage still dominates: the panel takes a column of its
@@ -476,10 +557,126 @@ body.dgm-standalone {
   .dgm-reel.dgm-has-board .dgm-body {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  /* One column means everything stacks, so a page clipped to the window would
+     hide the step list outright. The page scrolls here as it always has; the
+     stage takes a fixed share of the window instead, which puts the caption a
+     short scroll below the diagram rather than a screenful. A reel is exempt:
+     it is a portrait column by construction and owns its own heights.
+
+     Present is exempt for the same kind of reason. The escape hatch is for the
+     *scrolling* page, and present is never one: it is a bounded shell either
+     way — real fullscreen, or the fixed, inset-0, overflow-hidden
+     .dgm-present-fill fallback a phone always lands on, since iOS Safari has
+     no element fullscreen. Without the exemption the hatch (0,3,0) simply
+     outranks the fill rule (0,2,0), the stage keeps its 55vh, and the rows
+     stacked below it push the caption and the storyboard out of the bottom of
+     a window that cannot scroll — where the board's absolutely positioned
+     crossfade layers paint over the narration on the way past. Exempted,
+     present inherits the shell: the body flexes into the height the caption
+     leaves, the stage stretches into that, and the svg's max-height fits the
+     whole diagram. */
+  .dgm-standalone .dgm:not(.dgm-reel):not(.dgm-present) {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .dgm-standalone .dgm:not(.dgm-reel):not(.dgm-present) .dgm-stage {
+    height: 55vh;
+  }
+
+  /* Present on a phone: the storyboard becomes a picture-in-picture thumbnail.
+     A 380px panel stacked under the diagram was unreadable at this width and
+     cost the diagram half the screen; the lightbox is the real full-size look
+     at a frame, and the panel's job here is only to say one is available and
+     be tappable. So it leaves the grid entirely — the stage gets the column
+     back — and parks top-left, across from the minimap's top-right.
+
+     Not scoped to .dgm-standalone: present uses the fill fallback in the
+     playground pane and in a VS Code webview too, and those are the hosts most
+     likely to be narrow.
+
+     touch-action: none is what lets the swipe-to-dismiss gesture in
+     bindBoardGestures see horizontal pointermoves instead of losing them to
+     the browser's own scrolling; user-select and user-drag keep a swipe from
+     turning into a text selection or a native image drag. */
+  .dgm-present .dgm-body { position: relative; }
+
+  .dgm-present .dgm-board {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    width: min(32%, 150px);
+    z-index: 6;
+    padding: 4px;
+    box-shadow: 0 8px 24px var(--dgm-shadow);
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .dgm-present .dgm-board-img { -webkit-user-drag: none; }
+
+  /* Swiped away. Inline display is '' while the scenario has scenes, so a
+     class rule is enough — and it lives inside this media block deliberately:
+     widening the window past the phone breakpoint restores the side panel
+     without waiting for the next syncBoard. */
+  .dgm-board.is-flung { display: none; }
+
+  /* The title and the caption are panel furniture; at thumbnail size they
+     would crowd out the picture they describe. */
+  .dgm-present .dgm-board-title,
+  .dgm-present .dgm-board-caption { display: none; }
+
+  /* The stack still needs a height of its own — its two crossfade layers are
+     absolutely positioned and contribute none — but 180px is a panel's floor,
+     not a thumbnail's. A ratio sizes it from the width instead. */
+  .dgm-present .dgm-board-stack {
+    min-height: 0;
+    aspect-ratio: 16 / 10;
+  }
+
+  /* A caption-only frame has no picture to preview and cannot open the
+     lightbox, so with the caption hidden the thumbnail would be an empty chip
+     over the diagram. */
+  .dgm-present .dgm-board.is-wordy { display: none; }
+}
+
+/* The other escape hatch, and the same bargain as the 900px one above: the
+   shell divides a definite height between the bar, the stage, the caption and
+   the transport, and below roughly 500px — the stage's own 320px floor plus
+   the chrome — there is no height left to divide. A landscape phone, a short
+   browser window, a split editor pane: rather than clip the transport off the
+   bottom of a page that cannot scroll, the page becomes a scrolling one again
+   and the reader gets everything back by scrolling for it.
+
+   Reel and present are exempt for exactly the reasons the width hatch states:
+   a reel owns its own heights, and present is a bounded shell either way and
+   has no scrollbar to offer. */
+@media (max-height: 520px) {
+  .dgm-standalone .dgm:not(.dgm-reel):not(.dgm-present) {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  /* And the same second half, for the same reason the width hatch gives: with
+     nothing bounding it, a tall diagram grows the stage to its natural height
+     — a thousand pixels of sequence diagram above a caption nobody will scroll
+     that far to find. A share of the window instead, floored by the stage's own
+     320px minimum, keeps the narration a short scroll away. */
+  .dgm-standalone .dgm:not(.dgm-reel):not(.dgm-present) .dgm-stage {
+    height: 55vh;
+  }
 }
 
 /* overflow is hidden rather than scrolled: the stage is pannable now, and a
-   scrollbar competing with drag-to-pan reads as two ways to do one thing. */
+   scrollbar competing with drag-to-pan reads as two ways to do one thing.
+
+   align-self overrides the grid's align-items:start for the stage alone, so
+   the diagram claims the whole row while the step list and the storyboard
+   still sit at the top of theirs. */
 .dgm-stage {
   position: relative;
   background: var(--dgm-panel);
@@ -488,20 +685,87 @@ body.dgm-standalone {
   padding: 20px;
   overflow: hidden;
   min-height: 320px;
+  align-self: stretch;
   cursor: grab;
   touch-action: none;
 }
 
 .dgm-stage:active { cursor: grabbing; }
 
+/* The holder needs a height of its own for the clamp below to mean anything,
+   and a diagram smaller than its stage wants to sit in the middle of it
+   rather than at the top. */
+.dgm-svg-holder {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* max-height is what actually fits a tall diagram into the stage instead of
+   letting the stage's overflow:hidden crop it. The runtime writes height:auto
+   inline on the svg, so the viewBox ratio does the scaling and the width
+   follows from it. */
 .dgm-svg-holder svg {
   display: block;
   margin: 0 auto;
+  max-height: 100%;
+  width: auto;
 }
 
 .dgm-overlay {
   position: absolute;
   inset: 0;
+  pointer-events: none;
+}
+
+/* --- minimap -------------------------------------------------------------
+ *
+ * The whole diagram in the stage's corner, with a rectangle around the region
+ * the stage is showing. On screen only while something has zoomed past fit, so
+ * a page at rest — and every recording, which photographs ?embed at rest — is
+ * unchanged. The runtime writes the box's exact width and height from the
+ * diagram's aspect ratio; the caps here are the share of the stage it fits
+ * into, stated twice so a slow first layout is never oversized.
+ *
+ * The z-index puts it above pills and notes. A pill anchored to a node in the
+ * top-right corner can therefore end up underneath it — accepted: the map is
+ * only on screen while zoomed, and it is the smaller claim on that corner.
+ */
+
+.dgm-map {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 6;
+  max-width: 28%;
+  max-height: 40%;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid var(--dgm-border);
+  border-radius: 8px;
+  background: var(--dgm-bg);
+  box-shadow: 0 2px 10px var(--dgm-shadow);
+  opacity: 0.95;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.dgm-map.is-off { display: none; }
+
+.dgm-map-body {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* No transition on the rectangle: it describes the frame the diagram is drawn
+   at, and one that eased into place would lag the thing it describes. */
+.dgm-map-rect {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1.5px solid var(--dgm-accent);
+  background: var(--dgm-accent-soft);
   pointer-events: none;
 }
 
@@ -512,6 +776,8 @@ body.dgm-standalone {
  * its own — absolutely positioned children contribute none.
  */
 
+/* The panel scrolls in its own column rather than lengthening the page: in a
+   bounded shell the page has no scroll left to give it. */
 .dgm-board {
   display: flex;
   flex-direction: column;
@@ -521,6 +787,8 @@ body.dgm-standalone {
   background: var(--dgm-panel);
   padding: 12px;
   box-sizing: border-box;
+  max-height: 100%;
+  overflow: auto;
 }
 
 .dgm-board-title {
@@ -643,6 +911,9 @@ body.dgm-standalone {
 
 /* --- step list ---------------------------------------------------------- */
 
+/* overflow was hidden, for the radius; auto clips the same way and adds the
+   scrollbar a long walkthrough needs once the shell stops the column growing
+   past the window. */
 .dgm-steps {
   list-style: none;
   counter-reset: dgm-step;
@@ -650,7 +921,8 @@ body.dgm-standalone {
   padding: 0;
   border: 1px solid var(--dgm-border);
   border-radius: 12px;
-  overflow: hidden;
+  max-height: 100%;
+  overflow: auto;
 }
 
 .dgm-step-row {
@@ -734,6 +1006,23 @@ body.dgm-standalone {
 }
 
 .dgm-caption.is-on { opacity: 1; }
+
+/* The same treatment present mode gets, for the same reason: on a bounded page
+   a step with a paragraph of narration would otherwise take its height out of
+   the stage. The cap keeps the diagram's share of the window predictable, and
+   the scrollbar makes the overflow readable instead of clipped — the default
+   flex-shrink and the 42px floor above still do the squeezing, this only says
+   what happens once they run out.
+
+   Only where the shell bounds the page: a host that owns an auto-height
+   document has the room below the diagram and should use it. And only in the
+   plain mode — present and reel each state their own caption height above,
+   and being written later this rule would otherwise quietly outrank both on
+   equal specificity, putting a scrollbar in a recorded reel's frames. */
+.dgm-standalone .dgm:not(.dgm-reel):not(.dgm-present) .dgm-caption {
+  max-height: 34vh;
+  overflow-y: auto;
+}
 
 .dgm-caption-name {
   font-weight: 600;

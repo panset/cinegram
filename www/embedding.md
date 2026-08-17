@@ -112,9 +112,14 @@ A player mounted this way is a **guest on your page**, not a page of its own:
 
 ## Presenter mode
 
-Click **Present** and the diagram goes fullscreen, chrome off, one beat per
-press of Space, narration at a size that survives a projector. Escape or
-**Exit** comes back.
+Click **Present** and the diagram asks the browser for the screen: chrome off,
+one beat per press of Space, narration at a size that survives a projector.
+Escape or **Exit** comes back. Where the browser refuses element fullscreen —
+iOS Safari, some webviews — it pins itself to the window instead, which is the
+same box minus the browser's own chrome going away.
+
+The kit does nothing here beyond making the button visible; all of the above is
+the player's own, and it is the reason the kit is as small as it is.
 
 A page carrying exactly **one** diagram can also open straight into it with
 `?present` on the URL — the way `cinegram preview --serve` does. On a page of

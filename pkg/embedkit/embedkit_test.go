@@ -55,7 +55,7 @@ func TestKitReachesNoExternalOrigin(t *testing.T) {
 // anything. Splitting them across two files is what lets a site load the cheap
 // half everywhere, so the seam is worth a test.
 func TestLoaderAndStylesheetAgreeOnClassNames(t *testing.T) {
-	for _, class := range []string{"cinegram--loading", "cinegram--mounted", "cinegram--failed", "cinegram--fullscreen"} {
+	for _, class := range []string{"cinegram--loading", "cinegram--mounted", "cinegram--failed"} {
 		if !strings.Contains(embedJS, class) {
 			t.Errorf("cinegram-embed.css styles .%s but the loader never sets it", class)
 		}

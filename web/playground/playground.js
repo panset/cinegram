@@ -296,7 +296,13 @@
         scenarioIndex: p.scenarioIndex,
         viewId: p.view() ? p.view().id : null,
         stack: p.stack.slice(),
-        playing: p.playing
+        playing: p.playing,
+        present: p.present,
+        follow: p.follow,
+        // The pending presenter stop: without it, a recompile in the middle of
+        // a beat hands the reader a player that plays to the end of the
+        // scenario the next time they press Space.
+        stopAt: p.stopAt
       };
     } catch (e) {
       return null;
@@ -315,8 +321,23 @@
       if (was.scenarioIndex && was.scenarioIndex !== p.scenarioIndex) {
         p.selectScenario(was.scenarioIndex);
       }
-      // Seek last: setView and selectScenario both reset the clock.
+      // The modes before the clock, because both of them move it: setPresenter
+      // pauses unconditionally and drops any pending stop, so restoring it
+      // after play() would stop the playback it was meant to preserve.
+      //
+      // A recompile replaces the player's DOM node, which drops fullscreen with
+      // it; the new player asks for it back, and with no gesture behind the
+      // request the browser refuses and the fill fallback takes over. So typing
+      // mid-presentation degrades to a full-window overlay rather than snapping
+      // back into the split view.
+      if (was.present) p.setPresenter(true);
+      if (was.follow) p.setFollow(true);
+
+      // Seek last: setView, selectScenario and setPresenter all reset the
+      // clock. The presenter stop goes back after it, since seek clears it —
+      // and then play() resumes the beat exactly where it was interrupted.
       p.seek(was.time);
+      p.stopAt = was.stopAt === undefined ? null : was.stopAt;
       if (was.playing) p.play();
     } catch (e) {
       // A timeline that changed shape under the reader just starts over; an

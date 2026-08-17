@@ -74,6 +74,23 @@ func TestPageClaimsTheDocument(t *testing.T) {
 	}
 }
 
+// TestPageIsSizedForAPhone pins the other half of the responsive contract.
+//
+// runtime.css carries the narrow-screen layout — the single column, the
+// picture-in-picture storyboard, the phone-sized present mode — and none of it
+// can ever fire without this tag: a mobile browser without it lays the page out
+// at ~980px and scales the result down, so the media queries see a desktop
+// width and the reader gets an unreadable miniature of the wide layout.
+func TestPageIsSizedForAPhone(t *testing.T) {
+	page, err := Render(sample(), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(page), `<meta name="viewport"`) {
+		t.Error("the page has no viewport meta; every narrow-screen rule in runtime.css is dead on a phone")
+	}
+}
+
 // TestScriptPayloadCannotEscape checks that diagram text containing a closing
 // script tag is neutralised rather than breaking out of the script element.
 func TestScriptPayloadCannotEscape(t *testing.T) {

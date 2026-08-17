@@ -38,7 +38,7 @@
     return s ? s.src.replace(/[^/]*$/, '') : 'assets/cinegram/';
   })();
 
-  /** Every mounted player, so a theme or fullscreen change reaches all of them. */
+  /** Every mounted player, so a palette change reaches all of them. */
   var players = [];
 
   /** True when the page carries exactly one diagram — see `present` below. */
@@ -84,24 +84,6 @@
     host.textContent = message;
   }
 
-  // --- fullscreen, spelled for Safari as well ------------------------------
-
-  function fullscreenEl() {
-    return document.fullscreenElement || document.webkitFullscreenElement || null;
-  }
-
-  function enterFullscreen(el) {
-    var req = el.requestFullscreen || el.webkitRequestFullscreen;
-    // A rejected request is not a failure worth reporting: presenter mode is
-    // perfectly usable in the flow of the page, it is just smaller.
-    if (req) try { Promise.resolve(req.call(el)).catch(function () {}); } catch (e) {}
-  }
-
-  function leaveFullscreen() {
-    var ex = document.exitFullscreen || document.webkitExitFullscreen;
-    if (ex) try { Promise.resolve(ex.call(document)).catch(function () {}); } catch (e) {}
-  }
-
   /**
    * Presenter mode is unreachable in a document unless we put the control
    * back. Two separate things hide it, both deliberate in the runtime:
@@ -114,43 +96,15 @@
    *     to a diagram inside it.
    *
    * Both are right for an embed in general and wrong for a page whose whole
-   * job is to show the diagram. So we un-hide the runtime's own button rather
-   * than building one: Exit, the Escape key and the label are then all still
-   * the runtime's, and if a future version renames the property presenter mode
-   * simply stays hidden instead of breaking. What we add is the fullscreen the
-   * mode implies — a 60vh stage is worth little inside a box on an article.
+   * job is to show the diagram. So un-hide the runtime's own button rather
+   * than building one, and stop there: asking for the screen, falling back
+   * when the browser refuses, and leaving presenter mode when fullscreen goes
+   * are all the runtime's own — done against the player root, which is not
+   * the element this file would have reached for. Two of us requesting
+   * fullscreen on nested elements is worse than either of us doing it alone.
    */
-  function enablePresenter(host, player) {
-    var btn = player.presentBtn;
-    if (!btn) return;
-    btn.style.display = 'inline-block';
-
-    // Runs after the runtime's own click handler, so `present` is already the
-    // state we are moving to. Being inside the click keeps the user gesture
-    // that requestFullscreen needs.
-    btn.addEventListener('click', function () {
-      if (player.present) enterFullscreen(host);
-      else if (fullscreenEl() === host) leaveFullscreen();
-    });
-  }
-
-  // Leaving fullscreen by any route — Escape, F11, the browser's own chrome —
-  // leaves presenter mode with it. Otherwise the page is left holding a stage
-  // sized for a projector and a transport that only steps one beat at a time.
-  function watchFullscreen() {
-    var sync = function () {
-      // A class rather than the :fullscreen pseudo, so the stylesheet states
-      // the fullscreen layout once instead of twice for Safari's prefix —
-      // one unknown pseudo-class drops a whole selector list.
-      var fs = fullscreenEl();
-      [].forEach.call(document.querySelectorAll(HOSTS), function (h) {
-        h.classList.toggle('cinegram--fullscreen', h === fs);
-      });
-      if (fs) return;
-      players.forEach(function (p) { if (p.present) p.setPresenter(false); });
-    };
-    document.addEventListener('fullscreenchange', sync);
-    document.addEventListener('webkitfullscreenchange', sync);
+  function enablePresenter(player) {
+    if (player.presentBtn) player.presentBtn.style.display = 'inline-block';
   }
 
   function mount(host) {
@@ -200,7 +154,7 @@
         theme: theme()
       });
       players.push(player);
-      enablePresenter(host, player);
+      enablePresenter(player);
     }).catch(function (err) {
       fail(host, 'Could not load the diagram "' + name + '": ' + err.message);
     });
@@ -210,7 +164,6 @@
     var hosts = [].slice.call(document.querySelectorAll(HOSTS));
     if (!hosts.length) return;
     solo = hosts.length === 1;
-    watchFullscreen();
 
     hosts.forEach(function (host) {
       var h = host.getAttribute('data-height');
