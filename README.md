@@ -886,29 +886,17 @@ Layout is delegated to mermaid.js. Cinegram emits clean Mermaid, mermaid.js
 produces the SVG, and the runtime animates particles along the real edge
 geometry using `getPointAtLength`. There is no layout engine here to maintain.
 
-Two design decisions are load-bearing and worth preserving:
+Two properties follow from that shape. The timeline holds **no geometry** —
+tracks are node and edge IDs with absolute start/end times — so a renderer is a
+clock and a scrubber. And the animation layer **never mentions flowcharts**: a
+diagram parser's only obligation is to produce a `symbol.Table`, so adding
+`sequenceDiagram` or `architecture-beta` costs one parser and nothing else.
 
-- **The timeline holds no geometry.** Tracks reference node and edge IDs with
-  absolute start/end times, so a renderer is a clock and a scrubber. The same
-  timeline could drive a Go-native SVG backend later without recompilation.
+The runtime binds to the rendered SVG defensively, and anything that fails to
+bind is reported in a banner on the page instead of silently not animating.
 
-- **The animation layer never mentions flowcharts.** A diagram parser's only
-  obligation is to produce a `symbol.Table`; scenario parsing, interaction
-  bindings, validation, and compilation work against that alone. Adding
-  `sequenceDiagram` or `architecture-beta` costs one parser in `pkg/parser`
-  registered via `pkg/registry`, and zero changes anywhere else.
-
-- **Parsing does no I/O.** `parser.Parse` takes content and returns a tree, so
-  it stays usable from a webview or a WASM build with no filesystem. Resolving
-  the paths in `view` declarations is `pkg/loader`'s job, and it takes its read
-  function as an argument.
-
-The runtime binds to the rendered SVG defensively: nodes by mermaid's
-`<renderer>-<id>-<n>` id — `flowchart-` for a flowchart, `state-` for a state
-diagram — and edges by matching path endpoints against node centres rather than
-by parsing mermaid's edge-id format, which has changed between releases.
-Anything that fails to bind is reported in a banner on the page instead of
-silently not animating.
+Contributing? `.claude/skills/rendering-pipeline/` is the working reference for
+all of it.
 
 ## Building
 
@@ -921,35 +909,15 @@ bazel test  //...
 bazel run   //:gazelle          # after adding or moving packages
 ```
 
-Golden fixtures are regenerated through `bazel run` (which sets
-`BUILD_WORKSPACE_DIRECTORY`), not `bazel test`:
-
-```
-bazel run //pkg/parser:parser_test   -- -update
-bazel run //pkg/compile:compile_test -- -update
-```
-
 There are no third-party Go dependencies, and the intent is to keep it that
 way: a hand-rolled lexer and recursive-descent parser need nothing beyond the
-standard library.
+standard library. The demo site at <https://panset.github.io/cinegram/> is the
+same story one level up — the `pages` workflow uploads the committed `docs/`
+verbatim, and `bazel run //site:sync` on a committer's machine is the only
+thing that writes it.
 
-The demo site at <https://panset.github.io/cinegram/> is the same story
-one level up: the `pages` workflow uploads the committed `docs/` verbatim and
-never rebuilds it, so nothing but `bazel run //site:sync` on a committer's
-machine writes that folder. `docs/demos/` mirrors the `examples/` tree — a
-page per example, an index per folder, one shared copy of mermaid and the
-runtime under `demos/assets/` rather than 2.8 MB inlined per page — and
-`//site:site_test` fails the build whenever the committed copy has fallen
-behind the examples or the renderer.
-
-`pkg/emit/html/assets/` holds the vendored `mermaid.min.js` plus the runtime's
-`runtime.js` and `runtime.css`. They live inside the package because `go:embed`
-cannot reach outside it. The VS Code extension has to keep its own copies —
-`markdown.previewScripts` takes only extension-relative paths — so
-`//editors/vscode:assets_test` fails when they drift and `bazel run
-//editors/vscode:sync_assets` fixes it. The runtime is a classic script, not an
-ES module, because module scripts are blocked on `file://` and awkward in
-webviews.
+`.claude/skills/build/` has the rest: golden fixtures, formatting, and the
+invariants a change has to preserve.
 
 ## Status
 
@@ -974,11 +942,9 @@ registry seam exists for them).
 installing the extension. Building, packaging and publishing it are in
 [`editors/vscode/CONTRIBUTING.md`](editors/vscode/CONTRIBUTING.md).
 
-A `.vsix` is a ZIP with an XML manifest, so `cmd/vsix` builds one with
-`archive/zip` and nothing else — no `vsce`, no npm, no lockfile. Each package
-carries the `cinegram` binary for one platform, because the extension shells out
-to the compiler rather than reimplementing any of it, and VS Code installs the
-package matching the machine.
+Each package carries the `cinegram` binary for one platform, because the
+extension shells out to the compiler rather than reimplementing any of it, and
+VS Code installs the package matching the machine.
 
 ## License
 

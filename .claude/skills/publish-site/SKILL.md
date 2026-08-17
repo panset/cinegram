@@ -9,6 +9,10 @@ description: >
 
 # Publishing the demo site
 
+**`docs/` is generated — regenerate it, never edit it.** Nothing rebuilds it on
+the way to production, so an edit by hand ships as-is and is lost at the next
+`sync`.
+
 `docs/` is the site GitHub Pages serves. The `pages` workflow
 (`.github/workflows/pages.yml`) runs on every push to `main`: it gates on
 `bazel test //...`, uploads the committed `docs/` **verbatim** (it never
@@ -43,6 +47,12 @@ page, and the top-level `docs/index.html` is only a redirect into it.
 
 Done when the test passes and `git status` shows nothing unstaged under
 `docs/`.
+
+## The tour
+
+`examples/` is a tour, not a bag of files: `01-basics/` → `04-diagram-types/`,
+and `docs/demos/` mirrors it folder for folder. `pod-a.dgm` stays at the root
+because two demos in different folders drill into it (`../pod-a.dgm`).
 
 ## What the generator decides for you
 

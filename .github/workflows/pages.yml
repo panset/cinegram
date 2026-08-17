@@ -54,7 +54,7 @@ jobs:
         run: bazel test //...
 
       # Verbatim. //site:sync is the only thing that ever writes docs/, and it
-      # runs on a committer's machine — see skills/publish-site/SKILL.md.
+      # runs on a committer's machine — see .claude/skills/publish-site/SKILL.md.
       - name: Stage the committed demo site
         run: cp -R docs "$PWD/_site"
 
