@@ -9,6 +9,11 @@
 :root {
   --dgm-bg: #ffffff;
   --dgm-panel: #f6f7f9;
+  /* The panel colour with the diagram showing through it. Only the tool rail
+     wants it — a control floating on the stage has to admit what it is
+     covering — and it is a token rather than an rgba() in place because a
+     panel and its translucent form must change together. */
+  --dgm-panel-soft: rgba(246, 247, 249, 0.72);
   --dgm-border: #dfe3e8;
   --dgm-fg: #1c2024;
   --dgm-muted: #6b7480;
@@ -26,6 +31,7 @@
 :root:not([data-theme='light']) {
   --dgm-bg: #0f1216;
   --dgm-panel: #171b21;
+  --dgm-panel-soft: rgba(23, 27, 33, 0.72);
   --dgm-border: #2a313a;
   --dgm-fg: #e6e9ee;
   --dgm-muted: #98a2b0;
@@ -43,6 +49,7 @@
   :root:not([data-theme='dark']) {
     --dgm-bg: #ffffff;
     --dgm-panel: #f6f7f9;
+    --dgm-panel-soft: rgba(246, 247, 249, 0.72);
     --dgm-border: #dfe3e8;
     --dgm-fg: #1c2024;
     --dgm-muted: #6b7480;
@@ -231,7 +238,12 @@ body.dgm-standalone {
    diagram, not while showing one; they carry .dgm-authoring so this rule names
    them rather than guessing from the shape of their other classes. Exit,
    Restart — taking a demo from the top is presenting, not building — the
-   scenario picker, zoom reset, theme and help stay. */
+   scenario picker, zoom reset, theme and help stay.
+
+   The set is the same now that most of it lives in the tool rail instead of the
+   bar: the classes moved with the buttons, so this rule thins the rail rather
+   than emptying it. Nothing in the rail section may state a `display` for a
+   button, or this would stop being true — see the note there. */
 .dgm-present .dgm-authoring { display: none; }
 
 /* Except in a document, where inline mode has already restored Play at
@@ -767,6 +779,144 @@ body.dgm-standalone {
   border: 1.5px solid var(--dgm-accent);
   background: var(--dgm-accent-soft);
   pointer-events: none;
+}
+
+/* --- the tool rail -------------------------------------------------------
+ *
+ * Everything the bar used to carry except Play and Present, in one column over
+ * the stage's right edge: Restart, speed, Cine, Copy link, reset zoom, theme,
+ * help. See buildRail in runtime.js for what each of them is and why the
+ * classes stayed with them.
+ *
+ * Vertically centred rather than pinned to a corner, because both corners are
+ * taken — the minimap top-right, the presenter storyboard top-left.
+ *
+ * z-index 8 puts it over the overlay's notes and pills and over the minimap
+ * (6), and under the help sheet (20) and the lightbox (30) — which are children
+ * of the root rather than the stage, so they cover it whatever it says here.
+ *
+ * Translucent rather than hover-to-reveal: a control nobody can see is a
+ * control nobody knows exists. It goes solid on hover or when something inside
+ * it takes focus, which is exactly when the diagram behind it stops mattering.
+ */
+.dgm-rail {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 6px;
+  box-sizing: border-box;
+  border: 1px solid var(--dgm-border);
+  border-radius: 10px;
+  /* Opaque by default, so a browser with no backdrop-filter still gets a
+     legible panel rather than a wash. The @supports below is what trades that
+     for the blur where there is one — stated in this order because a fallback
+     that has to be undone is a fallback that works. */
+  background: var(--dgm-panel);
+  box-shadow: 0 2px 10px var(--dgm-shadow);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+@supports ((backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px))) {
+  .dgm-rail {
+    background: var(--dgm-panel-soft);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+}
+
+/* (0,2,0), so it wins over the @supports block above wherever it applies
+   regardless of source order. */
+.dgm-rail:hover,
+.dgm-rail:focus-within {
+  background: var(--dgm-panel);
+  border-color: var(--dgm-accent);
+}
+
+.dgm-rail-items {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+/* No `display` in any rule that selects a rail button. `.dgm-present
+   .dgm-authoring { display: none }` is (0,2,0) and stands earlier in this
+   sheet, so a (0,2,0) display here would quietly put the speed and Copy link
+   buttons back in the middle of a presentation. The box is sized by padding
+   instead: a 16px glyph inside 7px of padding and a 1px border is 32px square,
+   with no flex container needed to centre it. */
+.dgm-rail .dgm-btn {
+  position: relative;
+  min-width: 32px;
+  height: 32px;
+  padding: 7px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  /* The two buttons whose label is text — speed and theme — sit in the same
+     16px content box the glyphs do. */
+  line-height: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.dgm-rail .dgm-btn svg {
+  display: block;
+  margin: 0 auto;
+}
+
+/* The copy confirmation. Absolutely positioned inside the button, to the left
+   of the column: it says a word without the rail changing width, which on a
+   button the reader has just clicked would move the next click's target. */
+.dgm-rail-note {
+  position: absolute;
+  right: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--dgm-fg);
+  color: var(--dgm-bg);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  box-shadow: 0 2px 8px var(--dgm-shadow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.dgm-rail-note.is-on { opacity: 1; }
+
+/* The collapse toggle is hidden at every width but the narrow one below, so it
+   never stands beside the tools it exists to stand in for. */
+.dgm-rail-more { display: none; }
+
+/* Hosts that show no chrome show no rail either, and each for the reason it
+   hides the bar: a diagram inline in a document is a reader's, not an author's;
+   an embed's page has its own furniture — and every recording photographs
+   `?embed`, so a rail here would appear in every GIF the recorder makes; a reel
+   is watched rather than operated. Named separately rather than left to
+   `.dgm-embed` covering inline, because the inline contract is the one that
+   must not move. */
+.dgm-inline .dgm-rail,
+.dgm-embed .dgm-rail,
+.dgm-reel .dgm-rail { display: none; }
+
+/* Narrow screens: seven targets stacked over a phone-sized diagram is most of
+   the diagram. The column folds behind the "more" toggle, which puts it back —
+   the runtime toggles is-open and keeps aria-expanded with it. */
+@media (max-width: 520px) {
+  .dgm-rail-more { display: block; }
+  .dgm-rail-items { display: none; }
+  .dgm-rail.is-open .dgm-rail-items { display: flex; }
 }
 
 /* --- storyboard ----------------------------------------------------------
@@ -1503,6 +1653,8 @@ body.dgm-standalone {
 
   .dgm-btn,
   .dgm-select,
+  .dgm-rail,
+  .dgm-rail-note,
   .dgm-step,
   .dgm-chip,
   .dgm-caption,
