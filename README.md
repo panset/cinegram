@@ -22,14 +22,14 @@ Or skip the build entirely: every example is playable at
 `01-basics/` is a request path and a pipeline, `02-storytelling/` adds
 failure paths, narration and storyboards, `03-interaction/` is clicking and
 drilling in, `04-diagram-types/` proves the same language over `sequence-`
-and `stateDiagram`. The numeric prefixes are ordering only — readers never
-see them.
+and `stateDiagram`. The numeric prefixes are ordering: they show in a page's
+URL and nowhere a reader looks, since titles come from the diagram itself.
 
 **Try it in the browser.** <https://panset.github.io/cinegram/playground/> is
 the compiler itself, built to WASM and running in the tab — paste a diagram,
 watch it animate, share the link. Drop in a whole folder of `.dgm` files (or
-*Add folder…*) and the *Files* view browses it like the demo site, numeric
-prefixes ordering the tree. Nothing is uploaded; the document lives in the
+*Add folder…*) and the *Files* view browses it the way `cinegram site` does,
+numeric prefixes ordering the tree. Nothing is uploaded; the document lives in the
 URL fragment. Locally that page is `bazel run //web/playground:site --
 --serve`.
 
@@ -665,6 +665,7 @@ cinegram compile <file.dgm> [-o out.json]   # animation timeline JSON
 cinegram mermaid <file.dgm> [-o out.mmd]    # the diagram as plain Mermaid
 cinegram preview <file.dgm> [-o out.html]   # self-contained animated page
 cinegram site    <folder>   -o out/         # a browsable site from a folder tree
+cinegram assets             -o dir/         # the embed kit, for a site of your own
 cinegram frame   <file.dgm> --at 1620ms -o still.png   # one exact moment
 cinegram record  <file.dgm> -o out.gif      # a GIF, mp4 or webm of one scenario
 cinegram narrate <file.dgm> [--format=md|json]   # the animation, written out
@@ -726,6 +727,32 @@ Presentation is flags: `--title`, `--link Name=URL` for header links,
 link carries the whole document (the playground's own share-link format,
 minted at build time — nothing is uploaded), and `--hero` for the card on the
 root index.
+
+### A diagram inside a page you already wrote
+
+`site` owns the whole page. When the diagram belongs in the middle of an
+architecture doc or an RFC — a paragraph, not the point — install the **embed
+kit** into a folder your site serves and write a `<div>`:
+
+```
+cinegram assets -o docs/assets/cinegram
+cinegram compile diagrams/failover.dgm -o docs/assets/cinegram/timelines/failover.json
+```
+
+```html
+<div class="cinegram" data-cinegram="failover" data-height="900"></div>
+```
+
+Five files: the loader, its stylesheet, and the three runtime files. The
+loader finds its siblings and the `timelines/` folder relative to its own URL,
+so the kit works unchanged under a path prefix, and it is **inert on a page
+with no diagram** — which is why the 2.6 MB of mermaid can be listed site-wide
+without every page paying for it. The player arrives as a guest: keys scoped to
+itself, the address bar left to the theme, lazy mount, and the palette
+following the site's own light/dark toggle.
+
+This website is built that way, so the path is the one it documents:
+<https://panset.github.io/cinegram/embedding/>.
 
 ### Recording
 
@@ -911,10 +938,13 @@ bazel run   //:gazelle          # after adding or moving packages
 
 There are no third-party Go dependencies, and the intent is to keep it that
 way: a hand-rolled lexer and recursive-descent parser need nothing beyond the
-standard library. The demo site at <https://panset.github.io/cinegram/> is the
-same story one level up — the `pages` workflow uploads the committed `docs/`
-verbatim, and `bazel run //site:sync` on a committer's machine is the only
-thing that writes it.
+standard library. The website at <https://panset.github.io/cinegram/> is the
+one exception, and it is held at arm's length: Zensical renders `www/` in the
+`pages` workflow at a pinned version, and Bazel's job is to guarantee the
+input. `bazel run //site:sync` writes the generated half of `www/` — the
+examples tour and this README, cut into guide pages — and `//site:site_test`
+fails while the committed copy is stale, so the renderer is never handed
+anything out of date.
 
 `.claude/skills/build/` has the rest: golden fixtures, formatting, and the
 invariants a change has to preserve.

@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "embedkit",
+    srcs = ["embedkit.go"],
+    embedsrcs = [
+        "assets/cinegram-embed.css",
+        "assets/cinegram-embed.js",
+    ],
+    importpath = "github.com/tejaspanse/cinegram/pkg/embedkit",
+    visibility = ["//visibility:public"],
+    deps = ["//pkg/emit/html"],
+)
+
+go_test(
+    name = "embedkit_test",
+    srcs = ["embedkit_test.go"],
+    embed = [":embedkit"],
+    deps = ["//pkg/emit/html"],
+)

@@ -129,6 +129,17 @@ reading the `.dgm`.
 | Plain Mermaid back out | `cinegram mermaid out.dgm` |
 | Written walkthrough for docs | `cinegram narrate out.dgm -o walkthrough.md` |
 | Timeline as data | `cinegram compile out.dgm -o timeline.json` |
+| A browsable site from a folder of `.dgm` files | `cinegram site diagrams/ -o out/` |
+| A diagram **inside** a page they already have (MkDocs/Zensical, or any site) | the embed kit — see below |
+
+To put a player in the middle of someone's existing page rather than give it a
+page of its own: `cinegram assets -o <site>/assets/cinegram` installs the
+loader, its stylesheet and the player; `cinegram compile x.dgm -o
+<site>/assets/cinegram/timelines/x.json` supplies what it plays; the page gets
+`<div class="cinegram" data-cinegram="x" data-height="900"></div>`, and the
+site loads `cinegram-embed.css` and `cinegram-embed.js` once, site-wide. They
+are inert on pages with no diagram, so mermaid's 2.6 MB is only fetched where
+it is needed. Full contract: <https://panset.github.io/cinegram/embedding/>.
 
 Useful page facts: `out.html#v=<view>&s=<scenario>&t=<ms>` deep-links a
 paused moment (the **Copy link** button writes it); `?embed` strips the

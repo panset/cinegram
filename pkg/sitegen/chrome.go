@@ -7,29 +7,31 @@ import (
 	"strings"
 
 	"github.com/tejaspanse/cinegram/pkg/emit/html"
-	"github.com/tejaspanse/cinegram/pkg/loader"
 )
 
 // renderAll writes every folder's index and every page into out, walking the
 // tree once. cur is the folder being rendered; root stays in hand because the
 // sidebar always shows the whole tree.
-func renderAll(out map[string][]byte, root, cur *folder, cfg Config, read loader.ReadFileFunc) error {
+func renderAll(out map[string][]byte, root, cur *Group, cfg Config) error {
 	if err := renderIndex(out, root, cur, cfg); err != nil {
 		return err
 	}
-	for _, e := range cur.entries {
-		if e.dir != nil {
-			if err := renderAll(out, root, e.dir, cfg, read); err != nil {
+	for _, e := range cur.Entries {
+		if e.Group != nil {
+			if err := renderAll(out, root, e.Group, cfg); err != nil {
 				return err
 			}
 			continue
 		}
-		if err := renderPage(out, root, e.page, cfg, read); err != nil {
+		if err := renderPage(out, root, e.Doc, cfg); err != nil {
 			return err
 		}
 	}
 	return nil
 }
+
+// pageOf is a document's output path in an HTML site.
+func pageOf(d *Doc) string { return d.Slug + ".html" }
 
 // depth is how many folders deep an output path sits, which is how many
 // "../" it takes to reach the site root from it.
@@ -50,23 +52,20 @@ func resolve(url string, n int) string {
 	return up(n) + url
 }
 
-func renderPage(out map[string][]byte, root *folder, p *page, cfg Config, read loader.ReadFileFunc) error {
-	n := depth(p.out)
+func renderPage(out map[string][]byte, root *Group, d *Doc, cfg Config) error {
+	outPath := pageOf(d)
+	n := depth(outPath)
 
 	var head strings.Builder
 	fmt.Fprintf(&head, "<link rel=\"stylesheet\" href=\"%sassets/site.css\">\n", up(n))
 
 	var header strings.Builder
 	header.WriteString("<header class=\"dgm-site-top\">\n")
-	header.WriteString(crumbs(p.out, p.title, cfg, n))
+	header.WriteString(crumbs(outPath, d.Title, cfg, n))
 	header.WriteString("<div class=\"dgm-site-actions\">\n")
 	if cfg.Playground != "" {
-		doc, err := encodePlaygroundDoc(p.bundle, read)
-		if err != nil {
-			return fmt.Errorf("encoding %s for the playground: %w", p.src, err)
-		}
 		fmt.Fprintf(&header, "<a class=\"dgm-site-edit\" href=\"%s#doc=%s\">Edit in playground</a>\n",
-			stdhtml.EscapeString(resolve(cfg.Playground, n)), doc)
+			stdhtml.EscapeString(resolve(cfg.Playground, n)), d.Share)
 	}
 	for _, l := range cfg.Links {
 		fmt.Fprintf(&header, "<a href=\"%s\">%s</a>\n",
@@ -75,47 +74,47 @@ func renderPage(out map[string][]byte, root *folder, p *page, cfg Config, read l
 	header.WriteString("</div>\n</header>\n")
 
 	var footer strings.Builder
-	if p.prev != nil || p.next != nil {
+	if d.prev != nil || d.next != nil {
 		footer.WriteString("<nav class=\"dgm-site-prevnext\">\n")
-		if p.prev != nil {
+		if d.prev != nil {
 			fmt.Fprintf(&footer, "<a class=\"dgm-site-prev\" href=\"%s\">← %s</a>\n",
-				stdhtml.EscapeString(up(n)+p.prev.out), stdhtml.EscapeString(p.prev.title))
+				stdhtml.EscapeString(up(n)+pageOf(d.prev)), stdhtml.EscapeString(d.prev.Title))
 		} else {
 			footer.WriteString("<span></span>\n")
 		}
-		if p.next != nil {
+		if d.next != nil {
 			fmt.Fprintf(&footer, "<a class=\"dgm-site-next\" href=\"%s\">%s →</a>\n",
-				stdhtml.EscapeString(up(n)+p.next.out), stdhtml.EscapeString(p.next.title))
+				stdhtml.EscapeString(up(n)+pageOf(d.next)), stdhtml.EscapeString(d.next.Title))
 		}
 		footer.WriteString("</nav>\n")
 	}
 
-	pageHTML, err := html.Render(p.timeline, html.Options{
-		Title:      p.title,
+	pageHTML, err := html.Render(d.Timeline, html.Options{
+		Title:      d.Title,
 		AssetsHref: up(n) + "assets",
 		HeadExtra:  []byte(head.String()),
-		Nav:        []byte(sidebar(root, p.out, cfg, n)),
+		Nav:        []byte(sidebar(root, outPath, cfg, n)),
 		Header:     []byte(header.String()),
 		Footer:     []byte(footer.String()),
 	})
 	if err != nil {
-		return fmt.Errorf("rendering %s: %w", p.src, err)
+		return fmt.Errorf("rendering %s: %w", d.Source, err)
 	}
-	out[p.out] = pageHTML
+	out[outPath] = pageHTML
 	return nil
 }
 
 // renderIndex writes a folder's listing page.
-func renderIndex(out map[string][]byte, root, cur *folder, cfg Config) error {
-	outPath := path.Join(cur.rel, "index.html")
-	if cur.rel == "" {
+func renderIndex(out map[string][]byte, root, cur *Group, cfg Config) error {
+	outPath := path.Join(cur.Path, "index.html")
+	if cur.Path == "" {
 		outPath = "index.html"
 	}
 	n := depth(outPath)
 
 	title := cfg.Title
-	if cur.rel != "" {
-		title = cur.name
+	if cur.Path != "" {
+		title = cur.Name
 	}
 
 	var b strings.Builder
@@ -136,27 +135,27 @@ func renderIndex(out map[string][]byte, root, cur *folder, cfg Config) error {
 	b.WriteString("</div>\n</header>\n<main class=\"dgm-site-list\">\n")
 
 	fmt.Fprintf(&b, "<h1>%s</h1>\n", stdhtml.EscapeString(title))
-	if cur.rel == "" && cfg.Playground != "" && cfg.Hero != "" {
+	if cur.Path == "" && cfg.Playground != "" && cfg.Hero != "" {
 		fmt.Fprintf(&b, "<p class=\"dgm-site-hero\"><a href=\"%s\">Try the playground</a><span>%s</span></p>\n",
 			stdhtml.EscapeString(resolve(cfg.Playground, n)), stdhtml.EscapeString(cfg.Hero))
 	}
 
 	b.WriteString("<ul class=\"dgm-site-demos\">\n")
-	for _, e := range cur.entries {
-		if e.dir != nil {
+	for _, e := range cur.Entries {
+		if e.Group != nil {
 			fmt.Fprintf(&b, "<li class=\"is-folder\"><a class=\"title\" href=\"%s\">%s/</a>\n",
-				stdhtml.EscapeString(up(n)+path.Join(e.dir.rel, "index.html")), stdhtml.EscapeString(e.dir.name))
-			if inside := contents(e.dir, n); inside != "" {
+				stdhtml.EscapeString(up(n)+path.Join(e.Group.Path, "index.html")), stdhtml.EscapeString(e.Group.Name))
+			if inside := contents(e.Group, n); inside != "" {
 				fmt.Fprintf(&b, "<p class=\"blurb\">%s</p>\n", inside)
 			}
 			b.WriteString("</li>\n")
 			continue
 		}
 		fmt.Fprintf(&b, "<li><a class=\"title\" href=\"%s\">%s</a><span class=\"source\">%s</span>\n",
-			stdhtml.EscapeString(up(n)+e.page.out), stdhtml.EscapeString(e.page.title),
-			stdhtml.EscapeString(path.Base(e.page.src)))
-		if e.page.blurb != "" {
-			fmt.Fprintf(&b, "<p class=\"blurb\">%s</p>\n", stdhtml.EscapeString(e.page.blurb))
+			stdhtml.EscapeString(up(n)+pageOf(e.Doc)), stdhtml.EscapeString(e.Doc.Title),
+			stdhtml.EscapeString(path.Base(e.Doc.Source)))
+		if e.Doc.Blurb != "" {
+			fmt.Fprintf(&b, "<p class=\"blurb\">%s</p>\n", stdhtml.EscapeString(e.Doc.Blurb))
 		}
 		b.WriteString("</li>\n")
 	}
@@ -176,18 +175,18 @@ const contentsShown = 6
 // nothing but folder names, where a flat one showed every demo and its blurb —
 // this keeps any demo one click from the landing page either way. Blurbs stay
 // on the folder's own index: a listing of listings has to stay scannable.
-func contents(f *folder, n int) string {
+func contents(f *Group, n int) string {
 	var parts []string
-	for _, e := range f.entries {
+	for _, e := range f.Entries {
 		if len(parts) == contentsShown {
 			return strings.Join(parts, " · ") +
-				fmt.Sprintf(" · and %d more", len(f.entries)-contentsShown)
+				fmt.Sprintf(" · and %d more", len(f.Entries)-contentsShown)
 		}
 		href, text := "", ""
-		if e.dir != nil {
-			href, text = up(n)+path.Join(e.dir.rel, "index.html"), e.dir.name+"/"
+		if e.Group != nil {
+			href, text = up(n)+path.Join(e.Group.Path, "index.html"), e.Group.Name+"/"
 		} else {
-			href, text = up(n)+e.page.out, e.page.title
+			href, text = up(n)+pageOf(e.Doc), e.Doc.Title
 		}
 		parts = append(parts, fmt.Sprintf("<a href=\"%s\">%s</a>",
 			stdhtml.EscapeString(href), stdhtml.EscapeString(text)))
@@ -198,7 +197,7 @@ func contents(f *folder, n int) string {
 // sidebar renders the whole tree, marking the current output path. Folders
 // are <details> — collapsible, and open by default so the shape of the site
 // is visible without hunting.
-func sidebar(root *folder, current string, cfg Config, n int) string {
+func sidebar(root *Group, current string, cfg Config, n int) string {
 	var b strings.Builder
 	b.WriteString("<nav class=\"dgm-site-nav\">\n")
 	class := ""
@@ -212,27 +211,27 @@ func sidebar(root *folder, current string, cfg Config, n int) string {
 	return b.String()
 }
 
-func writeTree(b *strings.Builder, f *folder, current string, n int) {
+func writeTree(b *strings.Builder, f *Group, current string, n int) {
 	b.WriteString("<ul>\n")
-	for _, e := range f.entries {
-		if e.dir != nil {
-			idx := path.Join(e.dir.rel, "index.html")
+	for _, e := range f.Entries {
+		if e.Group != nil {
+			idx := path.Join(e.Group.Path, "index.html")
 			cls := ""
 			if current == idx {
 				cls = " class=\"is-current\""
 			}
 			fmt.Fprintf(b, "<li class=\"is-folder\"><details open><summary><a%s href=\"%s\">%s</a></summary>\n",
-				cls, stdhtml.EscapeString(up(n)+idx), stdhtml.EscapeString(e.dir.name))
-			writeTree(b, e.dir, current, n)
+				cls, stdhtml.EscapeString(up(n)+idx), stdhtml.EscapeString(e.Group.Name))
+			writeTree(b, e.Group, current, n)
 			b.WriteString("</details></li>\n")
 			continue
 		}
 		cls := ""
-		if current == e.page.out {
+		if current == pageOf(e.Doc) {
 			cls = " class=\"is-current\""
 		}
 		fmt.Fprintf(b, "<li><a%s href=\"%s\">%s</a></li>\n",
-			cls, stdhtml.EscapeString(up(n)+e.page.out), stdhtml.EscapeString(e.page.title))
+			cls, stdhtml.EscapeString(up(n)+pageOf(e.Doc)), stdhtml.EscapeString(e.Doc.Title))
 	}
 	b.WriteString("</ul>\n")
 }

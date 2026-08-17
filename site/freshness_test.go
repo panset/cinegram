@@ -11,53 +11,66 @@ import (
 	"github.com/tejaspanse/cinegram/internal/repotest"
 )
 
-// TestDocsAreFresh fails when the committed site under docs/ has fallen behind
-// the examples or the renderer.
+// TestGeneratedPagesAreFresh fails when the committed pages under www/ have
+// fallen behind the examples, the README or the renderer.
 //
-// GitHub Pages serves docs/ straight from the branch — there is no build step
-// after the commit, so a stale artifact would ship as-is. This test is the
-// same promise //editors/vscode:assets_test makes for the extension's asset
-// copies: a committed copy of generated content is only honest if a build
-// checks it.
-func TestDocsAreFresh(t *testing.T) {
+// Zensical builds the site from www/, and Bazel cannot run Zensical. So this
+// is where the guarantee has to live: everything Zensical reads that a program
+// wrote is regenerated here and diffed. It is the same promise
+// //editors/vscode:assets_test makes for the extension's asset copies — a
+// committed copy of generated content is only honest if a build checks it.
+func TestGeneratedPagesAreFresh(t *testing.T) {
 	root := repotest.Root(t, "examples")
 
-	want, _, err := Build(os.DirFS(filepath.Join(root, "examples")))
+	readme, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil {
+		t.Fatalf("reading README.md: %v", err)
+	}
+	want, _, err := Build(os.DirFS(filepath.Join(root, "examples")), readme)
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 
+	www := filepath.Join(root, "www")
 	for _, rel := range sortedKeys(want) {
-		got, err := os.ReadFile(filepath.Join(root, "docs", filepath.FromSlash(rel)))
+		got, err := os.ReadFile(filepath.Join(www, filepath.FromSlash(rel)))
 		if err != nil {
-			t.Errorf("docs/%s is missing\nrun: bazel run //site:sync", rel)
+			t.Errorf("www/%s is missing\nrun: bazel run //site:sync", rel)
 			continue
 		}
 		if !bytes.Equal(got, want[rel]) {
-			t.Errorf("docs/%s is stale (%d bytes, regenerated is %d)\nrun: bazel run //site:sync",
+			t.Errorf("www/%s is stale (%d bytes, regenerated is %d)\nrun: bazel run //site:sync",
 				rel, len(got), len(want[rel]))
 		}
 	}
 
-	// A demo page whose example was renamed or removed would otherwise stay
-	// live on the site forever. The walk is recursive: the generated site
-	// nests (demos/assets/, subfolders).
-	demosDir := filepath.Join(root, "docs", "demos")
-	err = filepath.WalkDir(demosDir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		rel, err := filepath.Rel(filepath.Join(root, "docs"), p)
+	// A page whose example was renamed or removed would otherwise stay on the
+	// site forever. Only the generated folders are walked: everything else
+	// under www/ is prose nobody generated.
+	for _, gen := range Generated {
+		base := filepath.Join(www, filepath.FromSlash(gen))
+		err := filepath.WalkDir(base, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				if os.IsNotExist(err) {
+					return fs.SkipAll
+				}
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			rel, err := filepath.Rel(www, p)
+			if err != nil {
+				return err
+			}
+			if _, ok := want[filepath.ToSlash(rel)]; !ok {
+				t.Errorf("www/%s has nothing behind it\nrun: bazel run //site:sync", filepath.ToSlash(rel))
+			}
+			return nil
+		})
 		if err != nil {
-			return err
+			t.Fatalf("walking www/%s: %v", gen, err)
 		}
-		if _, ok := want[filepath.ToSlash(rel)]; !ok {
-			t.Errorf("docs/%s has no example behind it\nrun: bazel run //site:sync", filepath.ToSlash(rel))
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("walking docs/demos: %v", err)
 	}
 }
 

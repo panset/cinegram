@@ -1,19 +1,24 @@
-# Deploys the GitHub Pages site: the committed demo pages plus the playground.
+# Deploys the GitHub Pages site: the Zensical build of www/, plus the playground.
 #
-# The site has two halves that are produced in opposite ways, and the split is
+# Three things go into _site/, produced three different ways, and the split is
 # the whole design here:
 #
-#   docs/       committed. `bazel run //site:sync` is its only writer and
-#               //site:site_test fails while it is stale, so this workflow
-#               uploads it verbatim and never rebuilds it. Every existing
-#               demo URL therefore keeps working byte for byte.
-#   playground/ assembled. It is ~10 MB, most of it a .wasm nobody wants in
-#               git history, so //web/playground:site builds it here from the
-#               sources and the artifacts already in the tree.
+#   www/**      committed Markdown. Half of it is prose someone wrote; half —
+#               examples/, guide/, and the compiled timelines — is written by
+#               `bazel run //site:sync` and kept honest by //site:site_test.
+#               Zensical renders it here.
+#   the kit     `cinegram assets` writes the player and the embed loader into
+#               www/assets/cinegram/. Never committed: pkg/emit/html/assets is
+#               the one canonical copy of mermaid.min.js and the runtime, and a
+#               second copy in git is a copy that drifts. Installing it here is
+#               also how the site proves the command works.
+#   playground/ assembled. It is ~10 MB, most of it a .wasm nobody wants in git
+#               history, so //web/playground:site builds it from the sources
+#               and the artifacts already in the tree.
 #
 # `bazel test //...` runs first as the deploy gate. It includes
-# //site:site_test, so a commit that changed an example without re-running
-# //site:sync blocks the deploy exactly as it blocks CI.
+# //site:site_test, so a commit that changed an example or the README without
+# re-running //site:sync blocks the deploy exactly as it blocks CI.
 name: pages
 
 on:
@@ -30,6 +35,11 @@ permissions:
 # cancelling mid-deploy can leave the site half-published.
 concurrency:
   group: pages
+
+env:
+  # Pinned: a site generator that moves under us turns an unrelated push into a
+  # broken deploy, and this is the only third-party thing the repository runs.
+  ZENSICAL_VERSION: "0.0.54"
 
 jobs:
   deploy:
@@ -53,16 +63,42 @@ jobs:
       - name: Qualify
         run: bazel test //...
 
-      # Verbatim. //site:sync is the only thing that ever writes docs/, and it
-      # runs on a committer's machine — see .claude/skills/publish-site/SKILL.md.
-      - name: Stage the committed demo site
-        run: cp -R docs "$PWD/_site"
+      # The player and the loader, from this commit's binary rather than from
+      # git. `assets` is the same command www/embedding.md tells everyone else
+      # to run, so a break in it fails the deploy instead of shipping quietly.
+      - name: Install the embed kit
+        run: bazel run //cmd/cinegram -- assets -o "$PWD/www/assets/cinegram"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Render the site
+        run: |
+          pip install --disable-pip-version-check "zensical==$ZENSICAL_VERSION"
+          # --strict fails on a dead link or a dead anchor. The generated pages
+          # are full of cross-references nobody hand-checks, so this is the
+          # only thing standing between a rename and a 404.
+          zensical build --strict
+
+      # --strict does not cover extra_css/extra_javascript: a config pointing
+      # at a file that is not there builds clean and publishes a site where
+      # every diagram silently fails to load. //site:site_test checks the
+      # config names the right files; this checks they actually arrived.
+      - name: Check the player shipped
+        run: |
+          for f in cinegram-embed.js cinegram-embed.css runtime.js runtime.css mermaid.min.js; do
+            test -s "_site/assets/cinegram/$f" || {
+              echo "::error::_site/assets/cinegram/$f is missing or empty — no diagram would play"
+              exit 1
+            }
+          done
+          test -s _site/assets/cinegram/timelines/01-basics/01-k8s-request.json
 
       # _site sits in the checkout, which is safe only because nothing reads
-      # the workspace afterwards: the root package globs docs/** and nothing
-      # else, so no Bazel target picks the copy up, and no git step follows.
-      # The assembler resolves a relative -o against BUILD_WORKING_DIRECTORY;
-      # an absolute path takes that question off the table entirely.
+      # the workspace afterwards: no Bazel target globs it, and no git step
+      # follows. The assembler resolves a relative -o against
+      # BUILD_WORKING_DIRECTORY; an absolute path takes that off the table.
       - name: Assemble the playground
         run: bazel run //web/playground:site -- -o "$PWD/_site/playground"
 

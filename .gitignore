@@ -1,16 +1,25 @@
 bazel-*
 *.html
 !testdata/**/*.html
-# The GitHub Pages site is a committed artifact; //site:site_test keeps it
-# fresh. Only the exact files the generator writes are un-ignored, so a stray
-# preview written into docs/ stays invisible to git.
-!docs/index.html
-# demos/ nests since the sitegen rewrite: a subfolder of examples/ becomes a
-# subfolder of demos/ with its own index.
-!docs/demos/**/*.html
 # The playground's page is a source file, not something a command emits: the
 # site is assembled from it at deploy time and never committed.
 !web/**/*.html
+
+# The website. www/ is committed — prose, plus the pages //site:sync writes and
+# //site:site_test keeps fresh — but two things under it are not:
+#
+#   _site/      Zensical's output. Built in CI on every push to main; there is
+#               nothing to gain from a second copy in git history.
+#   the kit     the player and the embed loader, written into
+#               www/assets/cinegram/ by `cinegram assets`. The canonical copy
+#               lives in pkg/emit/html/assets and pkg/embedkit/assets, and a
+#               committed duplicate of a 2.7 MB mermaid.min.js is a duplicate
+#               that drifts. The compiled timelines beside them *are*
+#               committed: they are generated from examples/ and checked.
+_site/
+www/assets/cinegram/*
+!www/assets/cinegram/timelines/
+
 .DS_Store
 dist/
 # Tool droppings: the Playwright MCP server's session logs and its npm cache.

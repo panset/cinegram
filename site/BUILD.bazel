@@ -2,27 +2,39 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "site",
-    srcs = ["site.go"],
+    srcs = [
+        "guide.go",
+        "site.go",
+    ],
     importpath = "github.com/tejaspanse/cinegram/site",
     visibility = ["//visibility:public"],
-    deps = ["//pkg/sitegen"],
+    deps = [
+        "//pkg/ir",
+        "//pkg/sitegen",
+    ],
 )
 
 go_test(
     name = "site_test",
     size = "small",
     srcs = [
+        "config_test.go",
         "freshness_test.go",
         "site_test.go",
     ],
-    # The freshness test regenerates the site from the examples and diffs the
-    # result against the committed docs/ tree.
+    # The freshness test regenerates the pages from the examples and the
+    # README and diffs the result against the committed www/ tree.
     data = [
-        "//:docs",
         "//:examples",
+        "//:readme",
+        "//:www",
+        "//:zensical_config",
     ],
     embed = [":site"],
-    deps = ["//internal/repotest"],
+    deps = [
+        "//internal/repotest",
+        "//pkg/embedkit",
+    ],
 )
 
 # The fix for what the freshness test reports. Aliased here so that the

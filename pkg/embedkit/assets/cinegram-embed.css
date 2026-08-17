@@ -1,0 +1,148 @@
+/* The host box a cinegram is mounted into.
+ *
+ * This is the only cinegram CSS a site loads on every page. The player's own
+ * stylesheet (runtime.css, 33 KB) is injected by cinegram-embed.js on the
+ * pages that actually show a diagram; everything here is the box around it, so
+ * an unmounted host still reserves its space and a broken one still says so.
+ * Colours come from Material's palette variables, so the box follows the
+ * light/dark toggle without a second set of rules — and falls back to plain
+ * values on a theme that does not define them.
+ */
+
+.cinegram {
+  /* Space reserved before the player mounts, so the article does not jump as
+     each diagram arrives. data-height overrides it per host; this is the
+     fallback for one that sets none. It is a floor, never a cap — the player
+     sizes itself to the diagram, the step list and the caption. */
+  min-height: 32rem;
+  margin: 1.5em 0;
+  border: 1px solid var(--md-default-fg-color--lightest, rgba(0, 0, 0, 0.07));
+  border-radius: 0.2rem;
+  overflow: hidden;
+  background: var(--md-default-bg-color, #fff);
+  /* The player mounts into a child; this makes it fill the box rather than
+     shrink to the height of whichever view happens to be on screen, so
+     drilling between views does not make the page jump. */
+  display: flex;
+  flex-direction: column;
+}
+
+.cinegram > .dgm {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Once the player is up it knows its own height, so the reservation goes.
+   Without this the floor above would survive as permanent empty space
+   whenever data-height was set higher than the diagram turned out to need. */
+.cinegram--mounted {
+  min-height: 0;
+}
+
+/* The step list is an <ol>, and Material's `.md-typeset ol:not([hidden])`
+   (0,2,1) beats runtime.css's `.dgm-present .dgm-steps` (0,2,0) — so without
+   this the theme keeps a step list on screen in presenter mode, where the room
+   should be looking at the stage. Not a bug in either sheet: it is where a
+   prose theme's list styling meets a player embedded in prose. The foot and
+   crumb are re-asserted alongside it for the same reason. */
+.cinegram .dgm-present .dgm-steps,
+.cinegram .dgm-present .dgm-foot,
+.cinegram .dgm-present .dgm-crumb {
+  display: none;
+}
+
+/* Presenter mode takes the host fullscreen, where the reserved height and the
+   page framing are both wrong: the box should be the screen. The class is put
+   on by cinegram-embed.js from the fullscreenchange event rather than using
+   :fullscreen, so this is written once instead of twice for Safari's prefix. */
+.cinegram--fullscreen {
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.cinegram--fullscreen > .dgm {
+  height: 100%;
+  border-radius: 0;
+}
+
+/* Fit the diagram to the screen instead of letting it run off the bottom.
+   Nothing in the player sizes a diagram to a height — the SVG is scaled to the
+   stage's width and the stage takes whatever height that produces, which is
+   right for a page that scrolls and wrong for a projector. Reel mode already
+   solves it: give the holder a height of its own so the SVG's max-height has
+   something to measure against, and let width follow. Without this the stage
+   overflows and `overflow: hidden` crops the bottom of the diagram. */
+.cinegram--fullscreen .dgm-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.cinegram--fullscreen .dgm-stage {
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.cinegram--fullscreen .dgm-svg-holder {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cinegram--fullscreen .dgm-svg-holder svg {
+  max-height: 100%;
+  width: auto;
+}
+
+/* The caption is what the presenter is talking from, so it is the one thing
+   that must not be squeezed: presenter mode sets `min-height: 0` on it, which
+   in a flex column lets it shrink below its own text and crop the last line.
+   Fix the caption at its content height and let the stage — which is scaled to
+   fit anyway — give up the pixels instead. */
+.cinegram--fullscreen .dgm-caption {
+  flex: 0 0 auto;
+}
+
+/* Before mount: a quiet placeholder rather than an empty framed hole. */
+.cinegram--loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--md-default-fg-color--light, #666);
+  font-size: 0.75rem;
+}
+
+.cinegram--loading::after {
+  content: "Loading diagram…";
+}
+
+/* A diagram that could not be fetched says which one and why. Silence here
+   reads as "the page has a gap in it" and sends the reader to the console. */
+.cinegram--failed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 6rem;
+  padding: 1rem;
+  text-align: center;
+  color: var(--md-typeset-color, #000);
+  background: var(--md-code-bg-color, #f5f5f5);
+  font-size: 0.7rem;
+}
+
+/* Full-bleed on a phone: a diagram is the one thing on these pages that wants
+   every pixel of the column, and the theme's own gutter is generous. */
+@media screen and (max-width: 44.9375em) {
+  .cinegram {
+    margin-left: -0.8rem;
+    margin-right: -0.8rem;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+  }
+}

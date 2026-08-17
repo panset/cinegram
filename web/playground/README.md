@@ -13,7 +13,7 @@ canonical browser assets in `pkg/emit/html/assets/`, and the `.wasm` plus
 never in git, and there is no fourth copy of `mermaid.min.js` to drift.
 
 `.github/workflows/pages.yml` assembles it at `/playground/`, beside the
-committed `docs/` — see `.claude/skills/publish-site/`.
+Zensical build of `www/` — see `.claude/skills/publish-site/`.
 
 ## Three things that are easy to break
 

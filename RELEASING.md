@@ -80,13 +80,13 @@ A playground, a package manager, a container image — the pattern is the same:
 
 A channel that serves *content* rather than the binary can instead ride
 `main` the way GitHub Pages does. `.github/workflows/pages.yml` runs on every
-push to `main`, gates on `bazel test //...`, and publishes two halves at once:
-the committed `docs/` demo site **verbatim** (regenerated only by `bazel run
-//site:sync`, kept honest by `//site:site_test`, never rebuilt in CI) plus the
-playground assembled by `bazel run //web/playground:site` at `/playground/`, so
-its 6.4 MB `.wasm` never enters git. Neither half needs a `release.yml` channel
-job, because neither ships the CLI binary — anything that does must go through
-a channel job here.
+push to `main`, gates on `bazel test //...`, and assembles the site there:
+Zensical renders the committed `www/` (whose generated half `//site:sync`
+writes and `//site:site_test` keeps honest), `cinegram assets` installs the
+player into it, and `bazel run //web/playground:site` puts the playground at
+`/playground/` so its 6.4 MB `.wasm` never enters git. None of it needs a
+`release.yml` channel job, because none of it ships the CLI binary — anything
+that does must go through a channel job here.
 
 ## Secrets
 

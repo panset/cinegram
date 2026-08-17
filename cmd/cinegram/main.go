@@ -11,6 +11,7 @@
 //	cinegram record  <file.dgm>   # a GIF, mp4 or webm of one scenario
 //	cinegram narrate <file.dgm>   # the animation as a written walkthrough
 //	cinegram lint    <file.dgm>   # diagnostics only
+//	cinegram assets  -o dir/      # the embed kit, for a site of your own
 package main
 
 import (
@@ -57,6 +58,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return cmdPreview(rest, stdout, stderr)
 	case "site":
 		return cmdSite(rest, stdout, stderr)
+	case "assets":
+		return cmdAssets(rest, stdout, stderr)
 	case "lint":
 		return cmdLint(rest, stdout, stderr)
 	case "narrate":
@@ -102,6 +105,12 @@ Usage:
                                                  rebuilds as the folder changes
                               [--playground URL] [--link Name=URL]...
                               [--hero TEXT] [--title NAME]
+  cinegram assets             -o dir/         write the embed kit into a folder
+                                                 your own site serves: the
+                                                 loader, its stylesheet and the
+                                                 three runtime files. Pair with
+                                                 compiled timelines to play a
+                                                 diagram inside a page you wrote
   cinegram frame   <file.dgm> --at 2400ms -o out.png
                                                  screenshot one exact moment
                                                  (--frames N -o dir/ for a sequence)

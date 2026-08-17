@@ -1,4 +1,4 @@
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "sitegen",
@@ -16,4 +16,10 @@ go_library(
         "//pkg/ir",
         "//pkg/loader",
     ],
+)
+
+go_test(
+    name = "sitegen_test",
+    srcs = ["sitegen_test.go"],
+    embed = [":sitegen"],
 )

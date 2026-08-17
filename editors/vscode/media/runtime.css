@@ -228,6 +228,13 @@ body.dgm-standalone {
    Exit, the scenario picker, zoom reset, theme and help stay. */
 .dgm-present .dgm-authoring { display: none; }
 
+/* Except in a document, where inline mode has already restored Play at
+   `.dgm-inline .dgm-controls > .dgm-play` (0,3,0) and outranks the (0,2,0)
+   rule above — leaving a continuous-run button in the one mode built to
+   advance a beat at a time. Both rules are right on their own; this states
+   which wins where they meet. */
+.dgm-inline.dgm-present .dgm-controls > .dgm-authoring { display: none; }
+
 .dgm-present .dgm-stage { min-height: 60vh; }
 
 .dgm-present .dgm-caption { min-height: 0; padding: 16px 20px; }
