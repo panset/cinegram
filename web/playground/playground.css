@@ -42,7 +42,10 @@ body.pg {
   overflow: hidden;
   background: var(--dgm-bg);
   color: var(--dgm-fg);
-  font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* The face is a token in runtime.css too, so a skin — this page asks for the
+     mainframe one on <html> — changes the workbench and the player together.
+     Sans is the token's default, which is what this said before. */
+  font: 14px/1.5 var(--dgm-font);
 }
 
 /* --- top bar ------------------------------------------------------------ */
@@ -342,7 +345,7 @@ body.pg {
 .pg-files-hint {
   margin: 0;
   color: var(--dgm-muted);
-  font: 12px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font: 12px/1.5 var(--dgm-font);
 }
 
 /* --- open files --------------------------------------------------------- */

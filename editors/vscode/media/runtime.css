@@ -4,9 +4,14 @@
  * Colours are defined as tokens on bare :root so the light palette always has
  * a value, then overridden for the dark theme. The runtime stamps
  * data-theme on <html>, and prefers-color-scheme covers the untouched default.
+ *
+ * The type face is a token for the same reason the colours are: a surface that
+ * wants the mainframe skin below has to be able to reset it without hunting
+ * through the rules that draw the chrome.
  */
 
 :root {
+  --dgm-font: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --dgm-bg: #ffffff;
   --dgm-panel: #f6f7f9;
   /* The panel colour with the diagram showing through it. Only the tool rail
@@ -19,6 +24,10 @@
   --dgm-muted: #6b7480;
   --dgm-accent: #2f6feb;
   --dgm-accent-soft: rgba(47, 111, 235, 0.14);
+  /* What is written *on* the accent — Play, the active step's number. White
+     against both blues, and a token because a skin is free to pick an accent
+     white cannot be read on. Scheme-independent, so it is stated once. */
+  --dgm-on-accent: #ffffff;
   --dgm-busy: #d97706;
   --dgm-response: #16a34a;
   --dgm-fail: #dc2626;
@@ -64,6 +73,114 @@
   }
 }
 
+/* --- the mainframe skin ------------------------------------------------- *
+ *
+ * Cinegram's own theme, applied to the player's chrome. The palette's home is
+ * www/assets/stylesheets/mainframe.css, which sets it as --cg-* for the
+ * website and documents what every colour means: light is greenbar, the
+ * fanfold paper a line printer banded pale green; dark is an IBM 3279 colour
+ * display, blue-black glass with the seven-colour field palette it actually
+ * had, where colour *was* the field attribute — green is a field you can act
+ * on, turquoise is protected text you read, yellow is a literal, red went
+ * wrong. So the mapping here is semantic rather than decorative: the accent is
+ * the actionable green, a response is turquoise, waiting is yellow (ochre on
+ * paper, where yellow is illegible), a failure is red.
+ *
+ * site/palette_test.go pins the hexes that must agree with mainframe.css,
+ * because the palette now lives in two files that no build step connects.
+ *
+ * Opt-in, on the root element, and never the default: the whole stylesheet is
+ * byte-synced into editors/vscode/media/, and a branded monospace player
+ * inside someone's Markdown preview reads as a broken font. The surfaces that
+ * ask for it are the ones cinegram owns end to end — the emitted page, the
+ * pages `cinegram site` builds, the playground.
+ *
+ * The three blocks mirror the three above, and for the same reason: an
+ * attribute selector already outranks bare :root, so the resolution order has
+ * to come from position in the file, not from specificity. Light values first
+ * so a skinned page always has a colour, the dark override second, and the
+ * prefers-color-scheme guard last for the page whose theme nobody has stamped
+ * yet. */
+
+:root[data-dgm-skin='mainframe'] {
+  /* One family, both schemes — a 3270 had one, and the roles separate by
+     weight, case and colour instead. Ordered so a machine with IBM Plex Mono
+     installed gets the face IBM drew looking at exactly these terminals, and
+     every other machine still lands on a real monospace. No @font-face: a
+     webfont this page cannot fetch is a silent fallback to something
+     arbitrary, and the page has to work from the filesystem. */
+  --dgm-font:
+    "IBM Plex Mono", "SF Mono", SFMono-Regular, "Berkeley Mono", ui-monospace,
+    Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+
+  --dgm-bg: #f4f4ec;            /* fanfold stock, warm off-white */
+  --dgm-panel: #dfe9d8;         /* the printed band */
+  --dgm-panel-soft: rgba(223, 233, 216, 0.72);
+  --dgm-border: #8b9c85;
+  --dgm-fg: #17201c;            /* never quite black; ribbon on paper */
+  --dgm-muted: #5a6a60;
+  --dgm-accent: #14713d;
+  --dgm-accent-soft: rgba(20, 113, 61, 0.12);
+  /* A field the cursor has landed on inverts — that is what a 3270 does, and it
+     is also the only legible answer for type on the dark scheme's phosphor
+     green, which white would sit on at less than 2:1. var() rather than a
+     literal so the one declaration follows the ground into both schemes. */
+  --dgm-on-accent: var(--dgm-bg);
+  --dgm-busy: #8a6212;          /* yellow is illegible on paper; ochre is its ink */
+  --dgm-response: #10666a;
+  --dgm-fail: #a9261b;
+  /* The warning banner is a recessed field with ochre type, not a coloured
+     card: on paper the printer had one ribbon and severity was the wording. */
+  --dgm-warn-bg: #e9ebe0;
+  --dgm-warn-fg: #8a6212;
+  --dgm-shadow: rgba(23, 32, 28, 0.14);
+}
+
+:root[data-dgm-skin='mainframe'][data-theme='dark'],
+:root[data-dgm-skin='mainframe']:not([data-theme='light']) {
+  /* Not #000: a CRT face in a lit room is a blue-black, and the whole palette
+     is keyed off that cast so the greens do not read as neon. */
+  --dgm-bg: #080d0c;
+  --dgm-panel: #0e1614;
+  --dgm-panel-soft: rgba(14, 22, 20, 0.72);
+  --dgm-border: #2a3e39;
+  --dgm-fg: #c9d6ce;
+  --dgm-muted: #6c918a;
+  --dgm-accent: #34d96a;
+  --dgm-accent-soft: rgba(52, 217, 106, 0.16);
+  --dgm-busy: #e8b646;
+  --dgm-response: #45c9c0;
+  --dgm-fail: #f2604f;
+  --dgm-warn-bg: #0e1614;
+  --dgm-warn-fg: #e8b646;
+  --dgm-shadow: rgba(0, 0, 0, 0.55);
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-dgm-skin='mainframe']:not([data-theme='dark']) {
+    --dgm-bg: #f4f4ec;
+    --dgm-panel: #dfe9d8;
+    --dgm-panel-soft: rgba(223, 233, 216, 0.72);
+    --dgm-border: #8b9c85;
+    --dgm-fg: #17201c;
+    --dgm-muted: #5a6a60;
+    --dgm-accent: #14713d;
+    --dgm-accent-soft: rgba(20, 113, 61, 0.12);
+    --dgm-busy: #8a6212;
+    --dgm-response: #10666a;
+    --dgm-fail: #a9261b;
+    --dgm-warn-bg: #e9ebe0;
+    --dgm-warn-fg: #8a6212;
+    --dgm-shadow: rgba(23, 32, 28, 0.14);
+  }
+}
+
+/* The diagram itself is deliberately not in scope. It renders through
+   mermaid's own light and dark themes, and restyling nodes and edges to
+   phosphor would mean a themeVariables set per skin plus design work on what
+   the 3279's semantic colours mean in mermaid's class model. The skin recolours
+   the chrome around the picture. */
+
 /* Everything that claims the page is scoped to .dgm-standalone, which only the
    emitted page sets on <body>. This stylesheet is also loaded whole into hosts
    that own the document around the diagram — the VS Code Markdown preview
@@ -74,7 +191,7 @@ body.dgm-standalone {
   margin: 0;
   background: var(--dgm-bg);
   color: var(--dgm-fg);
-  font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font: 14px/1.5 var(--dgm-font);
 }
 
 .dgm {
@@ -85,7 +202,7 @@ body.dgm-standalone {
   gap: 12px;
   /* Not inherited from the host: the runtime's own sizing is in px throughout,
      and an editor's prose font would leave the controls at the wrong scale. */
-  font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font: 14px/1.5 var(--dgm-font);
   color: var(--dgm-fg);
 }
 
@@ -169,7 +286,7 @@ body.dgm-standalone {
 .dgm-btn-primary {
   background: var(--dgm-accent);
   border-color: var(--dgm-accent);
-  color: #fff;
+  color: var(--dgm-on-accent);
   min-width: 72px;
   font-weight: 600;
 }
@@ -1128,7 +1245,7 @@ body.dgm-standalone {
 .dgm-step.is-active::before {
   background: var(--dgm-accent);
   border-color: var(--dgm-accent);
-  color: #fff;
+  color: var(--dgm-on-accent);
 }
 
 .dgm-step.is-done .dgm-step-name { color: var(--dgm-muted); }
@@ -1498,7 +1615,7 @@ body.dgm-standalone {
   border: 1px solid var(--dgm-accent);
   border-radius: 999px;
   background: var(--dgm-accent);
-  color: #fff;
+  color: var(--dgm-on-accent);
   font: inherit;
   font-size: 11px;
   font-weight: 700;

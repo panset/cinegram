@@ -74,7 +74,12 @@ func Render(t *ir.Timeline, opts Options) ([]byte, error) {
 	}
 
 	var b bytes.Buffer
-	b.WriteString("<!doctype html>\n<html lang=\"en\">\n<head>\n")
+	// The mainframe skin is opt-in, and this page is one of the surfaces that
+	// opts in: runtime.css keys it off the root element, so a page cinegram owns
+	// end to end wears the theme while the same stylesheet, contributed into a
+	// document somebody else owns, stays neutral. That is why the attribute is
+	// here and not in the token block.
+	b.WriteString("<!doctype html>\n<html lang=\"en\" data-dgm-skin=\"mainframe\">\n<head>\n")
 	b.WriteString("<meta charset=\"utf-8\">\n")
 	b.WriteString("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
 	fmt.Fprintf(&b, "<title>%s</title>\n", html.EscapeString(title))

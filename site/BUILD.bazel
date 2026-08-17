@@ -20,10 +20,13 @@ go_test(
     srcs = [
         "config_test.go",
         "freshness_test.go",
+        "palette_test.go",
         "site_test.go",
     ],
     # The freshness test regenerates the pages from the examples and the
-    # README and diffs the result against the committed www/ tree.
+    # README and diffs the result against the committed www/ tree; the palette
+    # test reads mainframe.css out of the same tree. runtime.css needs no data
+    # entry — the palette test takes it from the emitter's own embed.
     data = [
         "//:examples",
         "//:readme",
@@ -34,6 +37,7 @@ go_test(
     deps = [
         "//internal/repotest",
         "//pkg/embedkit",
+        "//pkg/emit/html",
     ],
 )
 
