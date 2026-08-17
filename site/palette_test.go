@@ -51,6 +51,19 @@ var mainframePalette = []struct {
 	{cg: "--cg-ink", dgm: "--dgm-shadow", scheme: "light"},
 }
 
+// The table above is one-way on its own: it fails when a colour it names
+// drifts, and says nothing about a token added to the skin and never listed —
+// which would be a colour the site and the player disagree on with every test
+// green. So every --dgm-* the skin declares has to be accounted for here, and a
+// token that genuinely does not correspond to a --cg- one is a line in this map
+// with the reason it does not.
+var mainframeUnpaired = map[string]string{
+	"--dgm-on-accent": "var(--dgm-bg), not a colour of its own: a field the cursor " +
+		"lands on inverts, so the ground follows the scheme rather than being pinned",
+	"--dgm-font": "a family rather than a colour; checked at the end of " +
+		"TestMainframePaletteAgrees instead",
+}
+
 // TestMainframePaletteAgrees checks the table above against both files.
 func TestMainframePaletteAgrees(t *testing.T) {
 	root := repotest.Root(t, filepath.Join("www", "assets", "stylesheets", "mainframe.css"))
@@ -123,12 +136,56 @@ func TestMainframePaletteAgrees(t *testing.T) {
 		}
 	}
 
+	// And the other direction: a token the skin declares that the table never
+	// mentions is a colour nothing compares, quietly free to drift from the
+	// site's. The light block is the one to sweep — it is the complete one, the
+	// dark override restating the same names.
+	paired := map[string]bool{}
+	for _, p := range mainframePalette {
+		paired[p.dgm] = true
+	}
+	for name := range skin["light"] {
+		if paired[name] || mainframeUnpaired[name] != "" {
+			continue
+		}
+		t.Errorf("the mainframe skin declares %s and nothing here pairs it with a "+
+			"--cg-* colour, so it can drift from mainframe.css with every test green. "+
+			"Add it to the correspondence table, or to mainframeUnpaired with the "+
+			"reason it has no counterpart", name)
+	}
+
 	// The type face is the other half of the theme, and it is one family in both
 	// schemes, so it is set once — in the light block, which every skinned page
 	// resolves through.
 	if font := skin["light"]["--dgm-font"]; !strings.Contains(font, "IBM Plex Mono") {
 		t.Errorf("the mainframe skin's --dgm-font is %q; mainframe.css leads its stack "+
 			"with IBM Plex Mono, which IBM drew looking at these terminals", font)
+	}
+}
+
+// The playground is the third surface cinegram owns end to end, and the only
+// one whose skin attribute is hand-written: the emitted page and the site's
+// listings both get it from html.Skin, but web/playground/index.html is a
+// static file with the name spelled out in it. A rename of the skin block would
+// leave that page wearing an attribute nothing matches — which costs nothing
+// and shows as a workbench that quietly stopped looking like the product.
+func TestPlaygroundWearsTheSkin(t *testing.T) {
+	root := repotest.Root(t, filepath.Join("web", "playground", "index.html"))
+	page, err := os.ReadFile(filepath.Join(root, "web", "playground", "index.html"))
+	if err != nil {
+		t.Fatalf("reading the playground page: %v", err)
+	}
+
+	// The name has to be one runtime.css answers to, not merely the one the Go
+	// constant says: the constant is what the emitted page writes, and this
+	// pins all three to the same string.
+	runtime := string(html.Assets()["runtime.css"])
+	if want := "[data-dgm-skin='" + html.Skin + "']"; !strings.Contains(runtime, want) {
+		t.Fatalf("html.Skin is %q but runtime.css defines no %s block", html.Skin, want)
+	}
+	if want := `data-dgm-skin="` + html.Skin + `"`; !strings.Contains(string(page), want) {
+		t.Errorf("web/playground/index.html does not carry %s; the page is a static file, "+
+			"so a renamed skin leaves it neutral with nothing failing", want)
 	}
 }
 

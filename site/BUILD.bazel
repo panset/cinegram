@@ -25,13 +25,16 @@ go_test(
     ],
     # The freshness test regenerates the pages from the examples and the
     # README and diffs the result against the committed www/ tree; the palette
-    # test reads mainframe.css out of the same tree. runtime.css needs no data
-    # entry — the palette test takes it from the emitter's own embed.
+    # test reads mainframe.css out of the same tree, and the playground's
+    # hand-written index.html, which is the one page that spells the skin's name
+    # out instead of taking it from html.Skin. runtime.css needs no data entry —
+    # the palette test takes it from the emitter's own embed.
     data = [
         "//:examples",
         "//:readme",
         "//:www",
         "//:zensical_config",
+        "//web/playground:static",
     ],
     embed = [":site"],
     deps = [

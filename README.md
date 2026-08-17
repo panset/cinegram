@@ -841,7 +841,8 @@ Press `?` in the page for this list.
 | `?` | Show or hide the shortcut list |
 
 Scroll to zoom the stage — anchored on the cursor, so the thing you are
-pointing at stays put — drag to pan, and `⌂` or a double-click resets. Notes,
+pointing at stays put — drag to pan, and a double-click, or **Reset zoom** on
+the tool rail, puts the framing back. Notes,
 badges and gauges are positioned from live element rects, so they stay glued to
 their nodes at any zoom. Zoom resets when you change view, since a framing that
 suited one diagram means nothing over the next.

@@ -114,9 +114,22 @@ A player mounted this way is a **guest on your page**, not a page of its own:
 
 The player's chrome — bar, captions, step list, panels — draws from a dozen CSS
 custom properties, `--dgm-bg` through `--dgm-fail`, and by default they are a
-neutral light/dark pair that sits quietly on any theme. Set them on `:root` in
-your own stylesheet and the chrome follows, no different from retuning
-Material's own variables.
+neutral light/dark pair that sits quietly on any theme. Set them on the host
+element and the chrome follows:
+
+```css
+.cinegram { --dgm-accent: #b4531f; --dgm-panel: #faf6f0; }
+```
+
+The host element rather than `:root`, and the distinction matters. The loader
+appends `runtime.css` to `<head>` when it mounts a diagram, so the runtime's own
+declarations arrive *after* your stylesheet: a `:root` block of yours loses on
+source order in light and outright on specificity in dark, where the runtime
+writes `:root:not([data-theme='light'])`. A custom property set on an ancestor
+of the player is inherited, and an inherited value is what the subtree resolves
+— nothing the runtime says about `:root` competes with it. The div you already
+put the diagram in is that ancestor; `body` works too, if you would rather say
+it once.
 
 Cinegram ships one made-up palette of its own for the players it owns — the
 greenbar-and-phosphor look of this site, defined in `runtime.css` as a **skin**.

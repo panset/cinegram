@@ -44,8 +44,13 @@ body.pg {
   color: var(--dgm-fg);
   /* The face is a token in runtime.css too, so a skin — this page asks for the
      mainframe one on <html> — changes the workbench and the player together.
-     Sans is the token's default, which is what this said before. */
-  font: 14px/1.5 var(--dgm-font);
+     Sans is the token's default, which is what this said before, and it is the
+     fallback here as well: `font` is a shorthand, so an unresolved var() throws
+     the size and the line height out with the family and drops the whole
+     workbench to the browser's default serif at whatever size it likes. That
+     is the failure mode when runtime.css has not loaded — which is exactly when
+     the page is already having a bad time. */
+  font: 14px/1.5 var(--dgm-font, ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
 }
 
 /* --- top bar ------------------------------------------------------------ */
@@ -345,7 +350,7 @@ body.pg {
 .pg-files-hint {
   margin: 0;
   color: var(--dgm-muted);
-  font: 12px/1.5 var(--dgm-font);
+  font: 12px/1.5 var(--dgm-font, ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
 }
 
 /* --- open files --------------------------------------------------------- */

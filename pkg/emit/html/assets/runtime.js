@@ -597,6 +597,7 @@
     this.bindMapGestures();
     this.bindStageGestures();
     this.bindRailGestures();
+    this.watchRailCollapse();
 
     // Camera keyframes bake the stage size in, so a resize invalidates them.
     // Same inline pattern as the window pointer listeners above this.
@@ -817,8 +818,14 @@
   Player.prototype.buildRail = function () {
     var self = this;
     var rail = el('div', 'dgm-rail');
-    rail.setAttribute('role', 'toolbar');
-    rail.setAttribute('aria-orientation', 'vertical');
+    // A group, not a toolbar. `role="toolbar"` is a promise of single-tab-stop
+    // arrow-key navigation, and these are seven plain tab stops — but the
+    // roving tabindex that would make the promise true has to own the arrow
+    // keys, and the transport already does: onKey reads ArrowLeft and
+    // ArrowRight as previous and next step, which is the more valuable binding
+    // on a player. A group says what the buttons are without contracting for
+    // keys something else owns.
+    rail.setAttribute('role', 'group');
     rail.setAttribute('aria-label', 'Diagram tools');
 
     // The narrow-screen collapse. Seven targets stacked over a phone-sized
@@ -826,9 +833,8 @@
     // hides the column and shows this instead; the class it toggles is what the
     // stylesheet puts back. Hidden by CSS at every other width, so the toggle
     // never competes with the tools it stands in for.
-    this.railMore = iconButton('more', 'More controls', 'dgm-btn dgm-btn-icon dgm-rail-more', function () {
-      var open = self.rail.classList.toggle('is-open');
-      self.railMore.setAttribute('aria-expanded', open ? 'true' : 'false');
+    this.railMore = iconButton('more', 'More controls', 'dgm-btn dgm-rail-more', function () {
+      self.setRailOpen(!self.rail.classList.contains('is-open'));
     });
     this.railMore.setAttribute('aria-expanded', 'false');
     rail.appendChild(this.railMore);
@@ -838,6 +844,25 @@
     // presenter rule, and would then put the authoring set back mid-talk.
     var items = el('div', 'dgm-rail-items');
     rail.appendChild(items);
+
+    // Using a tool closes the collapse again, which is the whole shape of the
+    // gesture on a phone: tap ⋯, tap the thing. Leaving the column standing
+    // over the diagram after it has done its job means a third tap to put it
+    // away. On the toggle itself this listener never runs — railMore is a
+    // sibling of items, not a child.
+    //
+    // The walk is by hand rather than through closest(): a press usually lands
+    // on the glyph, and an inline SVG element is where closest and classList
+    // are least reliable across the browsers this file still means to work in.
+    // A tagName comparison asks nothing of either.
+    items.addEventListener('click', function (ev) {
+      for (var n = ev.target; n && n !== items; n = n.parentNode) {
+        if (n.tagName && String(n.tagName).toLowerCase() === 'button') {
+          self.setRailOpen(false);
+          return;
+        }
+      }
+    });
 
     // Restart is not authoring: taking a demo from the top is one of the most
     // ordinary things a presenter does, so it stays when presenter mode strips
@@ -871,7 +896,7 @@
     this.shareBtn.appendChild(this.shareNote);
     items.appendChild(this.shareBtn);
 
-    this.zoomBtn = iconButton('fit', 'Reset zoom and pan', 'dgm-btn dgm-btn-icon', function () { self.resetZoom(); });
+    this.zoomBtn = iconButton('fit', 'Reset zoom and pan', 'dgm-btn', function () { self.resetZoom(); });
     items.appendChild(this.zoomBtn);
 
     // Theme keeps its word rather than a sun and a moon, because the word is
@@ -891,10 +916,42 @@
     this.themeBtn.title = 'Switch between the light and dark palette';
     items.appendChild(this.themeBtn);
 
-    this.helpBtn = iconButton('help', 'Keyboard shortcuts', 'dgm-btn dgm-btn-icon', function () { self.toggleHelp(); });
+    this.helpBtn = iconButton('help', 'Keyboard shortcuts', 'dgm-btn', function () { self.toggleHelp(); });
     items.appendChild(this.helpBtn);
 
     return rail;
+  };
+
+  // The collapse's one writer, so the class and the attribute a screen reader
+  // hears cannot disagree.
+  Player.prototype.setRailOpen = function (open) {
+    this.rail.classList.toggle('is-open', !!open);
+    this.railMore.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+
+  // is-open is a narrow-screen state, and nothing about widening the window
+  // touches it: above the breakpoint the toggle is display:none and the items
+  // are shown regardless, so a phone turned to landscape and back would come
+  // back with the column standing open and no press that opened it. Reset it
+  // when the query stops matching — the width that made the collapse make sense
+  // is the width that owns it.
+  Player.prototype.watchRailCollapse = function () {
+    var self = this;
+    try {
+      var mq = matchMedia('(max-width: 520px)');
+      var onChange = function (ev) {
+        if (!ev.matches) self.setRailOpen(false);
+      };
+      if (mq.addEventListener) {
+        own(self, mq, 'change', onChange);
+      } else if (mq.addListener) {
+        // Same legacy pair as the prefers-color-scheme watcher in build():
+        // MediaQueryList predates EventTarget there, so `own` cannot express
+        // it and the remover goes on by hand.
+        mq.addListener(onChange);
+        self._unbind.push(function () { mq.removeListener(onChange); });
+      }
+    } catch (e) { /* no matchMedia: the collapse is only reachable by pressing it */ }
   };
 
   // The rail is a child of the stage, which reads a press as the start of a pan
@@ -987,7 +1044,7 @@
     ['Click stage', 'In presenter mode, advance one step'],
     ['Click scene', 'Open the storyboard frame full size — scroll zooms, Esc closes'],
     ['?', 'Show or hide this list'],
-    ['Scroll', 'Zoom the diagram; drag to pan, ⌂ to reset']
+    ['Scroll', 'Zoom the diagram; drag to pan, double-click to reset']
   ];
 
   Player.prototype.onKey = function (ev) {
@@ -1488,6 +1545,27 @@
     own(self, window, 'pointerup', function () {
       if (moved) self.stage.classList.remove('is-panning');
       dragging = false;
+      // The flag has to clear even when no click follows. A pan released off
+      // the stage — over the page around it, or outside the window — dispatches
+      // its click somewhere else or nowhere, so the capture listener below never
+      // runs, and a `moved` left set makes it swallow the *next* real click
+      // instead. The rail is a stage descendant, so that next click is usually
+      // a tool press, silently ignored.
+      //
+      // A timeout rather than clearing here, because the drag-ending click is
+      // dispatched synchronously out of this same pointerup: it arrives while
+      // `moved` is still true and is still swallowed, and a timer can only fire
+      // after the whole event has finished. Zero delay is enough — a task
+      // cannot interleave with an event's own dispatch.
+      if (moved) setTimeout(function () { moved = false; }, 0);
+    });
+
+    // No click at all follows a cancelled pointer — the browser took the
+    // gesture over for a scroll or a system gesture — so there is nothing to
+    // swallow and nothing to wait for.
+    own(self, window, 'pointercancel', function () {
+      dragging = false;
+      moved = false;
     });
 
     this.stage.addEventListener('click', function (ev) {
@@ -2529,11 +2607,20 @@
         drawn = true;
         var holder = el('div', 'dgm-svg-holder');
         holder.innerHTML = out.svg;
+        // Emptying the stage detaches the rail, and detaching the focused
+        // element drops focus to <body>. A render is often something a rail
+        // button just did — the theme button calls render() out of its own
+        // handler — so a keyboard reader would press Enter on Dark and find
+        // the focus gone, with no way back to the button that would undo it.
+        // The rail is re-appended rather than rebuilt, so the same node is
+        // still focusable afterwards.
+        var refocus = document.activeElement;
         self.stage.innerHTML = '';
         self.stage.appendChild(holder);
         self.stage.appendChild(self.overlay);
         self.stage.appendChild(self.map);
         self.stage.appendChild(self.rail);
+        if (refocus && self.rail.contains(refocus)) refocus.focus();
         self.holder = holder;
         self.mapClone = null;
         self.mapKeys = null;
@@ -2993,6 +3080,12 @@
       try { this._unbind[i](); } catch (e) { /* already gone */ }
     }
     this._unbind = [];
+
+    // A pending "Copied" restore is a timer holding this player for another
+    // 1400ms, and a host that mounts a fresh one per keystroke — the playground
+    // — would keep every dead player the reader had clicked Copy link on.
+    if (this._shareTimer) clearTimeout(this._shareTimer);
+    this._shareTimer = null;
 
     // The minimap holds a second copy of the whole diagram. A host that keeps
     // a disposed player around — for its snapshot, say — should not be holding
