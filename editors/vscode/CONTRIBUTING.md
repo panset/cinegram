@@ -50,19 +50,48 @@ action or timing rule reaches the preview with no change here.
 The preview's CSP is `script-src 'nonce-…'` and the nonce never reaches a
 markdown-it plugin, so the placeholder the host emits is **data only** — every
 line of code the page runs is contributed through `markdown.previewScripts`,
-which VS Code nonces for us.
+which VS Code nonces for us. Emitting a `<script>` would be blocked *and* would
+raise the "content has been disabled" banner. There is no WASM in there either:
+no `wasm-unsafe-eval`.
+
+Content updates are a **morphdom diff**. An edit anywhere in the file reverts a
+rendered block to its placeholder, disposing nothing and firing no event beyond
+`vscode.markdown.updateContent`. So `media/preview.js` asks the DOM whether each
+block is still mounted rather than remembering, and carries each player's
+playhead across by keying on a hash of the block's own source.
+
+`Cinegram.mount(root, timeline, opts)` takes what several players sharing one
+page need: `inline`, `keys: 'scoped'`, `hash: false`, `autoplay`, `theme`. Every
+default is the standalone page's existing behaviour, so the emitted page is
+unaffected — and `runtime.css` scopes its page-level rules behind
+`.dgm-standalone` for the same reason, since the sheet is loaded whole into
+documents the extension does not own.
 
 Export is the one path that does not go through `src/compile.js`. Compiling is
 `execFileSync` because markdown-it cannot await and a compile is milliseconds;
-recording is one headless browser *per frame* and runs for minutes, so
-`src/record.js` uses `spawn`, a cancellable progress notification, and the
-`--progress` lines `cinegram record` writes to stderr for it.
+recording is one headless browser *per frame* — a ten-second scenario at 12fps
+is 121 browsers, four at a time — and blocking the extension host for that would
+freeze the editor. So `src/record.js` uses `spawn`, a cancellable progress
+notification, and the `--progress` lines `cinegram record` writes to stderr for
+it (`cinegram-progress capture <i> <n>`, then `cinegram-progress encode`). Two
+rules there: `--progress` is **purely additive**, leaving the two
+human-readable lines untouched so anything already parsing today's output still
+works; and Cancel kills the **process group**, because killing only the recorder
+orphans its browsers. Go's default `SIGTERM` skips deferred functions, so a
+cancelled record leaves one `cinegram-record-*` temp directory behind — knowingly
+traded for not adding signal handling to the CLI.
 
-`src/animationEditor.js` is the *Open With…* entry. It is a
+`src/animationEditor.js` is the *Open With…* entry, registered at
+`priority: "option"` so the text editor stays the default: a source format that
+opens as a picture with its text behind a submenu is a bad trade. It is a
 `CustomTextEditorProvider` that reuses `dgmPreview.shell`, so there stays one
 place that knows the CSP and the asset wiring, and it re-renders on save rather
 than on keystroke — assigning `webview.html` is a whole-page reload, and doing
-that per character would reset the playhead and re-parse 2.7 MB of mermaid.
+that per character would reset the playhead and re-parse 2.7 MB of mermaid. It
+would not be *true* either, since `view … from` reads from disk and only a save
+makes the file on disk what the panel claims to show. Live-on-type would need
+the payload delivered by `postMessage` plus the snapshot/restore dance
+`media/preview.js` does for the Markdown path.
 
 ## The copied files
 
@@ -73,7 +102,9 @@ be copies: `go:embed` cannot reach outside its own package, VS Code's
 contains nothing from outside the extension folder.
 
 `bazel test //editors/vscode:assets_test` fails when they drift, and
-`bazel run //editors/vscode:sync_assets` fixes it.
+`bazel run //editors/vscode:sync_assets` fixes it. Both file lists live in
+`sync/sync.go` and in `assets_test.go`, and are deliberately not shared — a test
+that imported its expectations from the thing it checks would pass either way.
 
 ## Packaging
 

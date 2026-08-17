@@ -1,10 +1,10 @@
 ---
 name: cinegram
 description: >
-  Author, edit, preview and record Cinegram .dgm files — animated, narrated
-  Mermaid diagrams. Use when the user wants to animate a Mermaid diagram
-  (flowchart, sequenceDiagram or stateDiagram), add an animated walkthrough /
-  scenario to a diagram, or create, edit, lint, preview or export a .dgm file.
+  Author, preview and record Cinegram .dgm files — animated, narrated Mermaid
+  diagrams. Use when the user wants to animate or narrate a Mermaid diagram
+  (flowchart, sequenceDiagram or stateDiagram), or to create, edit, lint,
+  preview, record or export a .dgm file.
 ---
 
 # Animating Mermaid diagrams with Cinegram
@@ -14,8 +14,8 @@ animation; the `cinegram` CLI validates it, previews it, and records it. The
 user does not need to know the format — you are the author, they direct.
 
 **Before writing any `.dgm` content, read [references/language.md](references/language.md)
-in this skill folder.** It is the complete authoring reference. Do not write
-from memory of Mermaid or guesses about the syntax.
+in this skill folder.** It is the complete authoring reference — write every
+line from it rather than from memory of Mermaid.
 
 ## Step 0 — get a working binary
 
@@ -63,10 +63,10 @@ answers `unknown command "upgrade"`, which predates 0.2.0: replace that one
 by re-running the install download above over it (the URL always fetches the
 latest release).
 
-Below, `cinegram` means whichever path you found. It is a single static
-binary with no dependencies; GIF recording needs nothing else installed
-(mp4/webm need ffmpeg, PNG frames and GIF need a Chrome/Chromium on `PATH`
-or named by `$CINEGRAM_CHROME`).
+Below, `cinegram` means whichever path you found: a single static binary with
+no dependencies of its own. The delivery table in step 5 marks what an
+individual output format additionally needs — Chrome/Chromium on `PATH` or
+named by `$CINEGRAM_CHROME`, or ffmpeg on `PATH` or `$CINEGRAM_FFMPEG`.
 
 ## Workflow
 
@@ -121,11 +121,11 @@ reading the `.dgm`.
 | Ask | Command |
 | --- | --- |
 | Interactive page (works from `file://`, self-contained, shareable) | `cinegram preview out.dgm -o out.html` |
-| GIF for a PR / README (needs Chrome only) | `cinegram record out.dgm -o out.gif --fps 10` |
-| Video | `cinegram record out.dgm -o out.mp4` (or `.webm`; needs ffmpeg) |
-| Vertical story clip for LinkedIn/Shorts/Slack (9:16, big captions, auto-follow camera) | `cinegram record out.dgm --reel -o out.mp4` (mp4 preferred at this size; `?reel` on the HTML page is the live version) |
+| GIF for a PR / README | `cinegram record out.dgm -o out.gif --fps 10` — Chrome |
+| Video | `cinegram record out.dgm -o out.mp4` (or `.webm`) — Chrome + ffmpeg |
+| Vertical story clip for LinkedIn/Shorts/Slack (9:16, big captions, auto-follow camera) | `cinegram record out.dgm --reel -o out.mp4` — Chrome + ffmpeg (mp4 preferred at this size; `?reel` on the HTML page is the live version) |
 | One scenario / one sub-view | add `--scenario s1` / `--view <id>` to `record`/`frame` |
-| Still of one moment | `cinegram frame out.dgm --at 1620ms -o still.png` |
+| Still of one moment | `cinegram frame out.dgm --at 1620ms -o still.png` — Chrome |
 | Plain Mermaid back out | `cinegram mermaid out.dgm` |
 | Written walkthrough for docs | `cinegram narrate out.dgm -o walkthrough.md` |
 | Timeline as data | `cinegram compile out.dgm -o timeline.json` |
@@ -138,6 +138,6 @@ at a time). Scenarios are addressed as `s0`, `s1`, … in declaration order.
 
 ### 6. Verify visually when it matters
 
-`cinegram frame` captures one exact, deterministic moment (needs Chrome on
-`PATH` or `$CINEGRAM_CHROME`). Read the PNG to confirm a key beat looks
-right — e.g. that a `status: fail` ✕ lands where intended.
+`cinegram frame` captures one exact, deterministic moment. Read the PNG to
+confirm a key beat looks right — e.g. that a `status: fail` ✕ lands where
+intended.
