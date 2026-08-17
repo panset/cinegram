@@ -1,0 +1,427 @@
+{
+  "version": 2,
+  "root": "02-layered-arch",
+  "views": [
+    {
+      "id": "02-layered-arch",
+      "title": "a priced order request",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "TB",
+        "mermaid": "%% A layered service, walked one layer at a time.\n%% ---\n%% A diagram this size is unreadable all at once, which is the point: `focus`\n%% takes a layer and lets everything else recede, so each step has exactly one\n%% thing to look at. The cross-cutting concerns are real but they are not the\n%% request path, so they start folded away behind a chip.\nflowchart TB\n  subgraph edge[Edge Layer]\n    cdn[CDN]\n    gw[API Gateway]\n  end\n  subgraph app[Application Layer]\n    orders[Orders Service]\n    pricing[Pricing Service]\n  end\n  subgraph domain[Domain Layer]\n    rules[Pricing Rules]\n    basket[Basket Aggregate]\n  end\n  subgraph data[Data Layer]\n    pg[(PostgreSQL)]\n    cache[(Redis)]\n  end\n  subgraph cross[Cross-cutting Concerns]\n    authn[AuthN / AuthZ]\n    otel[Tracing]\n    audit[(Audit Log)]\n  end\n  cdn --\u003e gw\n  gw --\u003e orders\n  orders --\u003e pricing\n  pricing --\u003e rules\n  orders --\u003e basket\n  basket --\u003e pg\n  pricing --\u003e cache\n  gw --\u003e authn\n  orders --\u003e otel\n  basket --\u003e audit\n"
+      },
+      "nodes": [
+        {
+          "id": "cdn",
+          "label": "CDN",
+          "shape": "rect",
+          "group": "edge"
+        },
+        {
+          "id": "gw",
+          "label": "API Gateway",
+          "shape": "rect",
+          "group": "edge"
+        },
+        {
+          "id": "orders",
+          "label": "Orders Service",
+          "shape": "rect",
+          "group": "app"
+        },
+        {
+          "id": "pricing",
+          "label": "Pricing Service",
+          "shape": "rect",
+          "group": "app"
+        },
+        {
+          "id": "rules",
+          "label": "Pricing Rules",
+          "shape": "rect",
+          "group": "domain"
+        },
+        {
+          "id": "basket",
+          "label": "Basket Aggregate",
+          "shape": "rect",
+          "group": "domain"
+        },
+        {
+          "id": "pg",
+          "label": "PostgreSQL",
+          "shape": "cylinder",
+          "group": "data"
+        },
+        {
+          "id": "cache",
+          "label": "Redis",
+          "shape": "cylinder",
+          "group": "data"
+        },
+        {
+          "id": "authn",
+          "label": "AuthN / AuthZ",
+          "shape": "rect",
+          "group": "cross"
+        },
+        {
+          "id": "otel",
+          "label": "Tracing",
+          "shape": "rect",
+          "group": "cross"
+        },
+        {
+          "id": "audit",
+          "label": "Audit Log",
+          "shape": "cylinder",
+          "group": "cross"
+        }
+      ],
+      "groups": [
+        {
+          "id": "edge",
+          "label": "Edge Layer",
+          "children": [
+            "cdn",
+            "gw"
+          ]
+        },
+        {
+          "id": "app",
+          "label": "Application Layer",
+          "children": [
+            "orders",
+            "pricing"
+          ]
+        },
+        {
+          "id": "domain",
+          "label": "Domain Layer",
+          "children": [
+            "rules",
+            "basket"
+          ]
+        },
+        {
+          "id": "data",
+          "label": "Data Layer",
+          "children": [
+            "pg",
+            "cache"
+          ]
+        },
+        {
+          "id": "cross",
+          "label": "Cross-cutting Concerns",
+          "children": [
+            "authn",
+            "otel",
+            "audit"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "cdn",
+          "to": "gw",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "gw",
+          "to": "orders",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "orders",
+          "to": "pricing",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "pricing",
+          "to": "rules",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "orders",
+          "to": "basket",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "basket",
+          "to": "pg",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e6",
+          "from": "pricing",
+          "to": "cache",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e7",
+          "from": "gw",
+          "to": "authn",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e8",
+          "from": "orders",
+          "to": "otel",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e9",
+          "from": "basket",
+          "to": "audit",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "a priced order request",
+          "duration": 3300,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "arrive",
+              "name": "The request lands at the edge",
+              "desc": "Everything the edge layer does — termination, routing, rate limiting — happens before any of your code runs.",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 0,
+                  "end": 600,
+                  "target": "edge"
+                },
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "cdn",
+                  "to": "gw",
+                  "label": "POST /orders"
+                },
+                {
+                  "kind": "note",
+                  "start": 0,
+                  "end": 600,
+                  "target": "gw",
+                  "text": "TLS terminated\nrate limit ok",
+                  "side": "right"
+                }
+              ]
+            },
+            {
+              "id": "orchestrate",
+              "name": "The application layer orchestrates",
+              "desc": "This layer coordinates and owns no rules of its own. If you find business logic here, it has escaped from the domain layer below.",
+              "start": 600,
+              "end": 1100,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 600,
+                  "end": 1100,
+                  "target": "app"
+                },
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1100,
+                  "edge": "e1",
+                  "from": "gw",
+                  "to": "orders",
+                  "label": "createOrder"
+                },
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1100,
+                  "edge": "e2",
+                  "from": "orders",
+                  "to": "pricing",
+                  "label": "priceBasket"
+                },
+                {
+                  "kind": "note",
+                  "start": 600,
+                  "end": 1100,
+                  "target": "orders",
+                  "text": "no business rules here",
+                  "side": "right"
+                }
+              ]
+            },
+            {
+              "id": "decide",
+              "name": "The domain layer decides",
+              "desc": "The rules that make this a pricing system rather than a CRUD system live here, and they run without knowing whether a request or a batch job called them.",
+              "start": 1100,
+              "end": 1600,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 1100,
+                  "end": 1600,
+                  "target": "domain"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1100,
+                  "end": 1600,
+                  "edge": "e3",
+                  "from": "pricing",
+                  "to": "rules",
+                  "label": "apply discounts"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1100,
+                  "end": 1600,
+                  "edge": "e4",
+                  "from": "orders",
+                  "to": "basket",
+                  "label": "reserve lines"
+                },
+                {
+                  "kind": "note",
+                  "start": 1100,
+                  "end": 1600,
+                  "target": "rules",
+                  "text": "pure functions of the basket",
+                  "side": "left"
+                },
+                {
+                  "kind": "note",
+                  "start": 1100,
+                  "end": 1600,
+                  "target": "basket",
+                  "text": "invariants enforced here",
+                  "side": "right"
+                }
+              ]
+            },
+            {
+              "id": "persist",
+              "name": "The data layer stores the result",
+              "desc": "Only the layer that can be swapped for another database sits down here. Anything above it that names a table has crossed a line.",
+              "start": 1600,
+              "end": 2100,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 1600,
+                  "end": 2100,
+                  "target": "data"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1600,
+                  "end": 2100,
+                  "edge": "e5",
+                  "from": "basket",
+                  "to": "pg",
+                  "label": "INSERT order"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1600,
+                  "end": 2100,
+                  "edge": "e6",
+                  "from": "pricing",
+                  "to": "cache",
+                  "label": "cache price"
+                },
+                {
+                  "kind": "note",
+                  "start": 1600,
+                  "end": 2100,
+                  "target": "pg",
+                  "text": "the only writer",
+                  "side": "below"
+                }
+              ]
+            },
+            {
+              "id": "whole",
+              "name": "The whole path, end to end",
+              "desc": "With nothing focused, the layers come back at once — and the shape of what just happened is the diagram you started with.",
+              "start": 2100,
+              "end": 3300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2100,
+                  "end": 2500,
+                  "edge": "e0",
+                  "from": "cdn",
+                  "to": "gw",
+                  "label": "one request"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2500,
+                  "end": 2900,
+                  "edge": "e1",
+                  "from": "gw",
+                  "to": "orders",
+                  "label": "one request"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2900,
+                  "end": 3300,
+                  "edge": "e2",
+                  "from": "orders",
+                  "to": "pricing",
+                  "label": "one request"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "source": "edge",
+          "kind": "reveal",
+          "targets": [
+            "cross",
+            "authn",
+            "otel",
+            "audit"
+          ]
+        }
+      ],
+      "hidden": [
+        "cross",
+        "authn",
+        "otel",
+        "audit"
+      ]
+    }
+  ]
+}

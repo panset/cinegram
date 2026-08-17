@@ -1,0 +1,563 @@
+{
+  "version": 2,
+  "root": "02-tcp-connection",
+  "views": [
+    {
+      "id": "02-tcp-connection",
+      "diagram": {
+        "type": "stateDiagram",
+        "mermaid": "%% The TCP connection lifecycle, as a stateDiagram-v2.\n%% ---\n%% raft-election.dgm tells a state-machine story with a flowchart; this one\n%% uses the diagram type built for the job. The `[*]` markers, the `\u003c\u003cchoice\u003e\u003e`\n%% pseudostate and the composite `Teardown` block are all first-class,\n%% addressable animation targets — a third diagram type, still costing one\n%% parser and one indexer.\n%% ---\n%% `[*]` is not a legal identifier, so the start and end markers answer to\n%% synthesized names: `root_start` and `root_end` at the top level, and\n%% `Teardown_start` inside the composite. `flow root_start -\u003e CLOSED` animates\n%% the very first arrow.\n%% ---\n%% The flows carry no `label`: a state diagram already draws each transition's\n%% event text, and a label would print a second copy on top of it.\nstateDiagram-v2\n  direction TB\n\n  [*] --\u003e CLOSED\n  CLOSED : CLOSED — no connection exists\n  CLOSED --\u003e SYN_SENT : connect() / send SYN\n  SYN_SENT --\u003e ESTABLISHED : SYN-ACK received / send ACK\n  SYN_SENT --\u003e CLOSED : RST — nobody listening\n  ESTABLISHED : ESTABLISHED — data flows both ways\n  ESTABLISHED --\u003e CLOSED : RST received\n\n  ESTABLISHED --\u003e Teardown : close begins\n  state Teardown {\n    state who_closes \u003c\u003cchoice\u003e\u003e\n    [*] --\u003e who_closes\n    who_closes --\u003e FIN_WAIT_1 : we sent the first FIN\n    who_closes --\u003e CLOSE_WAIT : the peer's FIN arrived first\n    FIN_WAIT_1 --\u003e FIN_WAIT_2 : our FIN is ACKed\n    FIN_WAIT_2 --\u003e TIME_WAIT : peer's FIN arrives / send ACK\n    CLOSE_WAIT --\u003e LAST_ACK : close() / send FIN\n  }\n  TIME_WAIT --\u003e CLOSED : 2MSL timer expires\n  LAST_ACK --\u003e CLOSED : our FIN is ACKed\n  CLOSED --\u003e [*]\n\n"
+      },
+      "nodes": [
+        {
+          "id": "root_start",
+          "label": "start",
+          "shape": "start"
+        },
+        {
+          "id": "CLOSED",
+          "label": "CLOSED — no connection exists",
+          "shape": "state"
+        },
+        {
+          "id": "SYN_SENT",
+          "label": "SYN_SENT"
+        },
+        {
+          "id": "ESTABLISHED",
+          "label": "ESTABLISHED — data flows both ways",
+          "shape": "state"
+        },
+        {
+          "id": "Teardown",
+          "label": "Teardown"
+        },
+        {
+          "id": "who_closes",
+          "label": "who_closes",
+          "shape": "choice",
+          "group": "Teardown"
+        },
+        {
+          "id": "Teardown_start",
+          "label": "start",
+          "shape": "start",
+          "group": "Teardown"
+        },
+        {
+          "id": "FIN_WAIT_1",
+          "label": "FIN_WAIT_1",
+          "group": "Teardown"
+        },
+        {
+          "id": "CLOSE_WAIT",
+          "label": "CLOSE_WAIT",
+          "group": "Teardown"
+        },
+        {
+          "id": "FIN_WAIT_2",
+          "label": "FIN_WAIT_2",
+          "group": "Teardown"
+        },
+        {
+          "id": "TIME_WAIT",
+          "label": "TIME_WAIT",
+          "group": "Teardown"
+        },
+        {
+          "id": "LAST_ACK",
+          "label": "LAST_ACK",
+          "group": "Teardown"
+        },
+        {
+          "id": "root_end",
+          "label": "end",
+          "shape": "end"
+        }
+      ],
+      "groups": [
+        {
+          "id": "Teardown",
+          "label": "Teardown",
+          "children": [
+            "who_closes",
+            "Teardown_start",
+            "FIN_WAIT_1",
+            "CLOSE_WAIT",
+            "FIN_WAIT_2",
+            "TIME_WAIT",
+            "LAST_ACK"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "root_start",
+          "to": "CLOSED",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "CLOSED",
+          "to": "SYN_SENT",
+          "label": "connect() / send SYN",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "SYN_SENT",
+          "to": "ESTABLISHED",
+          "label": "SYN-ACK received / send ACK",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "SYN_SENT",
+          "to": "CLOSED",
+          "label": "RST — nobody listening",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "ESTABLISHED",
+          "to": "CLOSED",
+          "label": "RST received",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "ESTABLISHED",
+          "to": "Teardown",
+          "label": "close begins",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e6",
+          "from": "Teardown_start",
+          "to": "who_closes",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e7",
+          "from": "who_closes",
+          "to": "FIN_WAIT_1",
+          "label": "we sent the first FIN",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e8",
+          "from": "who_closes",
+          "to": "CLOSE_WAIT",
+          "label": "the peer's FIN arrived first",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e9",
+          "from": "FIN_WAIT_1",
+          "to": "FIN_WAIT_2",
+          "label": "our FIN is ACKed",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e10",
+          "from": "FIN_WAIT_2",
+          "to": "TIME_WAIT",
+          "label": "peer's FIN arrives / send ACK",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e11",
+          "from": "CLOSE_WAIT",
+          "to": "LAST_ACK",
+          "label": "close() / send FIN",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e12",
+          "from": "TIME_WAIT",
+          "to": "CLOSED",
+          "label": "2MSL timer expires",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e13",
+          "from": "LAST_ACK",
+          "to": "CLOSED",
+          "label": "our FIN is ACKed",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e14",
+          "from": "CLOSED",
+          "to": "root_end",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "orderly close",
+          "duration": 5600,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "nothing",
+              "name": "No connection exists",
+              "desc": "CLOSED is less a state a socket passes through than the fact that no socket exists. Every connection begins and ends here, which is why the diagram enters it from the start marker rather than from anywhere else.",
+              "start": 0,
+              "end": 500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 500,
+                  "edge": "e0",
+                  "from": "root_start",
+                  "to": "CLOSED"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 500,
+                  "target": "CLOSED"
+                }
+              ]
+            },
+            {
+              "id": "connect",
+              "name": "The active open",
+              "desc": "connect() sends a SYN and commits this end to remembering a half-open attempt. Everything about SYN_SENT is optimism: a timer, a retransmit budget, and no evidence yet that anyone is listening.",
+              "start": 500,
+              "end": 1100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 500,
+                  "end": 1100,
+                  "edge": "e1",
+                  "from": "CLOSED",
+                  "to": "SYN_SENT"
+                }
+              ]
+            },
+            {
+              "id": "establish",
+              "name": "The handshake completes",
+              "desc": "The SYN-ACK answers both questions at once — the peer exists, and it heard us — and our ACK settles its remaining one. Three segments, and both sides now agree on two sequence numbers.",
+              "start": 1100,
+              "end": 1800,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1100,
+                  "end": 1800,
+                  "edge": "e2",
+                  "from": "SYN_SENT",
+                  "to": "ESTABLISHED"
+                }
+              ]
+            },
+            {
+              "id": "choose",
+              "name": "Someone has to hang up first",
+              "desc": "Teardown is symmetric in the protocol but not in the diagram: whoever sends the first FIN takes the active path. The choice pseudostate is addressable like any node, which is what lets this step walk through it.",
+              "start": 1800,
+              "end": 3100,
+              "tracks": [
+                {
+                  "kind": "highlight",
+                  "start": 1800,
+                  "end": 3100,
+                  "target": "Teardown"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1800,
+                  "end": 2300,
+                  "edge": "e5",
+                  "from": "ESTABLISHED",
+                  "to": "Teardown"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2300,
+                  "end": 2700,
+                  "edge": "e6",
+                  "from": "Teardown_start",
+                  "to": "who_closes"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2700,
+                  "end": 3100,
+                  "edge": "e7",
+                  "from": "who_closes",
+                  "to": "FIN_WAIT_1"
+                }
+              ]
+            },
+            {
+              "id": "fins",
+              "name": "Both FINs travel",
+              "desc": "FIN_WAIT_1 waits for our FIN to be acknowledged; FIN_WAIT_2 waits for the peer to send its own. Nothing forces the peer to be ready to close just because we are, which is why these are two states and not one.",
+              "start": 3100,
+              "end": 4300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3100,
+                  "end": 3700,
+                  "edge": "e9",
+                  "from": "FIN_WAIT_1",
+                  "to": "FIN_WAIT_2"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3700,
+                  "end": 4300,
+                  "edge": "e10",
+                  "from": "FIN_WAIT_2",
+                  "to": "TIME_WAIT"
+                }
+              ]
+            },
+            {
+              "id": "linger",
+              "name": "TIME_WAIT holds the door",
+              "desc": "The connection is over, yet the state remains for two maximum segment lifetimes, absorbing stray retransmissions so an old segment cannot wander into a new connection wearing the same port numbers. This is the state operators curse and the reason the protocol works.",
+              "start": 4300,
+              "end": 5100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 4300,
+                  "end": 5100,
+                  "edge": "e12",
+                  "from": "TIME_WAIT",
+                  "to": "CLOSED"
+                },
+                {
+                  "kind": "dim",
+                  "start": 4300,
+                  "end": 5100,
+                  "target": "Teardown"
+                }
+              ]
+            },
+            {
+              "id": "done",
+              "name": "Back where it started",
+              "desc": "A clean close returns the machine to the same nothing it began as. The end marker is the start marker's twin, and both are ordinary animation targets.",
+              "start": 5100,
+              "end": 5600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 5100,
+                  "end": 5600,
+                  "edge": "e14",
+                  "from": "CLOSED",
+                  "to": "root_end"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 500,
+              "end": 1100,
+              "target": "SYN_SENT",
+              "label": "SYN sent",
+              "value": "waiting",
+              "color": "#d97706"
+            },
+            {
+              "kind": "set",
+              "start": 1100,
+              "end": 1800,
+              "target": "ESTABLISHED",
+              "label": "established",
+              "value": "open",
+              "color": "#16a34a"
+            },
+            {
+              "kind": "gauge",
+              "start": 1100,
+              "end": 1800,
+              "target": "ESTABLISHED",
+              "label": "connection",
+              "value": "open"
+            },
+            {
+              "kind": "set",
+              "start": 3100,
+              "end": 4300,
+              "target": "TIME_WAIT",
+              "label": "2MSL",
+              "value": "waiting",
+              "color": "#d97706"
+            },
+            {
+              "kind": "gauge",
+              "start": 4300,
+              "end": 5600,
+              "target": "ESTABLISHED",
+              "label": "connection",
+              "value": "closed"
+            }
+          ]
+        },
+        {
+          "id": "s1",
+          "name": "RST teardown",
+          "duration": 2500,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "outcome": "fail",
+          "steps": [
+            {
+              "id": "nothing",
+              "name": "No connection exists",
+              "desc": "CLOSED is less a state a socket passes through than the fact that no socket exists. Every connection begins and ends here, which is why the diagram enters it from the start marker rather than from anywhere else.",
+              "start": 0,
+              "end": 500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 500,
+                  "edge": "e0",
+                  "from": "root_start",
+                  "to": "CLOSED"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 500,
+                  "target": "CLOSED"
+                }
+              ]
+            },
+            {
+              "id": "connect",
+              "name": "The active open",
+              "desc": "connect() sends a SYN and commits this end to remembering a half-open attempt. Everything about SYN_SENT is optimism: a timer, a retransmit budget, and no evidence yet that anyone is listening.",
+              "start": 500,
+              "end": 1100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 500,
+                  "end": 1100,
+                  "edge": "e1",
+                  "from": "CLOSED",
+                  "to": "SYN_SENT"
+                }
+              ]
+            },
+            {
+              "id": "establish",
+              "name": "The handshake completes",
+              "desc": "The SYN-ACK answers both questions at once — the peer exists, and it heard us — and our ACK settles its remaining one. Three segments, and both sides now agree on two sequence numbers.",
+              "start": 1100,
+              "end": 1800,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1100,
+                  "end": 1800,
+                  "edge": "e2",
+                  "from": "SYN_SENT",
+                  "to": "ESTABLISHED"
+                }
+              ]
+            },
+            {
+              "id": "rst",
+              "name": "The peer slams the door",
+              "desc": "A reset is not a close. No FIN, no ACK, no TIME_WAIT — one segment tears the connection out of both state machines, and whatever data was in flight is simply gone. Everything the orderly path exists to guarantee is exactly what this path skips.",
+              "start": 1800,
+              "end": 2500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1800,
+                  "end": 2500,
+                  "edge": "e4",
+                  "from": "ESTABLISHED",
+                  "to": "CLOSED",
+                  "status": "fail"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 500,
+              "end": 1100,
+              "target": "SYN_SENT",
+              "label": "SYN sent",
+              "value": "waiting",
+              "color": "#d97706"
+            },
+            {
+              "kind": "set",
+              "start": 1100,
+              "end": 1800,
+              "target": "ESTABLISHED",
+              "label": "established",
+              "value": "open",
+              "color": "#16a34a"
+            },
+            {
+              "kind": "gauge",
+              "start": 1100,
+              "end": 1800,
+              "target": "ESTABLISHED",
+              "label": "connection",
+              "value": "open"
+            },
+            {
+              "kind": "set",
+              "start": 1800,
+              "end": 2500,
+              "target": "CLOSED",
+              "label": "aborted",
+              "value": "error",
+              "color": "#dc2626"
+            },
+            {
+              "kind": "gauge",
+              "start": 1800,
+              "end": 2500,
+              "target": "ESTABLISHED",
+              "label": "connection",
+              "value": "reset"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

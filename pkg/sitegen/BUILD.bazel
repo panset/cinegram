@@ -20,7 +20,10 @@ go_library(
 
 go_test(
     name = "sitegen_test",
-    srcs = ["sitegen_test.go"],
+    srcs = [
+        "discover_test.go",
+        "sitegen_test.go",
+    ],
     embed = [":sitegen"],
     deps = ["//pkg/emit/html"],
 )

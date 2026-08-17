@@ -11,7 +11,7 @@ Then the area you are working in:
 | Area | Where |
 | --- | --- |
 | `pkg/{loader,parser,compile,ir,emit}`, `runtime.js` | the `rendering-pipeline` skill |
-| `docs/`, `examples/`, `pkg/sitegen`, `site/` | the `publish-site` skill |
+| `www/`, `zensical.toml`, `examples/`, `pkg/{sitegen,embedkit}`, `site/` | the `publish-site` skill |
 | the VS Code extension | [`editors/vscode/CONTRIBUTING.md`](editors/vscode/CONTRIBUTING.md) |
 | the WASM playground | [`web/playground/README.md`](web/playground/README.md) |
 | cutting a release | [`RELEASING.md`](RELEASING.md) |

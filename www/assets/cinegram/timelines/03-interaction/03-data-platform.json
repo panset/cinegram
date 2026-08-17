@@ -1,0 +1,821 @@
+{
+  "version": 2,
+  "root": "03-data-platform",
+  "views": [
+    {
+      "id": "03-data-platform",
+      "title": "a row's journey",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% A data platform, deliberately too big for one screen.\n%% ---\n%% Its size is the point. This is the example that needs pan and zoom, that\n%% makes Home and End worth having, and where jumping to step 7 with a digit\n%% key beats pressing the right arrow six times.\nflowchart LR\n  subgraph sources[Sources]\n    app[Application DB]\n    events[Event Producers]\n    saas[SaaS Connectors]\n    files[File Drops]\n  end\n  subgraph ingest[Ingestion]\n    cdc[CDC Reader]\n    gateway[Event Gateway]\n    loader[Batch Loader]\n  end\n  subgraph bus[Streaming]\n    kafka[Kafka]\n    schema[(Schema Registry)]\n    dlq[(Dead Letter Queue)]\n  end\n  subgraph stream[Stream Processing]\n    flink[Flink Jobs]\n    dedupe[Deduplication]\n    enrich[Enrichment]\n  end\n  subgraph lake[Lake]\n    bronze[(Bronze)]\n    silver[(Silver)]\n    gold[(Gold)]\n  end\n  subgraph warehouse[Warehouse]\n    dw[(Columnar Store)]\n    marts[Data Marts]\n    semantic[Semantic Layer]\n  end\n  subgraph serve[Serving]\n    bi[BI Dashboards]\n    reverse[Reverse ETL]\n    ml[Feature Store]\n  end\n  subgraph orchestration[Orchestration and Governance]\n    scheduler[Scheduler]\n    quality[Quality Checks]\n    lineage[(Lineage Catalog)]\n  end\n  app --\u003e cdc\n  events --\u003e gateway\n  saas --\u003e loader\n  files --\u003e loader\n  cdc --\u003e kafka\n  gateway --\u003e kafka\n  gateway --\u003e schema\n  kafka --\u003e dlq\n  loader --\u003e bronze\n  kafka --\u003e flink\n  flink --\u003e dedupe\n  dedupe --\u003e enrich\n  enrich --\u003e bronze\n  bronze --\u003e silver\n  silver --\u003e gold\n  gold --\u003e dw\n  dw --\u003e marts\n  marts --\u003e semantic\n  semantic --\u003e bi\n  gold --\u003e reverse\n  gold --\u003e ml\n  scheduler --\u003e loader\n  quality --\u003e silver\n  silver --\u003e lineage\n"
+      },
+      "nodes": [
+        {
+          "id": "app",
+          "label": "Application DB",
+          "shape": "rect",
+          "group": "sources"
+        },
+        {
+          "id": "events",
+          "label": "Event Producers",
+          "shape": "rect",
+          "group": "sources"
+        },
+        {
+          "id": "saas",
+          "label": "SaaS Connectors",
+          "shape": "rect",
+          "group": "sources"
+        },
+        {
+          "id": "files",
+          "label": "File Drops",
+          "shape": "rect",
+          "group": "sources"
+        },
+        {
+          "id": "cdc",
+          "label": "CDC Reader",
+          "shape": "rect",
+          "group": "ingest"
+        },
+        {
+          "id": "gateway",
+          "label": "Event Gateway",
+          "shape": "rect",
+          "group": "ingest"
+        },
+        {
+          "id": "loader",
+          "label": "Batch Loader",
+          "shape": "rect",
+          "group": "ingest"
+        },
+        {
+          "id": "kafka",
+          "label": "Kafka",
+          "shape": "rect",
+          "group": "bus"
+        },
+        {
+          "id": "schema",
+          "label": "Schema Registry",
+          "shape": "cylinder",
+          "group": "bus"
+        },
+        {
+          "id": "dlq",
+          "label": "Dead Letter Queue",
+          "shape": "cylinder",
+          "group": "bus"
+        },
+        {
+          "id": "flink",
+          "label": "Flink Jobs",
+          "shape": "rect",
+          "group": "stream"
+        },
+        {
+          "id": "dedupe",
+          "label": "Deduplication",
+          "shape": "rect",
+          "group": "stream"
+        },
+        {
+          "id": "enrich",
+          "label": "Enrichment",
+          "shape": "rect",
+          "group": "stream"
+        },
+        {
+          "id": "bronze",
+          "label": "Bronze",
+          "shape": "cylinder",
+          "group": "lake"
+        },
+        {
+          "id": "silver",
+          "label": "Silver",
+          "shape": "cylinder",
+          "group": "lake"
+        },
+        {
+          "id": "gold",
+          "label": "Gold",
+          "shape": "cylinder",
+          "group": "lake"
+        },
+        {
+          "id": "dw",
+          "label": "Columnar Store",
+          "shape": "cylinder",
+          "group": "warehouse"
+        },
+        {
+          "id": "marts",
+          "label": "Data Marts",
+          "shape": "rect",
+          "group": "warehouse"
+        },
+        {
+          "id": "semantic",
+          "label": "Semantic Layer",
+          "shape": "rect",
+          "group": "warehouse"
+        },
+        {
+          "id": "bi",
+          "label": "BI Dashboards",
+          "shape": "rect",
+          "group": "serve"
+        },
+        {
+          "id": "reverse",
+          "label": "Reverse ETL",
+          "shape": "rect",
+          "group": "serve"
+        },
+        {
+          "id": "ml",
+          "label": "Feature Store",
+          "shape": "rect",
+          "group": "serve"
+        },
+        {
+          "id": "scheduler",
+          "label": "Scheduler",
+          "shape": "rect",
+          "group": "orchestration"
+        },
+        {
+          "id": "quality",
+          "label": "Quality Checks",
+          "shape": "rect",
+          "group": "orchestration"
+        },
+        {
+          "id": "lineage",
+          "label": "Lineage Catalog",
+          "shape": "cylinder",
+          "group": "orchestration"
+        }
+      ],
+      "groups": [
+        {
+          "id": "sources",
+          "label": "Sources",
+          "children": [
+            "app",
+            "events",
+            "saas",
+            "files"
+          ]
+        },
+        {
+          "id": "ingest",
+          "label": "Ingestion",
+          "children": [
+            "cdc",
+            "gateway",
+            "loader"
+          ]
+        },
+        {
+          "id": "bus",
+          "label": "Streaming",
+          "children": [
+            "kafka",
+            "schema",
+            "dlq"
+          ]
+        },
+        {
+          "id": "stream",
+          "label": "Stream Processing",
+          "children": [
+            "flink",
+            "dedupe",
+            "enrich"
+          ]
+        },
+        {
+          "id": "lake",
+          "label": "Lake",
+          "children": [
+            "bronze",
+            "silver",
+            "gold"
+          ]
+        },
+        {
+          "id": "warehouse",
+          "label": "Warehouse",
+          "children": [
+            "dw",
+            "marts",
+            "semantic"
+          ]
+        },
+        {
+          "id": "serve",
+          "label": "Serving",
+          "children": [
+            "bi",
+            "reverse",
+            "ml"
+          ]
+        },
+        {
+          "id": "orchestration",
+          "label": "Orchestration and Governance",
+          "children": [
+            "scheduler",
+            "quality",
+            "lineage"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "app",
+          "to": "cdc",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "events",
+          "to": "gateway",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "saas",
+          "to": "loader",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "files",
+          "to": "loader",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "cdc",
+          "to": "kafka",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "gateway",
+          "to": "kafka",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e6",
+          "from": "gateway",
+          "to": "schema",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e7",
+          "from": "kafka",
+          "to": "dlq",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e8",
+          "from": "loader",
+          "to": "bronze",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e9",
+          "from": "kafka",
+          "to": "flink",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e10",
+          "from": "flink",
+          "to": "dedupe",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e11",
+          "from": "dedupe",
+          "to": "enrich",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e12",
+          "from": "enrich",
+          "to": "bronze",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e13",
+          "from": "bronze",
+          "to": "silver",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e14",
+          "from": "silver",
+          "to": "gold",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e15",
+          "from": "gold",
+          "to": "dw",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e16",
+          "from": "dw",
+          "to": "marts",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e17",
+          "from": "marts",
+          "to": "semantic",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e18",
+          "from": "semantic",
+          "to": "bi",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e19",
+          "from": "gold",
+          "to": "reverse",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e20",
+          "from": "gold",
+          "to": "ml",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e21",
+          "from": "scheduler",
+          "to": "loader",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e22",
+          "from": "quality",
+          "to": "silver",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e23",
+          "from": "silver",
+          "to": "lineage",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "a row's journey",
+          "duration": 10300,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "change",
+              "name": "A row changes in the application database",
+              "desc": "Change data capture reads the write-ahead log rather than polling the table, so the platform learns about the change without the application knowing the platform exists.",
+              "start": 0,
+              "end": 700,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 0,
+                  "end": 700,
+                  "target": "sources"
+                },
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 700,
+                  "edge": "e0",
+                  "from": "app",
+                  "to": "cdc",
+                  "label": "UPDATE orders"
+                }
+              ]
+            },
+            {
+              "id": "publish",
+              "name": "The change is published to the log",
+              "desc": "From here it is an immutable event with a schema. Everything downstream is a consumer, and none of them can slow the producer down.",
+              "start": 700,
+              "end": 1300,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 700,
+                  "end": 1300,
+                  "target": "bus"
+                },
+                {
+                  "kind": "flow",
+                  "start": 700,
+                  "end": 1300,
+                  "edge": "e4",
+                  "from": "cdc",
+                  "to": "kafka",
+                  "label": "orders.v2"
+                }
+              ]
+            },
+            {
+              "id": "process",
+              "name": "Stream processing cleans it up",
+              "desc": "Deduplication first, because at-least-once delivery means the same event will arrive twice and every later stage would otherwise have to cope with it.",
+              "start": 1300,
+              "end": 2800,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 1300,
+                  "end": 2800,
+                  "target": "stream"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1300,
+                  "end": 1800,
+                  "edge": "e9",
+                  "from": "kafka",
+                  "to": "flink",
+                  "label": "one event"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1800,
+                  "end": 2300,
+                  "edge": "e10",
+                  "from": "flink",
+                  "to": "dedupe",
+                  "label": "one event"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2300,
+                  "end": 2800,
+                  "edge": "e11",
+                  "from": "dedupe",
+                  "to": "enrich",
+                  "label": "one event"
+                }
+              ]
+            },
+            {
+              "id": "land",
+              "name": "It lands in the lake as bronze",
+              "desc": "Bronze is the raw truth: whatever arrived, exactly as it arrived. Nothing is ever corrected here, only downstream, so a bad transformation can always be replayed.",
+              "start": 2800,
+              "end": 3400,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 2800,
+                  "end": 3400,
+                  "target": "lake"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2800,
+                  "end": 3400,
+                  "edge": "e12",
+                  "from": "enrich",
+                  "to": "bronze",
+                  "label": "append"
+                }
+              ]
+            },
+            {
+              "id": "refine",
+              "name": "Quality checks promote it to silver",
+              "desc": "This is the first stage that can reject a row. A check that fails here stops the promotion rather than propagating a quiet error into everything built on top.",
+              "start": 3400,
+              "end": 4000,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 3400,
+                  "end": 4000,
+                  "target": "lake"
+                },
+                {
+                  "kind": "focus",
+                  "start": 3400,
+                  "end": 4000,
+                  "target": "quality"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3400,
+                  "end": 4000,
+                  "edge": "e22",
+                  "from": "quality",
+                  "to": "silver",
+                  "label": "assertions pass"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3400,
+                  "end": 4000,
+                  "edge": "e13",
+                  "from": "bronze",
+                  "to": "silver",
+                  "label": "promote"
+                }
+              ]
+            },
+            {
+              "id": "model",
+              "name": "Gold is the modelled, business-facing shape",
+              "desc": "Gold is where table names stop describing systems and start describing the business. Two teams reading the same gold table should mean the same thing by it.",
+              "start": 4000,
+              "end": 4700,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 4000,
+                  "end": 4700,
+                  "target": "lake"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4000,
+                  "end": 4700,
+                  "edge": "e14",
+                  "from": "silver",
+                  "to": "gold",
+                  "label": "dbt model"
+                }
+              ]
+            },
+            {
+              "id": "warehouse-load",
+              "name": "The warehouse takes a copy",
+              "desc": "The lake keeps history and the warehouse serves queries. Copying rather than querying the lake directly is the trade the platform makes for predictable latency.",
+              "start": 4700,
+              "end": 6100,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 4700,
+                  "end": 6100,
+                  "target": "warehouse"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4700,
+                  "end": 5166,
+                  "edge": "e15",
+                  "from": "gold",
+                  "to": "dw",
+                  "label": "load"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5166,
+                  "end": 5633,
+                  "edge": "e16",
+                  "from": "dw",
+                  "to": "marts",
+                  "label": "load"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5633,
+                  "end": 6100,
+                  "edge": "e17",
+                  "from": "marts",
+                  "to": "semantic",
+                  "label": "load"
+                }
+              ]
+            },
+            {
+              "id": "consume",
+              "name": "Three very different consumers",
+              "desc": "The same gold table feeds a dashboard, a sync back into the CRM, and a model's features. Sharing that one definition is most of what a data platform is for.",
+              "start": 6100,
+              "end": 6700,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 6100,
+                  "end": 6700,
+                  "target": "serve"
+                },
+                {
+                  "kind": "flow",
+                  "start": 6100,
+                  "end": 6700,
+                  "edge": "e18",
+                  "from": "semantic",
+                  "to": "bi",
+                  "label": "query"
+                },
+                {
+                  "kind": "flow",
+                  "start": 6100,
+                  "end": 6700,
+                  "edge": "e19",
+                  "from": "gold",
+                  "to": "reverse",
+                  "label": "sync"
+                },
+                {
+                  "kind": "flow",
+                  "start": 6100,
+                  "end": 6700,
+                  "edge": "e20",
+                  "from": "gold",
+                  "to": "ml",
+                  "label": "features"
+                }
+              ]
+            },
+            {
+              "id": "whole",
+              "name": "The whole platform at once",
+              "desc": "Zoom out. Every arrow on this diagram exists because one of the eight steps above needed it, which is the only honest way to draw a picture this size.",
+              "start": 6700,
+              "end": 10300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 6700,
+                  "end": 7000,
+                  "edge": "e0",
+                  "from": "app",
+                  "to": "cdc",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 7000,
+                  "end": 7300,
+                  "edge": "e4",
+                  "from": "cdc",
+                  "to": "kafka",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 7300,
+                  "end": 7600,
+                  "edge": "e9",
+                  "from": "kafka",
+                  "to": "flink",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 7600,
+                  "end": 7900,
+                  "edge": "e10",
+                  "from": "flink",
+                  "to": "dedupe",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 7900,
+                  "end": 8200,
+                  "edge": "e11",
+                  "from": "dedupe",
+                  "to": "enrich",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 8200,
+                  "end": 8500,
+                  "edge": "e12",
+                  "from": "enrich",
+                  "to": "bronze",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 8500,
+                  "end": 8800,
+                  "edge": "e13",
+                  "from": "bronze",
+                  "to": "silver",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 8800,
+                  "end": 9100,
+                  "edge": "e14",
+                  "from": "silver",
+                  "to": "gold",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 9100,
+                  "end": 9400,
+                  "edge": "e15",
+                  "from": "gold",
+                  "to": "dw",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 9400,
+                  "end": 9700,
+                  "edge": "e16",
+                  "from": "dw",
+                  "to": "marts",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 9700,
+                  "end": 10000,
+                  "edge": "e17",
+                  "from": "marts",
+                  "to": "semantic",
+                  "label": "end to end"
+                },
+                {
+                  "kind": "flow",
+                  "start": 10000,
+                  "end": 10300,
+                  "edge": "e18",
+                  "from": "semantic",
+                  "to": "bi",
+                  "label": "end to end"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "gauge",
+              "start": 700,
+              "end": 10300,
+              "target": "kafka",
+              "label": "lag",
+              "value": "0.4s"
+            },
+            {
+              "kind": "set",
+              "start": 3400,
+              "end": 10300,
+              "target": "silver",
+              "label": "validated",
+              "value": "ok",
+              "color": "#16a34a"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

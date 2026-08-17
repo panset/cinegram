@@ -1,5 +1,10 @@
 load("@rules_go//go:def.bzl", "go_binary", "go_cross_binary", "go_library", "go_test")
 
+# This file is hand-maintained: the `# gazelle:ignore` guarding the
+# go_cross_binary list below is file-scoped, not block-scoped, so gazelle
+# skips the whole file. A new .go source here has to be added to srcs by hand
+# — `bazel run //:gazelle` will not do it, and will not say so either.
+
 # The version constant, read by //editors/vscode:assets_test to check it
 # agrees with the extension manifest and changelog.
 exports_files(["version.go"])
@@ -7,6 +12,7 @@ exports_files(["version.go"])
 go_library(
     name = "cinegram_lib",
     srcs = [
+        "assets.go",
         "capture.go",
         "main.go",
         "record.go",
@@ -20,6 +26,7 @@ go_library(
     deps = [
         "//pkg/compile",
         "//pkg/diag",
+        "//pkg/embedkit",
         "//pkg/emit/html",
         "//pkg/emit/mermaid",
         "//pkg/emit/narrate",
@@ -66,6 +73,7 @@ go_binary(
 go_test(
     name = "cinegram_test",
     srcs = [
+        "assets_test.go",
         "main_test.go",
         "record_test.go",
         "serve_test.go",
@@ -74,6 +82,7 @@ go_test(
     embed = [":cinegram_lib"],
     deps = [
         "//pkg/diag",
+        "//pkg/embedkit",
         "//pkg/envelope",
         "//pkg/source",
     ],

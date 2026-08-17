@@ -3,8 +3,9 @@
 # `//:examples` now delegates here, because a glob stops at a package boundary
 # and would otherwise have silently emptied.
 
-# Everything, for //site:site_test — it regenerates the whole demo site, which
-# reads the storyboard images and the narration alongside the .dgm sources.
+# Everything, for //site:site_test — it regenerates the whole examples tour,
+# which reads the storyboard images and the narration alongside the .dgm
+# sources.
 filegroup(
     name = "all_files",
     srcs = glob(["**"]),

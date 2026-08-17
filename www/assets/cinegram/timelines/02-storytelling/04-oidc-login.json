@@ -1,0 +1,724 @@
+{
+  "version": 2,
+  "root": "04-oidc-login",
+  "views": [
+    {
+      "id": "04-oidc-login",
+      "title": "sign in with an external IdP",
+      "diagram": {
+        "type": "sequenceDiagram",
+        "mermaid": "%% An OIDC login through authapiservice, as the shared engine actually runs it.\n%% ---\n%% `oauth-login.dgm` tells the protocol story in the abstract. This one is the\n%% same handshake with the implementation left in: which process holds which\n%% secret, what is written to Postgres and when it is deleted again, and the\n%% four separate checks that stand between a token arriving and a session\n%% existing. Every step's `desc` says what would go wrong without it.\n%% ---\n%% The flows carry no `label` — a sequence diagram already draws the message\n%% text, and a label would print a second copy on top of it. Notes take\n%% `side: below` for a related reason: an actor box sits at the top of the\n%% stage, so a note above it has nowhere to go but over its name.\n%% ---\n%% A message an actor sends to itself is an edge like any other — `flow E -\u003e E`\n%% sends the particle round mermaid's loop. The four self-messages here are the\n%% engine's own work, and they are the steps where nothing else moves.\nsequenceDiagram\n  autonumber\n  participant U as Browser\n  participant A as authapiservice\n  participant E as common/oidc engine\n  participant PG as PostgreSQL\n  participant IdP as External IdP\n\n  U-\u003e\u003eA: GET /prod/auth/oidc/login?provider_id=...\n  A-\u003e\u003eE: FlowService.Login(LoginRequest)\n  E-\u003e\u003eE: rebuild OAuth2/verifier from stored config (no stale cache)\n  E-\u003e\u003eE: generate state, nonce, PKCE verifier/challenge\n  E-\u003e\u003ePG: CreateState (10-min TTL)\n  E--\u003e\u003eA: authorization URL (+ auth_url_params)\n  A--\u003e\u003eU: 302 to IdP\n  U-\u003e\u003eIdP: authenticate (+MFA)\n  IdP--\u003e\u003eU: 302 to /prod/auth/oidc/callback with code and state\n  U-\u003e\u003eA: GET callback\n  A-\u003e\u003eE: FlowService.Callback(CallbackRequest)\n  E-\u003e\u003ePG: FindAndDeleteState(state)  (single-use, CSRF)\n  E-\u003e\u003ePG: GetConfigWithSecret(providerID) → decrypt client_secret\n  E-\u003e\u003eIdP: token exchange (configured auth method + token_request_params)\n  IdP--\u003e\u003eE: id_token, access_token, (refresh_token)\n  E-\u003e\u003eE: enforce configured alg, verify signature (JWKS or HMAC), issuer, aud, nonce, exp\n  E-\u003e\u003eIdP: (if userinfo_enabled) GET userinfo, enforce sub match, merge claims\n  E-\u003e\u003eE: map username/groups → roles\n  E-\u003e\u003ePG: CreateSession (encrypt tokens, lifetime/idle per config)\n  E--\u003e\u003eA: CallbackResult{RedirectURL, Cookies}\n  A--\u003e\u003eU: Set-Cookie + redirect into the app\n\n  %% The storyboard is the other half of this diagram's point. Eighteen messages\n  %% fly and the person signing in sees five screens; a `scene` says which one is\n  %% in front of them while each beat plays. Scenes are sticky, so the six steps\n  %% between `callback` and `signedin` — the whole verification back-and-forth —\n  %% all sit under one motionless interstitial, which is exactly what they look\n  %% like from a chair.\n  %% ---\n  %% Where a scene sits inside its step matters as much as which step it is in.\n  %% A screen changes when an arrow *lands*, not when its step begins, so every\n  %% scene below that follows a message is written inside the `seq` after the hop\n  %% that causes it — a scene consumes none of the chain, so it means \"here\" and\n  %% keeps meaning it if a duration changes. The steps that end on a new screen\n  %% then carry a `dur` long enough to look at it.\n"
+      },
+      "nodes": [
+        {
+          "id": "U",
+          "label": "Browser",
+          "shape": "actor"
+        },
+        {
+          "id": "A",
+          "label": "authapiservice",
+          "shape": "actor"
+        },
+        {
+          "id": "E",
+          "label": "common/oidc engine",
+          "shape": "actor"
+        },
+        {
+          "id": "PG",
+          "label": "PostgreSQL",
+          "shape": "actor"
+        },
+        {
+          "id": "IdP",
+          "label": "External IdP",
+          "shape": "actor"
+        }
+      ],
+      "groups": [],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "U",
+          "to": "A",
+          "label": "GET /prod/auth/oidc/login?provider_id=...",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "A",
+          "to": "E",
+          "label": "FlowService.Login(LoginRequest)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "E",
+          "to": "E",
+          "label": "rebuild OAuth2/verifier from stored config (no stale cache)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "E",
+          "to": "E",
+          "label": "generate state, nonce, PKCE verifier/challenge",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "E",
+          "to": "PG",
+          "label": "CreateState (10-min TTL)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "E",
+          "to": "A",
+          "label": "authorization URL (+ auth_url_params)",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e6",
+          "from": "A",
+          "to": "U",
+          "label": "302 to IdP",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e7",
+          "from": "U",
+          "to": "IdP",
+          "label": "authenticate (+MFA)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e8",
+          "from": "IdP",
+          "to": "U",
+          "label": "302 to /prod/auth/oidc/callback with code and state",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e9",
+          "from": "U",
+          "to": "A",
+          "label": "GET callback",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e10",
+          "from": "A",
+          "to": "E",
+          "label": "FlowService.Callback(CallbackRequest)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e11",
+          "from": "E",
+          "to": "PG",
+          "label": "FindAndDeleteState(state)  (single-use, CSRF)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e12",
+          "from": "E",
+          "to": "PG",
+          "label": "GetConfigWithSecret(providerID) → decrypt client_secret",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e13",
+          "from": "E",
+          "to": "IdP",
+          "label": "token exchange (configured auth method + token_request_params)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e14",
+          "from": "IdP",
+          "to": "E",
+          "label": "id_token, access_token, (refresh_token)",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e15",
+          "from": "E",
+          "to": "E",
+          "label": "enforce configured alg, verify signature (JWKS or HMAC), issuer, aud, nonce, exp",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e16",
+          "from": "E",
+          "to": "IdP",
+          "label": "(if userinfo_enabled) GET userinfo, enforce sub match, merge claims",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e17",
+          "from": "E",
+          "to": "E",
+          "label": "map username/groups → roles",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e18",
+          "from": "E",
+          "to": "PG",
+          "label": "CreateSession (encrypt tokens, lifetime/idle per config)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e19",
+          "from": "E",
+          "to": "A",
+          "label": "CallbackResult{RedirectURL, Cookies}",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e20",
+          "from": "A",
+          "to": "U",
+          "label": "Set-Cookie + redirect into the app",
+          "style": "dotted",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "sign in with an external IdP",
+          "duration": 17000,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "ask",
+              "name": "The browser asks authapiservice to start a login",
+              "desc": "The request names a provider and nothing else. Which IdP that is, what it is called, and what secret talks to it are all server-side facts, because anything the browser carries is anything the browser can change.",
+              "start": 0,
+              "end": 700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 700,
+                  "edge": "e0",
+                  "from": "U",
+                  "to": "A"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 700,
+                  "target": "A",
+                  "style": "active"
+                },
+                {
+                  "kind": "scene",
+                  "start": 0,
+                  "end": 700,
+                  "target": "app_signin"
+                }
+              ]
+            },
+            {
+              "id": "build",
+              "name": "The engine rebuilds its client from stored config",
+              "desc": "The OAuth2 client and the token verifier are constructed from the database row on every request rather than cached at startup. An admin who rotates a client secret or repoints an issuer expects the next login to use it — a cached client would keep using the old one until something restarted.",
+              "start": 700,
+              "end": 2000,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 700,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "A",
+                  "to": "E"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1300,
+                  "end": 2000,
+                  "edge": "e2",
+                  "from": "E",
+                  "to": "E"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 700,
+                  "end": 2000,
+                  "target": "E",
+                  "style": "busy"
+                },
+                {
+                  "kind": "note",
+                  "start": 700,
+                  "end": 2000,
+                  "target": "E",
+                  "text": "no cached client:\nconfig can change\nunder a running pod",
+                  "side": "below"
+                }
+              ]
+            },
+            {
+              "id": "mint",
+              "name": "state, nonce and a PKCE pair are generated",
+              "desc": "Three random values with three different jobs. `state` ties the callback to this browser, `nonce` ties the eventual id_token to this request, and the PKCE verifier proves at the token exchange that whoever redeems the code is whoever asked for it.",
+              "start": 2000,
+              "end": 2800,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2000,
+                  "end": 2800,
+                  "edge": "e3",
+                  "from": "E",
+                  "to": "E"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 2000,
+                  "end": 2800,
+                  "target": "E",
+                  "style": "busy"
+                }
+              ]
+            },
+            {
+              "id": "store",
+              "name": "Only the challenge is written down",
+              "desc": "The row holds the state, the nonce and the PKCE *verifier* under a ten-minute TTL. It expires on its own because an abandoned login is the common case, not the exception, and nothing should have to come back later to clean it up.",
+              "start": 2800,
+              "end": 3400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2800,
+                  "end": 3400,
+                  "edge": "e4",
+                  "from": "E",
+                  "to": "PG"
+                }
+              ]
+            },
+            {
+              "id": "redirect",
+              "name": "The browser is handed to the IdP",
+              "desc": "authapiservice replies with a 302 and stops taking part. From here until the callback the conversation is between the user and their identity provider, which is exactly why authapiservice can never leak a password it was never shown.",
+              "start": 3400,
+              "end": 4400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3400,
+                  "end": 3900,
+                  "edge": "e5",
+                  "from": "E",
+                  "to": "A",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3900,
+                  "end": 4400,
+                  "edge": "e6",
+                  "from": "A",
+                  "to": "U",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "authenticate",
+              "name": "The user authenticates, and does their MFA",
+              "desc": "Whatever the provider demands — password, push, hardware key, a conditional-access policy nobody here has heard of — happens entirely inside this hop. Adding a second factor is a change to the IdP and to nothing in this diagram.",
+              "start": 4400,
+              "end": 7200,
+              "tracks": [
+                {
+                  "kind": "scene",
+                  "start": 4400,
+                  "end": 7200,
+                  "target": "idp_form"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4400,
+                  "end": 5300,
+                  "edge": "e7",
+                  "from": "U",
+                  "to": "IdP"
+                },
+                {
+                  "kind": "scene",
+                  "start": 6000,
+                  "end": 6000,
+                  "target": "idp_mfa"
+                },
+                {
+                  "kind": "note",
+                  "start": 4400,
+                  "end": 7200,
+                  "target": "IdP",
+                  "text": "password + MFA\nnever seen by authapiservice",
+                  "side": "below"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 4400,
+                  "end": 7200,
+                  "target": "IdP",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "callback",
+              "name": "The IdP sends back a code, not a token",
+              "desc": "The redirect carries a short-lived authorization code through the address bar, where it lands in browser history and in any proxy log along the way. A code is safe there precisely because it is worthless without the client secret and the PKCE verifier that never left the server.",
+              "start": 7200,
+              "end": 8500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 7200,
+                  "end": 7900,
+                  "edge": "e8",
+                  "from": "IdP",
+                  "to": "U",
+                  "style": "response"
+                },
+                {
+                  "kind": "scene",
+                  "start": 7900,
+                  "end": 7900,
+                  "target": "app_waiting"
+                },
+                {
+                  "kind": "flow",
+                  "start": 7900,
+                  "end": 8500,
+                  "edge": "e9",
+                  "from": "U",
+                  "to": "A"
+                }
+              ]
+            },
+            {
+              "id": "consume",
+              "name": "The state is looked up and deleted in one move",
+              "desc": "FindAndDeleteState is a single-use read: an unknown state fails and a replayed one fails too, because the first callback took it. That is the whole CSRF defence, and it works only if the delete cannot be raced — which is why it is one statement and not a read followed by a delete.",
+              "start": 8500,
+              "end": 9500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 8500,
+                  "end": 9000,
+                  "edge": "e10",
+                  "from": "A",
+                  "to": "E"
+                },
+                {
+                  "kind": "flow",
+                  "start": 8900,
+                  "end": 9500,
+                  "edge": "e11",
+                  "from": "E",
+                  "to": "PG"
+                },
+                {
+                  "kind": "note",
+                  "start": 8500,
+                  "end": 9500,
+                  "target": "PG",
+                  "text": "single use:\na second callback\nfinds nothing",
+                  "side": "below"
+                }
+              ]
+            },
+            {
+              "id": "secret",
+              "name": "The client secret is decrypted for this exchange only",
+              "desc": "The secret lives encrypted at rest and is decrypted per request into the exchange that needs it. It is the one credential that proves this cluster is the client, and it is the reason the code has to come back through the server rather than being redeemed by the browser.",
+              "start": 9500,
+              "end": 10100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 9500,
+                  "end": 10100,
+                  "edge": "e12",
+                  "from": "E",
+                  "to": "PG"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 9500,
+                  "end": 10100,
+                  "target": "E",
+                  "style": "busy"
+                }
+              ]
+            },
+            {
+              "id": "exchange",
+              "name": "Code, secret and verifier are traded for tokens",
+              "desc": "Back channel, server to server, over a connection the browser is not part of. The configured auth method matters here: an IdP expecting client_secret_basic will reject a body-posted secret, and the failure looks like a bad credential rather than a mismatched convention.",
+              "start": 10100,
+              "end": 11700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 10100,
+                  "end": 10900,
+                  "edge": "e13",
+                  "from": "E",
+                  "to": "IdP"
+                },
+                {
+                  "kind": "flow",
+                  "start": 10900,
+                  "end": 11700,
+                  "edge": "e14",
+                  "from": "IdP",
+                  "to": "E",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "verify",
+              "name": "Four checks, and the first one is the algorithm",
+              "desc": "Signature, issuer, audience, nonce and expiry each rule out a different attack — but the algorithm is enforced first and against the configured value, never against what the token asks for. A token that nominates its own algorithm can nominate `none`, and then the signature check it passes is one it wrote itself.",
+              "start": 11700,
+              "end": 12900,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 11700,
+                  "end": 12900,
+                  "target": "E"
+                },
+                {
+                  "kind": "flow",
+                  "start": 11700,
+                  "end": 12900,
+                  "edge": "e15",
+                  "from": "E",
+                  "to": "E"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 11700,
+                  "end": 12900,
+                  "target": "E",
+                  "style": "busy"
+                },
+                {
+                  "kind": "note",
+                  "start": 11700,
+                  "end": 12900,
+                  "target": "E",
+                  "text": "alg from config, not from the token\nnonce must match the one we stored",
+                  "side": "below"
+                }
+              ]
+            },
+            {
+              "id": "claims",
+              "name": "Claims become a username, groups, and then roles",
+              "desc": "userinfo is optional and its `sub` must equal the id_token's, or the two halves are describing two different people. The mapping from groups to roles is the point where an external directory finally becomes local authority.",
+              "start": 12900,
+              "end": 14200,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 12900,
+                  "end": 13600,
+                  "edge": "e16",
+                  "from": "E",
+                  "to": "IdP"
+                },
+                {
+                  "kind": "flow",
+                  "start": 13600,
+                  "end": 14200,
+                  "edge": "e17",
+                  "from": "E",
+                  "to": "E"
+                }
+              ]
+            },
+            {
+              "id": "session",
+              "name": "A session row is written, with the tokens encrypted",
+              "desc": "The session — not the id_token — is what the rest of the product checks. Storing the tokens encrypted alongside it is what makes refresh possible later without ever handing a bearer token to the browser.",
+              "start": 14200,
+              "end": 14900,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 14200,
+                  "end": 14900,
+                  "edge": "e18",
+                  "from": "E",
+                  "to": "PG"
+                }
+              ]
+            },
+            {
+              "id": "signedin",
+              "name": "A cookie comes back, and nothing else does",
+              "desc": "The browser ends up holding an opaque session cookie. It never saw the client secret, the id_token or the refresh token, so a compromised browser costs one session rather than standing access to the IdP.",
+              "start": 14900,
+              "end": 17000,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 14900,
+                  "end": 15400,
+                  "edge": "e19",
+                  "from": "E",
+                  "to": "A",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 15400,
+                  "end": 16000,
+                  "edge": "e20",
+                  "from": "A",
+                  "to": "U",
+                  "style": "response"
+                },
+                {
+                  "kind": "scene",
+                  "start": 16000,
+                  "end": 16000,
+                  "target": "app_home"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 14900,
+                  "end": 17000,
+                  "target": "U",
+                  "color": "#16a34a"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 2000,
+              "end": 8500,
+              "target": "E",
+              "label": "state · nonce · PKCE",
+              "value": "minting",
+              "color": "#7c3aed"
+            },
+            {
+              "kind": "gauge",
+              "start": 2800,
+              "end": 17000,
+              "target": "PG",
+              "label": "state TTL",
+              "value": "10 min"
+            },
+            {
+              "kind": "set",
+              "start": 12900,
+              "end": 17000,
+              "target": "E",
+              "label": "id_token verified",
+              "value": "verified",
+              "color": "#16a34a"
+            },
+            {
+              "kind": "gauge",
+              "start": 12900,
+              "end": 17000,
+              "target": "E",
+              "label": "claims",
+              "value": "sub · email · groups"
+            },
+            {
+              "kind": "gauge",
+              "start": 14200,
+              "end": 17000,
+              "target": "PG",
+              "label": "session",
+              "value": "lifetime + idle"
+            },
+            {
+              "kind": "set",
+              "start": 14200,
+              "end": 17000,
+              "target": "PG",
+              "label": "tokens encrypted",
+              "value": "ok",
+              "color": "#16a34a"
+            }
+          ]
+        }
+      ],
+      "storyboard": {
+        "title": "What the person signing in sees",
+        "frames": [
+          {
+            "id": "app_signin",
+            "caption": "Acme's own sign-in page. One button, no password field.",
+            "image": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0ODAgMzIwIiB3aWR0aD0iNDgwIiBoZWlnaHQ9IjMyMCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJUaGUgYXBwJ3Mgc2lnbi1pbiBwYWdlLCBvZmZlcmluZyBhIHNpbmdsZSBzaWduLWluIGJ1dHRvbiI+CiAgPCEtLSBGbGF0LWNvbG91ciBtb2NrdXBzLCBkZWxpYmVyYXRlbHk6IGEgc3Rvcnlib2FyZCBmcmFtZSBoYXMgdG8gcmVhZCBhdAogICAgICAgdGh1bWJuYWlsIHNpemUgYmVzaWRlIGEgZGlhZ3JhbSwgYW5kIGEgcmVhbCBzY3JlZW5zaG90IGRvZXMgbm90LiBFdmVyeQogICAgICAgZnJhbWUgaW4gdGhpcyBzZXQgc2hhcmVzIG9uZSBnZW9tZXRyeSBzbyB0aGUgcGFuZWwgZG9lcyBub3QganVtcCBhcyB0aGUKICAgICAgIHNjZW5lcyBjaGFuZ2U6IGEgNDgweDMyMCBwYWdlLCBhIDM0cHggYWRkcmVzcyBzdHJpcCwgb25lIGNhcmQuIC0tPgogIDxyZWN0IHdpZHRoPSI0ODAiIGhlaWdodD0iMzIwIiByeD0iMTAiIGZpbGw9IiNmZmZmZmYiIHN0cm9rZT0iI2RmZTNlOCIvPgogIDxwYXRoIGQ9Ik0wIDEwYTEwIDEwIDAgMCAxIDEwLTEwaDQ2MGExMCAxMCAwIDAgMSAxMCAxMHYyNEgweiIgZmlsbD0iI2YxZjNmNSIvPgogIDxyZWN0IHg9IjE0IiB5PSI5IiB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE2IiByeD0iOCIgZmlsbD0iI2ZmZmZmZiIgc3Ryb2tlPSIjZGZlM2U4Ii8+CiAgPHRleHQgeD0iMjQiIHk9IjIxIiBmb250LWZhbWlseT0idWktbW9ub3NwYWNlLCBTRk1vbm8tUmVndWxhciwgTWVubG8sIG1vbm9zcGFjZSIgZm9udC1zaXplPSIxMCIgZmlsbD0iIzZiNzQ4MCI+YXBwLmV4YW1wbGUuY29tPC90ZXh0PgogIDxsaW5lIHgxPSIwIiB5MT0iMzQiIHgyPSI0ODAiIHkyPSIzNCIgc3Ryb2tlPSIjZGZlM2U4Ii8+CgogIDxyZWN0IHg9IjEyMCIgeT0iNzYiIHdpZHRoPSIyNDAiIGhlaWdodD0iMTgwIiByeD0iMTIiIGZpbGw9IiNmZmZmZmYiIHN0cm9rZT0iI2RmZTNlOCIvPgogIDxyZWN0IHg9IjIyMCIgeT0iOTgiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcng9IjEwIiBmaWxsPSIjMmY2ZmViIi8+CiAgPHRleHQgeD0iMjQwIiB5PSIxMjUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJ1aS1zYW5zLXNlcmlmLCBzeXN0ZW0tdWksIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZvbnQtd2VpZ2h0PSI3MDAiIGZpbGw9IiNmZmZmZmYiPkE8L3RleHQ+CgogIDx0ZXh0IHg9IjI0MCIgeT0iMTY0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0idWktc2Fucy1zZXJpZiwgc3lzdGVtLXVpLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE1IiBmb250LXdlaWdodD0iNjAwIiBmaWxsPSIjMWMyMDI0Ij5TaWduIGluIHRvIEFjbWU8L3RleHQ+CiAgPHRleHQgeD0iMjQwIiB5PSIxODQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJ1aS1zYW5zLXNlcmlmLCBzeXN0ZW0tdWksIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTEiIGZpbGw9IiM2Yjc0ODAiPlVzZSB5b3VyIG9yZ2FuaXNhdGlvbiBhY2NvdW50PC90ZXh0PgoKICA8cmVjdCB4PSIxNDgiIHk9IjIwMCIgd2lkdGg9IjE4NCIgaGVpZ2h0PSIzNCIgcng9IjgiIGZpbGw9IiMyZjZmZWIiLz4KICA8dGV4dCB4PSIyNDAiIHk9IjIyMiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9InVpLXNhbnMtc2VyaWYsIHN5c3RlbS11aSwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxMiIgZm9udC13ZWlnaHQ9IjYwMCIgZmlsbD0iI2ZmZmZmZiI+TG9naW4gd2l0aCBBdXRoaHViPC90ZXh0Pgo8L3N2Zz4K"
+          },
+          {
+            "id": "idp_form",
+            "caption": "The provider's domain. The password is typed here and nowhere else.",
+            "image": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0ODAgMzIwIiB3aWR0aD0iNDgwIiBoZWlnaHQ9IjMyMCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJUaGUgaWRlbnRpdHkgcHJvdmlkZXIncyBjcmVkZW50aWFsIGZvcm0sIG9uIHRoZSBwcm92aWRlcidzIG93biBkb21haW4iPgogIDxyZWN0IHdpZHRoPSI0ODAiIGhlaWdodD0iMzIwIiByeD0iMTAiIGZpbGw9IiNmZmZmZmYiIHN0cm9rZT0iI2RmZTNlOCIvPgogIDxwYXRoIGQ9Ik0wIDEwYTEwIDEwIDAgMCAxIDEwLTEwaDQ2MGExMCAxMCAwIDAgMSAxMCAxMHYyNEgweiIgZmlsbD0iI2YxZjNmNSIvPgogIDxyZWN0IHg9IjE0IiB5PSI5IiB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE2IiByeD0iOCIgZmlsbD0iI2ZmZmZmZiIgc3Ryb2tlPSIjZGZlM2U4Ii8+CiAgPCEtLSBUaGUgYWRkcmVzcyBpcyB0aGUgd2hvbGUgcG9pbnQgb2YgdGhpcyBmcmFtZTogdGhlIHBhc3N3b3JkIGlzIGJlaW5nCiAgICAgICB0eXBlZCBvbiB0aGUgcHJvdmlkZXIncyBkb21haW4sIG5vdCB0aGUgYXBwJ3MuIC0tPgogIDx0ZXh0IHg9IjI0IiB5PSIyMSIgZm9udC1mYW1pbHk9InVpLW1vbm9zcGFjZSwgU0ZNb25vLVJlZ3VsYXIsIE1lbmxvLCBtb25vc3BhY2UiIGZvbnQtc2l6ZT0iMTAiIGZpbGw9IiM3YzNhZWQiPmxvZ2luLmlkcC5leGFtcGxlPC90ZXh0PgogIDxsaW5lIHgxPSIwIiB5MT0iMzQiIHgyPSI0ODAiIHkyPSIzNCIgc3Ryb2tlPSIjZGZlM2U4Ii8+CgogIDxyZWN0IHg9IjEyMCIgeT0iNjAiIHdpZHRoPSIyNDAiIGhlaWdodD0iMjEyIiByeD0iMTIiIGZpbGw9IiNmZmZmZmYiIHN0cm9rZT0iI2RmZTNlOCIvPgogIDxyZWN0IHg9IjIyMiIgeT0iODAiIHdpZHRoPSIzNiIgaGVpZ2h0PSIzNiIgcng9IjE4IiBmaWxsPSIjN2MzYWVkIi8+CiAgPHRleHQgeD0iMjQwIiB5PSIxMDQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJ1aS1zYW5zLXNlcmlmLCBzeXN0ZW0tdWksIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTciIGZvbnQtd2VpZ2h0PSI3MDAiIGZpbGw9IiNmZmZmZmYiPkk8L3RleHQ+CiAgPHRleHQgeD0iMjQwIiB5PSIxMzgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJ1aS1zYW5zLXNlcmlmLCBzeXN0ZW0tdWksIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTQiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMxYzIwMjQiPkF1dGhodWIgLSBTaWduIEluPC90ZXh0PgoKICA8IS0tIEFic3RyYWN0ZWQgY3JlZGVudGlhbCBlbnRyeTogYSBsb2NrIGdseXBoIHN0YW5kcyBmb3IgImVtYWlsIGFuZAogICAgICAgcGFzc3dvcmQgYXJlIHR5cGVkIGhlcmUiIHdpdGhvdXQgZHJhd2luZyBhbiBhY3R1YWwgZmlsbGFibGUgZm9ybS4gLS0+CiAgPHJlY3QgeD0iMTUyIiB5PSIxNjgiIHdpZHRoPSIxNzYiIGhlaWdodD0iNzYiIHJ4PSIxMCIgZmlsbD0iI2Y2ZjdmOSIgc3Ryb2tlPSIjZGZlM2U4Ii8+CiAgPHJlY3QgeD0iMjIyIiB5PSIxOTAiIHdpZHRoPSIzNiIgaGVpZ2h0PSIyNiIgcng9IjUiIGZpbGw9IiNmZmZmZmYiIHN0cm9rZT0iIzdjM2FlZCIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgPHBhdGggZD0iTTIzMCAxOTB2LThhMTAgMTAgMCAwIDEgMjAgMHY4IiBmaWxsPSJub25lIiBzdHJva2U9IiM3YzNhZWQiIHN0cm9rZS13aWR0aD0iMiIvPgogIDxjaXJjbGUgY3g9IjI0MCIgY3k9IjIwMiIgcj0iMi41IiBmaWxsPSIjN2MzYWVkIi8+CiAgPHRleHQgeD0iMjQwIiB5PSIyMzIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJ1aS1zYW5zLXNlcmlmLCBzeXN0ZW0tdWksIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTAiIGZpbGw9IiM2Yjc0ODAiPkNyZWRlbnRpYWxzIGVudGVyZWQgaGVyZTwvdGV4dD4KPC9zdmc+Cg=="
+          },
+          {
+            "id": "idp_mfa",
+            "caption": "A second factor, entirely between the user and their IdP.",
+            "image": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0ODAgMzIwIiB3aWR0aD0iNDgwIiBoZWlnaHQ9IjMyMCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJUaGUgaWRlbnRpdHkgcHJvdmlkZXIncyBzZWNvbmQtZmFjdG9yIHByb21wdCwgd2FpdGluZyBvbiBhIHNpeC1kaWdpdCBjb2RlIj4KICA8cmVjdCB3aWR0aD0iNDgwIiBoZWlnaHQ9IjMyMCIgcng9IjEwIiBmaWxsPSIjZmZmZmZmIiBzdHJva2U9IiNkZmUzZTgiLz4KICA8cGF0aCBkPSJNMCAxMGExMCAxMCAwIDAgMSAxMC0xMGg0NjBhMTAgMTAgMCAwIDEgMTAgMTB2MjRIMHoiIGZpbGw9IiNmMWYzZjUiLz4KICA8cmVjdCB4PSIxNCIgeT0iOSIgd2lkdGg9IjIwMCIgaGVpZ2h0PSIxNiIgcng9IjgiIGZpbGw9IiNmZmZmZmYiIHN0cm9rZT0iI2RmZTNlOCIvPgogIDx0ZXh0IHg9IjI0IiB5PSIyMSIgZm9udC1mYW1pbHk9InVpLW1vbm9zcGFjZSwgU0ZNb25vLVJlZ3VsYXIsIE1lbmxvLCBtb25vc3BhY2UiIGZvbnQtc2l6ZT0iMTAiIGZpbGw9IiM3YzNhZWQiPmxvZ2luLmlkcC5leGFtcGxlPC90ZXh0PgogIDxsaW5lIHgxPSIwIiB5MT0iMzQiIHgyPSI0ODAiIHkyPSIzNCIgc3Ryb2tlPSIjZGZlM2U4Ii8+CgogIDxyZWN0IHg9IjEyMCIgeT0iNzIiIHdpZHRoPSIyNDAiIGhlaWdodD0iMTg4IiByeD0iMTIiIGZpbGw9IiNmZmZmZmYiIHN0cm9rZT0iI2RmZTNlOCIvPgogIDxyZWN0IHg9IjIyNiIgeT0iOTIiIHdpZHRoPSIyOCIgaGVpZ2h0PSIzNCIgcng9IjYiIGZpbGw9IiNmZmZmZmYiIHN0cm9rZT0iIzdjM2FlZCIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgPHBhdGggZD0iTTIzNCA5MnYtNmE2IDYgMCAwIDEgMTIgMHY2IiBmaWxsPSJub25lIiBzdHJva2U9IiM3YzNhZWQiIHN0cm9rZS13aWR0aD0iMiIvPgogIDxjaXJjbGUgY3g9IjI0MCIgY3k9IjEwOSIgcj0iMyIgZmlsbD0iIzdjM2FlZCIvPgoKICA8dGV4dCB4PSIyNDAiIHk9IjE1MiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9InVpLXNhbnMtc2VyaWYsIHN5c3RlbS11aSwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9IjYwMCIgZmlsbD0iIzFjMjAyNCI+VHdvLWZhY3RvciBjaGVjazwvdGV4dD4KICA8dGV4dCB4PSIyNDAiIHk9IjE3MSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9InVpLXNhbnMtc2VyaWYsIHN5c3RlbS11aSwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxMSIgZmlsbD0iIzZiNzQ4MCI+RW50ZXIgdGhlIGNvZGUgZnJvbSB5b3VyIGF1dGhlbnRpY2F0b3I8L3RleHQ+CgogIDwhLS0gU2l4IGJveGVzOiB0aGUgZnJhbWUgaGFzIHRvIHNheSAiYSBjb2RlIGdvZXMgaGVyZSIgd2l0aG91dCBhIGNhcHRpb24uIC0tPgogIDxnIGZpbGw9IiNmZmZmZmYiIHN0cm9rZT0iI2RmZTNlOCI+CiAgICA8cmVjdCB4PSIxNTAiIHk9IjE5MCIgd2lkdGg9IjI2IiBoZWlnaHQ9IjMyIiByeD0iNiIvPgogICAgPHJlY3QgeD0iMTgyIiB5PSIxOTAiIHdpZHRoPSIyNiIgaGVpZ2h0PSIzMiIgcng9IjYiLz4KICAgIDxyZWN0IHg9IjIxNCIgeT0iMTkwIiB3aWR0aD0iMjYiIGhlaWdodD0iMzIiIHJ4PSI2Ii8+CiAgICA8cmVjdCB4PSIyNDYiIHk9IjE5MCIgd2lkdGg9IjI2IiBoZWlnaHQ9IjMyIiByeD0iNiIvPgogICAgPHJlY3QgeD0iMjc4IiB5PSIxOTAiIHdpZHRoPSIyNiIgaGVpZ2h0PSIzMiIgcng9IjYiLz4KICAgIDxyZWN0IHg9IjMxMCIgeT0iMTkwIiB3aWR0aD0iMjYiIGhlaWdodD0iMzIiIHJ4PSI2IiBzdHJva2U9IiM3YzNhZWQiLz4KICA8L2c+CiAgPGcgZm9udC1mYW1pbHk9InVpLW1vbm9zcGFjZSwgU0ZNb25vLVJlZ3VsYXIsIE1lbmxvLCBtb25vc3BhY2UiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiMxYzIwMjQiIHRleHQtYW5jaG9yPSJtaWRkbGUiPgogICAgPHRleHQgeD0iMTYzIiB5PSIyMTIiPjQ8L3RleHQ+CiAgICA8dGV4dCB4PSIxOTUiIHk9IjIxMiI+MTwvdGV4dD4KICAgIDx0ZXh0IHg9IjIyNyIgeT0iMjEyIj43PC90ZXh0PgogICAgPHRleHQgeD0iMjU5IiB5PSIyMTIiPjI8L3RleHQ+CiAgICA8dGV4dCB4PSIyOTEiIHk9IjIxMiI+OTwvdGV4dD4KICA8L2c+CgogIDx0ZXh0IHg9IjI0MCIgeT0iMjQ0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0idWktc2Fucy1zZXJpZiwgc3lzdGVtLXVpLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjEwIiBmaWxsPSIjNmI3NDgwIj5BY21lIG5ldmVyIHNlZXMgdGhpcyBzdGVwPC90ZXh0Pgo8L3N2Zz4K"
+          },
+          {
+            "id": "app_waiting",
+            "caption": "Back on Acme with a code in the address bar — worthless without the secret.",
+            "image": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0ODAgMzIwIiB3aWR0aD0iNDgwIiBoZWlnaHQ9IjMyMCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJCYWNrIG9uIHRoZSBhcHAncyBkb21haW4gb24gYSBibGFuayBpbnRlcnN0aXRpYWwgd2hpbGUgdGhlIHNlcnZlciBmaW5pc2hlcyB0aGUgbG9naW4iPgogIDxyZWN0IHdpZHRoPSI0ODAiIGhlaWdodD0iMzIwIiByeD0iMTAiIGZpbGw9IiNmZmZmZmYiIHN0cm9rZT0iI2RmZTNlOCIvPgogIDxwYXRoIGQ9Ik0wIDEwYTEwIDEwIDAgMCAxIDEwLTEwaDQ2MGExMCAxMCAwIDAgMSAxMCAxMHYyNEgweiIgZmlsbD0iI2YxZjNmNSIvPgogIDxyZWN0IHg9IjE0IiB5PSI5IiB3aWR0aD0iMjQ4IiBoZWlnaHQ9IjE2IiByeD0iOCIgZmlsbD0iI2ZmZmZmZiIgc3Ryb2tlPSIjZGZlM2U4Ii8+CiAgPCEtLSBUaGUgY2FsbGJhY2sgVVJMLCB3aXRoIHRoZSBjb2RlIHNpdHRpbmcgaW4gcGxhaW4gdmlldzogdGhpcyBpcyB0aGUgZnJhbWUKICAgICAgIHRoYXQgbWFrZXMgImEgY29kZSBpcyBzYWZlIGluIHRoZSBhZGRyZXNzIGJhciIgY29uY3JldGUuIC0tPgogIDx0ZXh0IHg9IjI0IiB5PSIyMSIgZm9udC1mYW1pbHk9InVpLW1vbm9zcGFjZSwgU0ZNb25vLVJlZ3VsYXIsIE1lbmxvLCBtb25vc3BhY2UiIGZvbnQtc2l6ZT0iOSIgZmlsbD0iIzZiNzQ4MCI+YXBwLmV4YW1wbGUuY29tL2NhbGxiYWNrP2NvZGU9NC8wQWLigKYmYW1wO3N0YXRlPeKApjwvdGV4dD4KICA8bGluZSB4MT0iMCIgeTE9IjM0IiB4Mj0iNDgwIiB5Mj0iMzQiIHN0cm9rZT0iI2RmZTNlOCIvPgoKICA8IS0tIEEgc3RhdGljIHNwaW5uZXIgYXJjLiBOb3RoaW5nIGhlcmUgYW5pbWF0ZXM6IGEgc3Rvcnlib2FyZCBmcmFtZSBpcyBhCiAgICAgICBzdGlsbCwgYW5kIGEgc3Bpbm5pbmcgb25lIHdvdWxkIGNvbXBldGUgd2l0aCB0aGUgZGlhZ3JhbSBiZXNpZGUgaXQuIC0tPgogIDxjaXJjbGUgY3g9IjI0MCIgY3k9IjE1MCIgcj0iMjIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2RmZTNlOCIgc3Ryb2tlLXdpZHRoPSI0Ii8+CiAgPHBhdGggZD0iTTI0MCAxMjhhMjIgMjIgMCAwIDEgMjIgMjIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzJmNmZlYiIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KCiAgPHRleHQgeD0iMjQwIiB5PSIyMDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJ1aS1zYW5zLXNlcmlmLCBzeXN0ZW0tdWksIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTQiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMxYzIwMjQiPlNpZ25pbmcgeW91IGlu4oCmPC90ZXh0PgogIDx0ZXh0IHg9IjI0MCIgeT0iMjIwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0idWktc2Fucy1zZXJpZiwgc3lzdGVtLXVpLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjExIiBmaWxsPSIjNmI3NDgwIj5UaGUgYnJvd3NlciBpcyBpZGxlIGZyb20gaGVyZSBvbjwvdGV4dD4KPC9zdmc+Cg=="
+          },
+          {
+            "id": "app_home",
+            "caption": "Signed in, holding an opaque cookie and nothing else.",
+            "image": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0ODAgMzIwIiB3aWR0aD0iNDgwIiBoZWlnaHQ9IjMyMCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJUaGUgYXBwJ3MgaG9tZSBwYWdlIHdpdGggdGhlIHVzZXIgc2lnbmVkIGluIj4KICA8cmVjdCB3aWR0aD0iNDgwIiBoZWlnaHQ9IjMyMCIgcng9IjEwIiBmaWxsPSIjZmZmZmZmIiBzdHJva2U9IiNkZmUzZTgiLz4KICA8cGF0aCBkPSJNMCAxMGExMCAxMCAwIDAgMSAxMC0xMGg0NjBhMTAgMTAgMCAwIDEgMTAgMTB2MjRIMHoiIGZpbGw9IiNmMWYzZjUiLz4KICA8cmVjdCB4PSIxNCIgeT0iOSIgd2lkdGg9IjIwMCIgaGVpZ2h0PSIxNiIgcng9IjgiIGZpbGw9IiNmZmZmZmYiIHN0cm9rZT0iI2RmZTNlOCIvPgogIDx0ZXh0IHg9IjI0IiB5PSIyMSIgZm9udC1mYW1pbHk9InVpLW1vbm9zcGFjZSwgU0ZNb25vLVJlZ3VsYXIsIE1lbmxvLCBtb25vc3BhY2UiIGZvbnQtc2l6ZT0iMTAiIGZpbGw9IiM2Yjc0ODAiPmFwcC5leGFtcGxlLmNvbS9ob21lPC90ZXh0PgogIDxsaW5lIHgxPSIwIiB5MT0iMzQiIHgyPSI0ODAiIHkyPSIzNCIgc3Ryb2tlPSIjZGZlM2U4Ii8+CgogIDwhLS0gQXBwIGNocm9tZTogYSBzaWduZWQtaW4gaGVhZGVyIHdpdGggdGhlIGFjY291bnQgY2hpcCBvbiB0aGUgcmlnaHQuIC0tPgogIDxyZWN0IHg9IjAiIHk9IjM0IiB3aWR0aD0iNDgwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjZmZmZmZmIi8+CiAgPHJlY3QgeD0iMjAiIHk9IjQ2IiB3aWR0aD0iMjQiIGhlaWdodD0iMTYiIHJ4PSI1IiBmaWxsPSIjMmY2ZmViIi8+CiAgPHRleHQgeD0iMzIiIHk9IjU4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0idWktc2Fucy1zZXJpZiwgc3lzdGVtLXVpLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjEwIiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSIjZmZmZmZmIj5BPC90ZXh0PgogIDx0ZXh0IHg9IjU0IiB5PSI1OSIgZm9udC1mYW1pbHk9InVpLXNhbnMtc2VyaWYsIHN5c3RlbS11aSwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxMiIgZm9udC13ZWlnaHQ9IjYwMCIgZmlsbD0iIzFjMjAyNCI+QWNtZTwvdGV4dD4KCiAgPGNpcmNsZSBjeD0iNDQwIiBjeT0iNTQiIHI9IjEyIiBmaWxsPSIjMTZhMzRhIi8+CiAgPHRleHQgeD0iNDQwIiB5PSI1OCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9InVpLXNhbnMtc2VyaWYsIHN5c3RlbS11aSwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxMCIgZm9udC13ZWlnaHQ9IjcwMCIgZmlsbD0iI2ZmZmZmZiI+QUQ8L3RleHQ+CiAgPHRleHQgeD0iNDE4IiB5PSI1OCIgdGV4dC1hbmNob3I9ImVuZCIgZm9udC1mYW1pbHk9InVpLXNhbnMtc2VyaWYsIHN5c3RlbS11aSwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxMSIgZmlsbD0iIzZiNzQ4MCI+YWRhQGFjbWUuZXhhbXBsZTwvdGV4dD4KICA8bGluZSB4MT0iMCIgeTE9Ijc0IiB4Mj0iNDgwIiB5Mj0iNzQiIHN0cm9rZT0iI2RmZTNlOCIvPgoKICA8dGV4dCB4PSIyNCIgeT0iMTA2IiBmb250LWZhbWlseT0idWktc2Fucy1zZXJpZiwgc3lzdGVtLXVpLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE1IiBmb250LXdlaWdodD0iNjAwIiBmaWxsPSIjMWMyMDI0Ij5XZWxjb21lIGJhY2ssIEFkYTwvdGV4dD4KCiAgPGcgZmlsbD0iI2ZmZmZmZiIgc3Ryb2tlPSIjZGZlM2U4Ij4KICAgIDxyZWN0IHg9IjI0IiB5PSIxMjQiIHdpZHRoPSIxMzYiIGhlaWdodD0iNzYiIHJ4PSI5Ii8+CiAgICA8cmVjdCB4PSIxNzIiIHk9IjEyNCIgd2lkdGg9IjEzNiIgaGVpZ2h0PSI3NiIgcng9IjkiLz4KICAgIDxyZWN0IHg9IjMyMCIgeT0iMTI0IiB3aWR0aD0iMTM2IiBoZWlnaHQ9Ijc2IiByeD0iOSIvPgogIDwvZz4KICA8ZyBmaWxsPSIjZjFmM2Y1Ij4KICAgIDxyZWN0IHg9IjM4IiB5PSIxNDAiIHdpZHRoPSI3MCIgaGVpZ2h0PSI4IiByeD0iNCIvPgogICAgPHJlY3QgeD0iMTg2IiB5PSIxNDAiIHdpZHRoPSI3MCIgaGVpZ2h0PSI4IiByeD0iNCIvPgogICAgPHJlY3QgeD0iMzM0IiB5PSIxNDAiIHdpZHRoPSI3MCIgaGVpZ2h0PSI4IiByeD0iNCIvPgogICAgPHJlY3QgeD0iMzgiIHk9IjE1OCIgd2lkdGg9IjEwMCIgaGVpZ2h0PSI2IiByeD0iMyIvPgogICAgPHJlY3QgeD0iMTg2IiB5PSIxNTgiIHdpZHRoPSIxMDAiIGhlaWdodD0iNiIgcng9IjMiLz4KICAgIDxyZWN0IHg9IjMzNCIgeT0iMTU4IiB3aWR0aD0iMTAwIiBoZWlnaHQ9IjYiIHJ4PSIzIi8+CiAgICA8cmVjdCB4PSIzOCIgeT0iMTcyIiB3aWR0aD0iODIiIGhlaWdodD0iNiIgcng9IjMiLz4KICAgIDxyZWN0IHg9IjE4NiIgeT0iMTcyIiB3aWR0aD0iODIiIGhlaWdodD0iNiIgcng9IjMiLz4KICAgIDxyZWN0IHg9IjMzNCIgeT0iMTcyIiB3aWR0aD0iODIiIGhlaWdodD0iNiIgcng9IjMiLz4KICA8L2c+CgogIDwhLS0gVGhlIGNvb2tpZSBpcyB0aGUgb25seSB0aGluZyB0aGUgYnJvd3NlciBlbmRlZCB1cCBob2xkaW5nLCBzbyBpdCBpcyB0aGUKICAgICAgIG9uZSBkZXRhaWwgdGhpcyBmcmFtZSBzdGF0ZXMgcmF0aGVyIHRoYW4gbW9ja3MuIC0tPgogIDxyZWN0IHg9IjI0IiB5PSIyMjAiIHdpZHRoPSI0MzIiIGhlaWdodD0iNDAiIHJ4PSI5IiBmaWxsPSIjZmZmZmZmIiBzdHJva2U9IiMxNmEzNGEiLz4KICA8Y2lyY2xlIGN4PSI0NiIgY3k9IjI0MCIgcj0iOCIgZmlsbD0iIzE2YTM0YSIvPgogIDxwYXRoIGQ9Ik00MiAyNDBsMyAzIDYtNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgogIDx0ZXh0IHg9IjY0IiB5PSIyMzciIGZvbnQtZmFtaWx5PSJ1aS1zYW5zLXNlcmlmLCBzeXN0ZW0tdWksIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTEiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMxYzIwMjQiPlNlc3Npb24gY29va2llIHNldDwvdGV4dD4KICA8dGV4dCB4PSI2NCIgeT0iMjUxIiBmb250LWZhbWlseT0idWktbW9ub3NwYWNlLCBTRk1vbm8tUmVndWxhciwgTWVubG8sIG1vbm9zcGFjZSIgZm9udC1zaXplPSI5IiBmaWxsPSIjNmI3NDgwIj5vcGFxdWUgwrcgSHR0cE9ubHkgwrcgU2VjdXJlIOKAlCBubyB0b2tlbiBpbiB0aGUgYnJvd3NlcjwvdGV4dD4KPC9zdmc+Cg=="
+          }
+        ]
+      }
+    }
+  ]
+}

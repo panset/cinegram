@@ -1,6 +1,7 @@
 package site
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -27,299 +28,236 @@ scenario "run" { speed: 1.0 }
   }
 `
 
-// linkedTo returns an example that pulls in target, which makes target a
-// sub-view rather than a demo of its own.
-func linkedTo(target string) string {
-	return fmt.Sprintf(`%%%% A demo with a drill-down.
-flowchart LR
-  a[One] --> b[Two]
-
-view inner "Inside" from %q
-
-interact {
-  click b -> view inner { label: "drill" }
-}
-
-scenario "run" { speed: 1.0 }
-
-  step go "Go" {
-    flow a -> b { dur: 500ms }
-  }
-`, target)
-}
-
-func TestBuildRendersAPagePerStandaloneExample(t *testing.T) {
-	out, _, err := Build(mem(map[string]string{
-		"linked.dgm": linkedTo("sub.dgm"),
-		"plain.dgm":  plainExample,
-		"sub.dgm":    plainExample,
-	}))
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-
-	for _, want := range []string{
-		"index.html", ".nojekyll",
-		"demos/index.html", "demos/linked.html", "demos/plain.html",
-		"demos/assets/mermaid.min.js", "demos/assets/runtime.js",
-		"demos/assets/runtime.css", "demos/assets/site.css",
-	} {
-		if _, ok := out[want]; !ok {
-			t.Errorf("missing output %s; have %v", want, sortedKeys(out))
+// A README with the shape the splitter cares about: the pitch above the first
+// ##, a heading per guide page, a cross-reference between two of them, a link
+// into the repository, and a shell block whose comment starts with ##.
+func fakeReadme() []byte {
+	var b strings.Builder
+	b.WriteString("# Cinegram\n\nThe pitch, which the home page does better.\n\n")
+	for i, p := range guidePages {
+		for _, s := range p.Sections {
+			fmt.Fprintf(&b, "## %s\n\nProse for %s.\n\n", s, s)
+			if i == 0 {
+				b.WriteString("```sh\ncinegram preview a.dgm\n## then open it\n```\n\n")
+			}
 		}
 	}
-
-	// sub.dgm is reachable from linked.dgm, so it is part of that demo's
-	// bundle rather than a demo in its own right.
-	if _, ok := out["demos/sub.html"]; ok {
-		t.Error("sub.dgm is a sub-view and should not get its own page")
-	}
+	return []byte(b.String())
 }
 
-func TestTopLevelIndexRedirectsIntoDemos(t *testing.T) {
-	out, _, err := Build(mem(map[string]string{"plain.dgm": plainExample}))
+func build(t *testing.T, files map[string]string) map[string][]byte {
+	t.Helper()
+	out, _, err := Build(mem(files), fakeReadme())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	stub := string(out["index.html"])
-	if !strings.Contains(stub, `url=demos/`) {
-		t.Errorf("top-level index does not redirect into demos/: %q", stub)
+	return out
+}
+
+func page(t *testing.T, out map[string][]byte, rel string) string {
+	t.Helper()
+	content, ok := out[rel]
+	if !ok {
+		t.Fatalf("no %s in the output; have %v", rel, sortedKeys(out))
+	}
+	return string(content)
+}
+
+// --- the examples tour ----------------------------------------------------
+
+func TestAnExamplePageMountsItsOwnTimeline(t *testing.T) {
+	out := build(t, map[string]string{"01-basics/01-plain.dgm": plainExample})
+
+	// The tour keeps the source's ordering prefix in the page name: Zensical
+	// sorts filenames to build its navigation, and the tour has an order.
+	md := page(t, out, "examples/01-basics/01-plain.md")
+	if !strings.Contains(md, `data-cinegram="01-basics/01-plain"`) {
+		t.Errorf("the page names no timeline:\n%s", md)
+	}
+	// The name in the div and the file on disk are the same string with
+	// .json on the end; nothing at build time checks that at read time, so
+	// it is checked here.
+	name := "01-basics/01-plain"
+	if _, ok := out[TimelineDir+"/"+name+".json"]; !ok {
+		t.Errorf("no timeline written for %s; have %v", name, sortedKeys(out))
+	}
+	if !strings.Contains(md, "A tiny demo.") {
+		t.Error("the page does not carry the example's blurb")
+	}
+	if !strings.Contains(md, "```dgm") {
+		t.Error("the page does not show the source that produced it")
 	}
 }
 
-func TestMutuallyReferencingExamplesStillPublish(t *testing.T) {
-	// a.dgm and b.dgm drill into each other, which the loader supports (a
-	// cycle terminates on its own). Each is the other's sub-view, so a naive
-	// "referenced means no page" rule would drop both from the site.
-	out, _, err := Build(mem(map[string]string{
-		"a.dgm": linkedTo("b.dgm"),
-		"b.dgm": linkedTo("a.dgm"),
-	}))
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
+func TestTheTimelineIsTheCompiledDocument(t *testing.T) {
+	out := build(t, map[string]string{"plain.dgm": plainExample})
 
-	if _, ok := out["demos/a.html"]; !ok {
-		t.Errorf("neither side of the cycle was published; have %v", sortedKeys(out))
+	var timeline struct {
+		Version int    `json:"version"`
+		Root    string `json:"root"`
+		Views   []struct {
+			ID string `json:"id"`
+		} `json:"views"`
 	}
-	// b stays unpublished: the player reaches it from a's page.
-	if _, ok := out["demos/b.html"]; ok {
-		t.Error("b.dgm is reachable from the published a.html and should not get its own page")
+	if err := json.Unmarshal(out[TimelineDir+"/plain.json"], &timeline); err != nil {
+		t.Fatalf("the timeline is not valid JSON: %v", err)
+	}
+	if timeline.Version == 0 || timeline.Root == "" || len(timeline.Views) == 0 {
+		t.Errorf("the timeline is empty: %+v", timeline)
 	}
 }
 
-func TestStrippedNamesCollidingInAFolderAreAnError(t *testing.T) {
-	// The numeric prefix is display order, not identity: once stripped,
-	// these both want dup.html and one would silently shadow the other.
-	_, _, err := Build(mem(map[string]string{
-		"01-dup.dgm": plainExample,
-		"02-dup.dgm": plainExample,
-	}))
+// The player finds its timeline relative to the loader's own URL, so depth
+// costs it nothing. The playground link is an ordinary href and does not get
+// that for free.
+func TestThePlaygroundLinkClimbsOutOfNestedFolders(t *testing.T) {
+	out := build(t, map[string]string{
+		"top.dgm":           plainExample,
+		"a/deep/nested.dgm": plainExample,
+	})
+
+	if md := page(t, out, "examples/top.md"); !strings.Contains(md, "(../playground/#doc=") {
+		t.Errorf("a top-level example does not reach the playground one level up:\n%s", md)
+	}
+	if md := page(t, out, "examples/a/deep/nested.md"); !strings.Contains(md, "(../../../playground/#doc=") {
+		t.Errorf("a nested example does not climb far enough:\n%s", md)
+	}
+}
+
+func TestFolderIndexesListWhatIsInThem(t *testing.T) {
+	out := build(t, map[string]string{
+		"01-basics/01-plain.dgm": plainExample,
+		"02-more/01-other.dgm":   plainExample,
+	})
+
+	root := page(t, out, "examples/index.md")
+	for _, want := range []string{"(01-basics/index.md)", "(02-more/index.md)"} {
+		if !strings.Contains(root, want) {
+			t.Errorf("the tour index does not link %s:\n%s", want, root)
+		}
+	}
+	inner := page(t, out, "examples/01-basics/index.md")
+	if !strings.Contains(inner, "(01-plain.md)") {
+		t.Errorf("a folder index does not link its own pages:\n%s", inner)
+	}
+	if !strings.Contains(inner, "A tiny demo.") {
+		t.Error("a folder index does not carry blurbs")
+	}
+}
+
+func TestPrevNextLinksResolveAcrossFolders(t *testing.T) {
+	out := build(t, map[string]string{
+		"01-basics/01-plain.dgm": plainExample,
+		"02-more/01-other.dgm":   plainExample,
+	})
+	// From 01-basics/plain.md, the next page is one folder up and one down.
+	if md := page(t, out, "examples/01-basics/01-plain.md"); !strings.Contains(md, "(../02-more/01-other.md)") {
+		t.Errorf("next does not resolve across the folder edge:\n%s", md)
+	}
+	if md := page(t, out, "examples/02-more/01-other.md"); !strings.Contains(md, "(../01-basics/01-plain.md)") {
+		t.Errorf("prev does not resolve across the folder edge:\n%s", md)
+	}
+}
+
+func TestEveryGeneratedFileIsUnderASweptFolder(t *testing.T) {
+	// The sweep only deletes inside site.Generated. Anything written outside
+	// it would survive its source being removed, forever.
+	out := build(t, map[string]string{"plain.dgm": plainExample})
+	for _, rel := range sortedKeys(out) {
+		swept := false
+		for _, gen := range Generated {
+			if strings.HasPrefix(rel, gen+"/") {
+				swept = true
+				break
+			}
+		}
+		if !swept {
+			t.Errorf("%s is generated but sits outside %v, so nothing will ever delete it", rel, Generated)
+		}
+	}
+}
+
+// --- the guide ------------------------------------------------------------
+
+func TestTheGuideIsTheReadmeCutUp(t *testing.T) {
+	out := build(t, map[string]string{"plain.dgm": plainExample})
+
+	md := page(t, out, "guide/01-language.md")
+	if !strings.Contains(md, "# The language\n") {
+		t.Error("the page has no title of its own")
+	}
+	for _, s := range guidePages[0].Sections {
+		if !strings.Contains(md, "## "+s+"\n") {
+			t.Errorf("the language page is missing the %q section", s)
+		}
+	}
+	// The pitch above the README's first ## is the home page's job.
+	if strings.Contains(md, "The pitch") {
+		t.Error("the guide carried the README's opening pitch onto a page")
+	}
+	// A ## inside a fenced block is a shell comment, not a heading.
+	if strings.Contains(md, "# then open it\n") && !strings.Contains(md, "## then open it") {
+		t.Error("a ## inside a code fence was treated as a heading")
+	}
+}
+
+func TestAReadmeHeadingNobodyClaimsFailsTheBuild(t *testing.T) {
+	readme := append(fakeReadme(), []byte("## Something new\n\nAdded last week.\n")...)
+	_, _, err := Build(mem(map[string]string{"plain.dgm": plainExample}), readme)
 	if err == nil {
-		t.Fatal("Build accepted two examples that would publish as the same page")
+		t.Fatal("Build accepted a README section that appears on no page")
 	}
-	if !strings.Contains(err.Error(), "dup.html") {
-		t.Errorf("error does not name the colliding page: %v", err)
-	}
-}
-
-func TestSameBasenameInDifferentFoldersIsFine(t *testing.T) {
-	out, _, err := Build(mem(map[string]string{
-		"api/dup.dgm": plainExample,
-		"web/dup.dgm": plainExample,
-	}))
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-	for _, want := range []string{"demos/api/dup.html", "demos/web/dup.html", "demos/api/index.html"} {
-		if _, ok := out[want]; !ok {
-			t.Errorf("missing output %s; have %v", want, sortedKeys(out))
-		}
+	if !strings.Contains(err.Error(), "Something new") {
+		t.Errorf("the error does not name the orphaned section: %v", err)
 	}
 }
 
-func TestDemoPagesShareAssetsAndCarryChrome(t *testing.T) {
-	out, _, err := Build(mem(map[string]string{
-		"plain.dgm":      plainExample,
-		"deep/other.dgm": plainExample,
-	}))
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-
-	page := string(out["demos/plain.html"])
-	if !strings.HasPrefix(page, "<!doctype html>") {
-		t.Errorf("demo page does not start with a doctype: %.40q", page)
-	}
-	if !strings.Contains(page, "CINEGRAM_TIMELINE") {
-		t.Error("demo page carries no timeline payload")
-	}
-	// Shared, not inlined: the page references the assets folder and does
-	// not carry mermaid's megabytes.
-	if !strings.Contains(page, `src="assets/mermaid.min.js"`) {
-		t.Error("demo page does not reference the shared mermaid copy")
-	}
-	if len(page) > 200_000 {
-		t.Errorf("demo page is %d bytes; shared assets should keep it small", len(page))
-	}
-	if !strings.Contains(page, "dgm-site-nav") {
-		t.Error("demo page carries no sidebar")
-	}
-	if !strings.Contains(page, "Edit in playground") {
-		t.Error("demo page carries no Edit-in-playground button")
-	}
-
-	// A page one folder down reaches the same assets one level up.
-	deep := string(out["demos/deep/other.html"])
-	if !strings.Contains(deep, `src="../assets/mermaid.min.js"`) {
-		t.Error("nested page does not reach the shared assets via ../")
-	}
-}
-
-func TestIndexLinksEveryDemoWithItsBlurb(t *testing.T) {
-	out, _, err := Build(mem(map[string]string{"plain.dgm": plainExample}))
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-
-	index := string(out["demos/index.html"])
-	if !strings.Contains(index, `href="plain.html"`) {
-		t.Error("index does not link plain.html")
-	}
-	// The first %% comment line is the example's own description of itself.
-	if !strings.Contains(index, "A tiny demo.") {
-		t.Error("index does not carry the example's leading comment as its blurb")
-	}
-	// The page title comes from the timeline, the same way the demo page's
-	// <title> does.
-	if !strings.Contains(index, "run") {
-		t.Error("index does not name the demo by its title")
-	}
-	// The repo's presentation: the hero card links the playground.
-	if !strings.Contains(index, "Try the playground") {
-		t.Error("index carries no playground hero card")
-	}
-}
-
-func TestAFolderEntryLinksWhatIsInsideIt(t *testing.T) {
-	// A site organised into folders would otherwise greet a reader with a
-	// landing page of bare folder names, where a flat one listed every demo.
-	out, _, err := Build(mem(map[string]string{
-		"01-basics/01-first.dgm":  plainExample,
-		"01-basics/02-second.dgm": plainExample,
-	}))
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-
-	index := listing(string(out["demos/index.html"]))
-	if !strings.Contains(index, `href="01-basics/index.html"`) {
-		t.Error("root index does not link the folder itself")
-	}
-	for _, want := range []string{`href="01-basics/first.html"`, `href="01-basics/second.html"`} {
-		if !strings.Contains(index, want) {
-			t.Errorf("root index does not reach %s in one click; have:\n%s", want, index)
-		}
-	}
-}
-
-// listing is an index page's <main> — the sidebar carries the whole tree on
-// every page, so a claim about what the listing itself shows has to exclude it.
-func listing(page string) string {
-	_, main, _ := strings.Cut(page, "<main")
-	return main
-}
-
-func TestAFolderEntryStopsListingAfterSix(t *testing.T) {
-	files := map[string]string{}
-	for _, name := range []string{"a", "b", "c", "d", "e", "f", "g", "h"} {
-		files["deep/"+name+".dgm"] = plainExample
-	}
-	out, _, err := Build(mem(files))
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-
-	index := listing(string(out["demos/index.html"]))
-	if !strings.Contains(index, "and 2 more") {
-		t.Errorf("root index does not say how much of the folder it left out; have:\n%s", index)
-	}
-	if strings.Contains(index, `href="deep/g.html"`) {
-		t.Error("root index spells out a folder past the cap")
-	}
-}
-
-func TestNumericPrefixesOrderAndDisappear(t *testing.T) {
-	out, _, err := Build(mem(map[string]string{
-		"02-second.dgm": plainExample,
-		"01-first.dgm":  plainExample,
-		"also.dgm":      plainExample,
-	}))
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-	index := string(out["demos/index.html"])
-	first := strings.Index(index, `href="first.html"`)
-	second := strings.Index(index, `href="second.html"`)
-	also := strings.Index(index, `href="also.html"`)
-	if first < 0 || second < 0 || also < 0 {
-		t.Fatalf("index is missing prefix-stripped links; have:\n%s", index)
-	}
-	if !(first < second && second < also) {
-		t.Error("index does not order by numeric prefix before the alphabet")
-	}
-	// The .source span deliberately shows the real filename, prefix and all;
-	// links and page names must not.
-	if strings.Contains(index, `href="01-first`) {
-		t.Error("the numeric prefix leaked into a link")
-	}
-}
-
-func TestBlurbIsTheLeadingCommentBlock(t *testing.T) {
-	// The examples' convention: a summary that may wrap across lines, with
-	// `%% ---` separating it from implementation notes the index should not
-	// show.
-	wrapped := "%% A demo whose summary\n%% wraps across two lines.\n%% ---\n%% Internal notes.\n" +
-		strings.TrimPrefix(plainExample, "%% A tiny demo.\n")
-
-	out, _, err := Build(mem(map[string]string{"wrapped.dgm": wrapped}))
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-
-	index := string(out["demos/index.html"])
-	if !strings.Contains(index, "A demo whose summary wraps across two lines.") {
-		t.Error("blurb does not join the wrapped comment lines")
-	}
-	if strings.Contains(index, "Internal notes.") {
-		t.Error("blurb runs past the %% --- separator")
-	}
-}
-
-func TestDirectivesAreNotBlurbs(t *testing.T) {
-	// A Mermaid `%%{init: …}%%` directive is configuration, not a comment —
-	// its JSON must not surface as the demo's description.
-	directive := "%%{init: {\"theme\":\"dark\"}}%%\n" +
-		strings.TrimPrefix(plainExample, "%% A tiny demo.\n")
-
-	out, _, err := Build(mem(map[string]string{"directive.dgm": directive}))
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-
-	if index := string(out["demos/index.html"]); strings.Contains(index, "init:") {
-		t.Error("index shows a %%{init} directive as a blurb")
-	}
-}
-
-func TestBuildFailsOnAnExampleThatDoesNotCompile(t *testing.T) {
-	broken := strings.Replace(plainExample, "flow a -> b", "flow a -> zz", 1)
-
-	_, _, err := Build(mem(map[string]string{"broken.dgm": broken}))
+func TestAPageWantingAMissingSectionFailsTheBuild(t *testing.T) {
+	// The mirror image: the README was reorganised out from under the table.
+	readme := strings.Replace(string(fakeReadme()), "## Commands\n", "## CLI\n", 1)
+	_, _, err := Build(mem(map[string]string{"plain.dgm": plainExample}), []byte(readme))
 	if err == nil {
-		t.Fatal("Build accepted an example that does not compile")
+		t.Fatal("Build accepted a page whose section no longer exists")
 	}
-	if !strings.Contains(err.Error(), "broken.dgm") {
-		t.Errorf("error does not name the broken file: %v", err)
+	if !strings.Contains(err.Error(), "Commands") {
+		t.Errorf("the error does not name the missing section: %v", err)
+	}
+}
+
+func TestLinksAreRewrittenForASite(t *testing.T) {
+	// One of each case the README actually contains.
+	readme := strings.Replace(string(fakeReadme()),
+		"Prose for Commands.",
+		"See [failure paths](#failure-paths), [the licence](LICENSE) and [upstream](https://example.com/x).",
+		1)
+	out, _, err := Build(mem(map[string]string{"plain.dgm": plainExample}), []byte(readme))
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	md := string(out["guide/05-commands.md"])
+	// "Failure paths" is on the storytelling page, so the anchor has to grow
+	// a page in front of it.
+	if !strings.Contains(md, "(02-storytelling.md#failure-paths)") {
+		t.Errorf("a cross-page anchor was not repointed:\n%s", md)
+	}
+	// The site does not serve the repository.
+	if !strings.Contains(md, "("+repoBlob+"LICENSE)") {
+		t.Errorf("a repository path was not sent to GitHub:\n%s", md)
+	}
+	if !strings.Contains(md, "(https://example.com/x)") {
+		t.Error("an absolute link was rewritten")
+	}
+}
+
+func TestAnAnchorToNothingFailsTheBuild(t *testing.T) {
+	readme := strings.Replace(string(fakeReadme()),
+		"Prose for Commands.", "See [gone](#no-such-heading).", 1)
+	_, _, err := Build(mem(map[string]string{"plain.dgm": plainExample}), []byte(readme))
+	if err == nil {
+		t.Fatal("Build accepted a link to an anchor no heading generates")
+	}
+	if !strings.Contains(err.Error(), "no-such-heading") {
+		t.Errorf("the error does not name the dead anchor: %v", err)
 	}
 }

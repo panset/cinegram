@@ -8,10 +8,15 @@ gazelle(name = "gazelle")
 # what keeps the two equal.
 exports_files(["LICENSE"])
 
-# The sources and the committed artifacts of the GitHub Pages site.
-# //site:site_test regenerates the former and diffs against the latter, so a
-# commit that changes an example without re-running `bazel run //site:sync`
-# fails the build.
+# The inputs and the committed outputs of the generated half of the website.
+# //site:site_test regenerates the latter from the former and diffs, so a
+# commit that changes an example or the README without re-running
+# `bazel run //site:sync` fails the build.
+#
+# Zensical turns www/ into the published site, and Bazel cannot run Zensical —
+# it is a Python package, and this repository takes no dependency it cannot
+# fetch itself. What Bazel can do is guarantee that Zensical's *input* is
+# current, which is the half that goes stale.
 filegroup(
     name = "examples",
     srcs = ["//examples:all_files"],
@@ -19,9 +24,23 @@ filegroup(
 )
 
 filegroup(
-    name = "docs",
+    name = "readme",
+    srcs = ["README.md"],
+    visibility = ["//site:__pkg__"],
+)
+
+# Zensical will not report an extra_css that points at nothing, so
+# //site:site_test reads the config and checks it against the embed kit.
+filegroup(
+    name = "zensical_config",
+    srcs = ["zensical.toml"],
+    visibility = ["//site:__pkg__"],
+)
+
+filegroup(
+    name = "www",
     srcs = glob(
-        ["docs/**"],
+        ["www/**"],
         # Empty until the first `bazel run //site:sync` has run; the test
         # reports that state itself, more helpfully than a glob error would.
         allow_empty = True,

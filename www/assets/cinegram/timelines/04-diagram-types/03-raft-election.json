@@ -1,0 +1,388 @@
+{
+  "version": 2,
+  "root": "03-raft-election",
+  "views": [
+    {
+      "id": "03-raft-election",
+      "title": "leader failure and re-election",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "TB",
+        "mermaid": "%% Raft leader election in a five-node cluster.\n%% ---\n%% The point of this example is that the cluster's state is legible at any\n%% scrub position. Who is leader, what term we are in and how many votes a\n%% candidate has collected are not things you can infer from a particle that\n%% has already gone past — so they are `set` and `gauge` state, which the\n%% compiler keeps open until something replaces it.\nflowchart TB\n  subgraph cluster[Raft Cluster]\n    n1[n1]\n    n2[n2]\n    n3[n3]\n    n4[n4]\n    n5[n5]\n  end\n  n1 --\u003e n2\n  n1 --\u003e n3\n  n1 --\u003e n4\n  n1 --\u003e n5\n  n3 --\u003e n1\n  n3 --\u003e n2\n  n3 --\u003e n4\n  n3 --\u003e n5\n"
+      },
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "n1",
+          "shape": "rect",
+          "group": "cluster"
+        },
+        {
+          "id": "n2",
+          "label": "n2",
+          "shape": "rect",
+          "group": "cluster"
+        },
+        {
+          "id": "n3",
+          "label": "n3",
+          "shape": "rect",
+          "group": "cluster"
+        },
+        {
+          "id": "n4",
+          "label": "n4",
+          "shape": "rect",
+          "group": "cluster"
+        },
+        {
+          "id": "n5",
+          "label": "n5",
+          "shape": "rect",
+          "group": "cluster"
+        }
+      ],
+      "groups": [
+        {
+          "id": "cluster",
+          "label": "Raft Cluster",
+          "children": [
+            "n1",
+            "n2",
+            "n3",
+            "n4",
+            "n5"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "n1",
+          "to": "n2",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "n1",
+          "to": "n3",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "n1",
+          "to": "n4",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "n1",
+          "to": "n5",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "n3",
+          "to": "n1",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "n3",
+          "to": "n2",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e6",
+          "from": "n3",
+          "to": "n4",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e7",
+          "from": "n3",
+          "to": "n5",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "leader failure and re-election",
+          "duration": 3350,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "steady",
+              "name": "n1 is leader and heartbeats the followers",
+              "desc": "A Raft leader holds its position by talking. Every follower that hears an AppendEntries within its election timeout stays a follower.",
+              "start": 0,
+              "end": 500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 500,
+                  "edge": "e0",
+                  "from": "n1",
+                  "to": "n2",
+                  "label": "AppendEntries"
+                },
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 500,
+                  "edge": "e1",
+                  "from": "n1",
+                  "to": "n3"
+                },
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 500,
+                  "edge": "e2",
+                  "from": "n1",
+                  "to": "n4"
+                },
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 500,
+                  "edge": "e3",
+                  "from": "n1",
+                  "to": "n5"
+                }
+              ]
+            },
+            {
+              "id": "down",
+              "name": "n1 stops responding",
+              "desc": "Nothing announces a leader failure. The followers only observe an absence, which is why the whole protocol is built on a timeout rather than on a notification.",
+              "start": 500,
+              "end": 1100,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 500,
+                  "end": 1100,
+                  "target": "n1"
+                },
+                {
+                  "kind": "flow",
+                  "start": 500,
+                  "end": 1100,
+                  "edge": "e1",
+                  "from": "n1",
+                  "to": "n3",
+                  "label": "heartbeat lost",
+                  "status": "fail"
+                }
+              ]
+            },
+            {
+              "id": "timeout",
+              "name": "n3's election timer fires first",
+              "desc": "Election timeouts are randomised precisely so that one node usually reaches zero first. n3 increments the term, votes for itself, and asks the others to agree.",
+              "start": 1100,
+              "end": 1600,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 1100,
+                  "end": 1600,
+                  "target": "n1"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1100,
+                  "end": 1600,
+                  "edge": "e5",
+                  "from": "n3",
+                  "to": "n2",
+                  "label": "RequestVote"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1100,
+                  "end": 1600,
+                  "edge": "e6",
+                  "from": "n3",
+                  "to": "n4"
+                }
+              ]
+            },
+            {
+              "id": "votes",
+              "name": "A majority answers",
+              "desc": "Each follower grants at most one vote per term, so two candidates in the same term cannot both win. Three of five is a majority and that is enough.",
+              "start": 1600,
+              "end": 2050,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 1600,
+                  "end": 2050,
+                  "target": "n1"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1600,
+                  "end": 2050,
+                  "edge": "e5",
+                  "from": "n2",
+                  "to": "n3",
+                  "reverse": true,
+                  "label": "granted",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1600,
+                  "end": 2050,
+                  "edge": "e6",
+                  "from": "n4",
+                  "to": "n3",
+                  "reverse": true,
+                  "label": "granted",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "elected",
+              "name": "n3 becomes leader for term 2",
+              "desc": "The badge moves because the role moved. n1's leadership was retired the moment it went silent, and nothing in the diagram still claims otherwise.",
+              "start": 2050,
+              "end": 2850,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 2050,
+                  "end": 2850,
+                  "target": "n1"
+                },
+                {
+                  "kind": "pulse",
+                  "start": 2050,
+                  "end": 2850,
+                  "target": "n3"
+                }
+              ]
+            },
+            {
+              "id": "replicate",
+              "name": "Log replication resumes under the new leader",
+              "desc": "From here the cluster is back to the steady state it started in, one term later and one node down. Scrub back and forth: the badges and gauges say what is true at that moment, not what happened to animate last.",
+              "start": 2850,
+              "end": 3350,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 2850,
+                  "end": 3350,
+                  "target": "n1"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2850,
+                  "end": 3350,
+                  "edge": "e5",
+                  "from": "n3",
+                  "to": "n2",
+                  "label": "AppendEntries"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2850,
+                  "end": 3350,
+                  "edge": "e6",
+                  "from": "n3",
+                  "to": "n4"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2850,
+                  "end": 3350,
+                  "edge": "e7",
+                  "from": "n3",
+                  "to": "n5"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 0,
+              "end": 500,
+              "target": "n1",
+              "label": "leader",
+              "value": "leader",
+              "color": "#16a34a"
+            },
+            {
+              "kind": "gauge",
+              "start": 0,
+              "end": 500,
+              "target": "n1",
+              "label": "term",
+              "value": "1"
+            },
+            {
+              "kind": "set",
+              "start": 1100,
+              "end": 2050,
+              "target": "n3",
+              "label": "candidate",
+              "value": "candidate",
+              "color": "#d97706"
+            },
+            {
+              "kind": "gauge",
+              "start": 1100,
+              "end": 3350,
+              "target": "n3",
+              "label": "term",
+              "value": "2"
+            },
+            {
+              "kind": "gauge",
+              "start": 1100,
+              "end": 1600,
+              "target": "n3",
+              "label": "votes",
+              "value": "1 / 5"
+            },
+            {
+              "kind": "gauge",
+              "start": 1600,
+              "end": 2050,
+              "target": "n3",
+              "label": "votes",
+              "value": "3 / 5"
+            },
+            {
+              "kind": "set",
+              "start": 2050,
+              "end": 3350,
+              "target": "n3",
+              "label": "leader",
+              "value": "leader",
+              "color": "#16a34a"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

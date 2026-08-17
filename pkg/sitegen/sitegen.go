@@ -10,6 +10,13 @@
 // files it does not list, and a folder that *is* the list cannot drift from
 // itself.
 //
+// Deciding what publishes is separate from rendering it. Discover answers
+// "which documents get pages, in what order, under which folders"; Build
+// renders that answer as a standalone HTML site. Cinegram's own site renders
+// the same answer as Markdown for its Zensical build (see //site), which is
+// the reason for the split — two renderers disagreeing about which examples
+// exist is a bug nobody would find until a page went missing.
+//
 // Reading goes through an fs.FS so the generator is testable against a map
 // and, by construction, cannot follow a `view … from` reference out of the
 // root it was pointed at.
@@ -56,35 +63,95 @@ type Config struct {
 	Links []Link
 }
 
-// Build renders the whole site into memory, keyed by output-relative path.
-// It also returns the warning text of every published document: warnings
-// never block a build, but a caller that swallowed them would publish a
+// Doc is one document the tree publishes.
+type Doc struct {
+	// Source is the path within the tree, exactly as found.
+	Source string
+	// Slug is the published path with no extension: the source's folders as
+	// written, and its own filename with any numeric ordering prefix
+	// stripped. A renderer appends whatever suffix its pages use.
+	Slug string
+	// Title is what a reader is shown, and Blurb the one-line summary an
+	// index entry carries — the document's leading %% comment block.
+	Title string
+	Blurb string
+	// Text is the source exactly as written. A renderer that shows the .dgm
+	// beside its animation uses this rather than reading the file again,
+	// which would race an edit and could disagree with the timeline above it.
+	Text string
+	// Share is the playground's share-link fragment for the whole document,
+	// sub-views and storyboard images included.
+	Share string
+
+	Bundle   *loader.Bundle
+	Timeline *ir.Timeline
+
+	prev, next *Doc
+}
+
+// Prev and Next are the documents either side of this one in reading order,
+// which runs depth-first through the whole tree and crosses folder edges. Nil
+// at the two ends.
+func (d *Doc) Prev() *Doc { return d.prev }
+func (d *Doc) Next() *Doc { return d.next }
+
+// Group is one folder of the tree.
+type Group struct {
+	// Path is the folder's path within the tree; "" is the root.
+	Path string
+	// Name is the display name: prefix stripped, separators opened up.
+	Name string
+	// Entries are the folder's children in reading order, subfolders and
+	// documents interleaved.
+	Entries []Entry
+}
+
+// Entry is one child of a Group: exactly one of Group or Doc is set.
+type Entry struct {
+	Group *Group
+	Doc   *Doc
+
+	key sortKey
+}
+
+// Discover resolves a tree of .dgm files into what a site publishes: the
+// folder structure, the documents that get their own page, and the order both
+// read in. Returned warnings are the published documents' compile warnings —
+// they never block a build, but a caller that swallowed them would publish a
 // degraded page silently. A document that fails to compile is an error.
+func Discover(fsys fs.FS) (root *Group, docs []*Doc, warnings []string, err error) {
+	sources, err := findSources(fsys)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if len(sources) == 0 {
+		return nil, nil, nil, fmt.Errorf("no .dgm files found")
+	}
+
+	read := func(p string) ([]byte, error) { return fs.ReadFile(fsys, path.Clean(p)) }
+
+	found, warnings, err := loadAll(sources, read)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	root, err = buildTree(found)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return root, chain(root), warnings, nil
+}
+
+// Build renders the whole site into memory, keyed by output-relative path,
+// alongside the warnings Discover reports.
 func Build(fsys fs.FS, cfg Config) (map[string][]byte, []string, error) {
 	if cfg.Title == "" {
 		cfg.Title = "Cinegram"
 	}
 
-	sources, err := findSources(fsys)
+	root, _, warnings, err := Discover(fsys)
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(sources) == 0 {
-		return nil, nil, fmt.Errorf("no .dgm files found")
-	}
-
-	read := func(p string) ([]byte, error) { return fs.ReadFile(fsys, path.Clean(p)) }
-
-	pages, warnings, err := loadAll(sources, read)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	root, err := buildTree(pages)
-	if err != nil {
-		return nil, nil, err
-	}
-	chain(root)
 
 	out := map[string][]byte{".nojekyll": {}}
 	for name, content := range html.Assets() {
@@ -92,34 +159,10 @@ func Build(fsys fs.FS, cfg Config) (map[string][]byte, []string, error) {
 	}
 	out["assets/site.css"] = []byte(siteCSS)
 
-	if err := renderAll(out, root, root, cfg, read); err != nil {
+	if err := renderAll(out, root, root, cfg); err != nil {
 		return nil, nil, err
 	}
 	return out, warnings, nil
-}
-
-// page is one published document.
-type page struct {
-	src        string // source path within the tree
-	out        string // output path: prefix-stripped, .html
-	title      string
-	blurb      string
-	bundle     *loader.Bundle
-	timeline   *ir.Timeline
-	prev, next *page
-}
-
-// folder is one directory of the tree; entries hold its ordered children.
-type folder struct {
-	rel     string // "" for the root
-	name    string // display name, prefix stripped
-	entries []entry
-}
-
-type entry struct {
-	key  sortKey
-	dir  *folder
-	page *page
 }
 
 // findSources walks the tree for .dgm files, skipping dotfiles and dot-dirs —
@@ -151,9 +194,8 @@ func findSources(fsys fs.FS) ([]string, error) {
 // loadAll loads and compiles every source, then decides which get pages: a
 // file another document pulls in via `view … from` is reached by drill-down
 // rather than listed — unless nothing published reaches it, in which case it
-// publishes after all so no document is stranded invisible. This is the same
-// sweep the demos index has always used.
-func loadAll(sources []string, read loader.ReadFileFunc) ([]*page, []string, error) {
+// publishes after all so no document is stranded invisible.
+func loadAll(sources []string, read loader.ReadFileFunc) ([]*Doc, []string, error) {
 	type loaded struct {
 		src    string
 		bundle *loader.Bundle
@@ -190,7 +232,7 @@ func loadAll(sources []string, read loader.ReadFileFunc) ([]*page, []string, err
 		}
 	}
 
-	var pages []*page
+	var docs []*Doc
 	var warnings []string
 	for _, l := range publish {
 		timeline := compile.CompileBundle(l.bundle)
@@ -204,11 +246,14 @@ func loadAll(sources []string, read loader.ReadFileFunc) ([]*page, []string, err
 		if err != nil {
 			return nil, nil, fmt.Errorf("reading %s: %w", l.src, err)
 		}
+		share, err := encodePlaygroundDoc(l.bundle, read)
+		if err != nil {
+			return nil, nil, fmt.Errorf("encoding %s for the playground: %w", l.src, err)
+		}
 		dir := path.Dir(l.src)
 		if dir == "." {
 			dir = ""
 		}
-		name := stripPrefix(strings.TrimSuffix(path.Base(l.src), ".dgm")) + ".html"
 		// DefaultTitle falls back to the root view's id, which is derived
 		// from the filename — numeric ordering prefix and all. A reader
 		// ordering their files with 01- prefixes did not name anything
@@ -217,34 +262,36 @@ func loadAll(sources []string, read loader.ReadFileFunc) ([]*page, []string, err
 		if title == timeline.Root {
 			title = displayName(strings.TrimSuffix(path.Base(l.src), ".dgm"))
 		}
-		pages = append(pages, &page{
-			src:      l.src,
-			out:      path.Join(dir, name),
-			title:    title,
-			blurb:    leadingComment(string(source)),
-			bundle:   l.bundle,
-			timeline: timeline,
+		docs = append(docs, &Doc{
+			Source:   l.src,
+			Slug:     path.Join(dir, stripPrefix(strings.TrimSuffix(path.Base(l.src), ".dgm"))),
+			Title:    title,
+			Blurb:    leadingComment(string(source)),
+			Text:     string(source),
+			Share:    share,
+			Bundle:   l.bundle,
+			Timeline: timeline,
 		})
 	}
-	return pages, warnings, nil
+	return docs, warnings, nil
 }
 
-// buildTree hangs the pages on their folders and orders every folder's
+// buildTree hangs the documents on their folders and orders every folder's
 // entries. Two sources whose stripped names collide in one folder would
 // silently overwrite each other's page, so that is an error naming both.
-func buildTree(pages []*page) (*folder, error) {
-	folders := map[string]*folder{"": {rel: ""}}
-	dirOf := func(rel string) *folder {
-		if f, ok := folders[rel]; ok {
+func buildTree(docs []*Doc) (*Group, error) {
+	groups := map[string]*Group{"": {Path: ""}}
+	dirOf := func(rel string) *Group {
+		if f, ok := groups[rel]; ok {
 			return f
 		}
-		f := &folder{rel: rel, name: displayName(path.Base(rel))}
-		folders[rel] = f
+		f := &Group{Path: rel, Name: displayName(path.Base(rel))}
+		groups[rel] = f
 		return f
 	}
 	// Ensure every ancestor exists and is linked exactly once.
-	var link func(rel string) *folder
-	link = func(rel string) *folder {
+	var link func(rel string) *Group
+	link = func(rel string) *Group {
 		f := dirOf(rel)
 		if rel == "" {
 			return f
@@ -254,55 +301,59 @@ func buildTree(pages []*page) (*folder, error) {
 			parentRel = ""
 		}
 		parent := link(parentRel)
-		for _, e := range parent.entries {
-			if e.dir == f {
+		for _, e := range parent.Entries {
+			if e.Group == f {
 				return f
 			}
 		}
-		parent.entries = append(parent.entries, entry{key: orderKey(path.Base(rel)), dir: f})
+		parent.Entries = append(parent.Entries, Entry{key: orderKey(path.Base(rel)), Group: f})
 		return f
 	}
 
 	seen := map[string]string{}
-	for _, p := range pages {
-		if prev, taken := seen[p.out]; taken {
-			return nil, fmt.Errorf("%s and %s would both publish as %s", prev, p.src, p.out)
+	for _, d := range docs {
+		if prev, taken := seen[d.Slug]; taken {
+			return nil, fmt.Errorf("%s and %s would both publish as %s", prev, d.Source, d.Slug)
 		}
-		seen[p.out] = p.src
-		dir := path.Dir(p.src)
+		seen[d.Slug] = d.Source
+		dir := path.Dir(d.Source)
 		if dir == "." {
 			dir = ""
 		}
 		f := link(dir)
-		f.entries = append(f.entries, entry{key: orderKey(path.Base(p.src)), page: p})
+		f.Entries = append(f.Entries, Entry{key: orderKey(path.Base(d.Source)), Doc: d})
 	}
 
-	for _, f := range folders {
-		es := f.entries
+	for _, f := range groups {
+		es := f.Entries
 		sort.SliceStable(es, func(i, j int) bool { return es[i].key.less(es[j].key) })
 	}
-	return folders[""], nil
+	return groups[""], nil
 }
 
-// chain threads prev/next through the pages in depth-first tree order — the
-// site reads front to back like a book, and the arrows cross folder edges.
-func chain(root *folder) {
-	var last *page
-	var walk func(f *folder)
-	walk = func(f *folder) {
-		for _, e := range f.entries {
-			if e.page != nil {
+// chain threads prev/next through the documents in depth-first tree order —
+// the site reads front to back like a book, and the arrows cross folder
+// edges. It returns that same reading order as a flat list.
+func chain(root *Group) []*Doc {
+	var order []*Doc
+	var last *Doc
+	var walk func(f *Group)
+	walk = func(f *Group) {
+		for _, e := range f.Entries {
+			if e.Doc != nil {
 				if last != nil {
-					last.next = e.page
-					e.page.prev = last
+					last.next = e.Doc
+					e.Doc.prev = last
 				}
-				last = e.page
+				last = e.Doc
+				order = append(order, e.Doc)
 			} else {
-				walk(e.dir)
+				walk(e.Group)
 			}
 		}
 	}
 	walk(root)
+	return order
 }
 
 // sortKey orders a folder's entries: an optional numeric prefix first, then
@@ -341,8 +392,10 @@ func stripPrefix(base string) string {
 	return prefixRe.ReplaceAllString(base, "")
 }
 
-// displayName is what a folder is called in nav: prefix stripped, separators
-// opened into spaces.
+// DisplayName is what a folder is called in nav: any numeric ordering prefix
+// stripped, separators opened into spaces.
+func DisplayName(base string) string { return displayName(base) }
+
 func displayName(base string) string {
 	s := stripPrefix(base)
 	return strings.NewReplacer("-", " ", "_", " ").Replace(s)
