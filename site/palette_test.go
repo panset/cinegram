@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/tejaspanse/cinegram/internal/repotest"
+	"github.com/tejaspanse/cinegram/pkg/embedkit"
 	"github.com/tejaspanse/cinegram/pkg/emit/html"
 )
 
@@ -128,6 +129,56 @@ func TestMainframePaletteAgrees(t *testing.T) {
 	if font := skin["light"]["--dgm-font"]; !strings.Contains(font, "IBM Plex Mono") {
 		t.Errorf("the mainframe skin's --dgm-font is %q; mainframe.css leads its stack "+
 			"with IBM Plex Mono, which IBM drew looking at these terminals", font)
+	}
+}
+
+// The site wears the skin by asking for it: `--cinegram-skin` on :root, which
+// cinegram-embed.js reads and turns into `data-dgm-skin` on <html>. Three
+// things have to line up for a diagram on these pages to look like the page
+// around it, and none of them is visible from either file alone.
+func TestSiteAsksForTheMainframeSkin(t *testing.T) {
+	root := repotest.Root(t, filepath.Join("www", "assets", "stylesheets", "mainframe.css"))
+	raw, err := os.ReadFile(filepath.Join(root, "www", "assets", "stylesheets", "mainframe.css"))
+	if err != nil {
+		t.Fatalf("reading mainframe.css: %v", err)
+	}
+	mainframe := cssComment.ReplaceAllString(string(raw), "")
+
+	// 1. The site declares a skin, on the element the loader reads it from.
+	m := regexp.MustCompile(`(?s):root\s*\{[^}]*--cinegram-skin:\s*([a-z0-9-]+)`).
+		FindStringSubmatch(mainframe)
+	if m == nil {
+		t.Fatal("mainframe.css declares no --cinegram-skin on :root, so every player on " +
+			"the site wears the runtime's neutral palette instead of this file's")
+	}
+	name := m[1]
+
+	// 2. runtime.css has that skin. A typo here is a site that silently does
+	//    not change, since an attribute nothing matches costs nothing.
+	runtime := string(html.Assets()["runtime.css"])
+	if want := "[data-dgm-skin='" + name + "']"; !strings.Contains(runtime, want) {
+		t.Errorf("mainframe.css asks for the %q skin but runtime.css defines no %s block",
+			name, want)
+	}
+
+	// 3. The loader still reads the property and still stamps the attribute.
+	loader := string(embedkit.Assets()["cinegram-embed.js"])
+	for _, hook := range []string{"--cinegram-skin", "data-dgm-skin"} {
+		if !strings.Contains(loader, hook) {
+			t.Errorf("cinegram-embed.js no longer mentions %s; the site's skin declaration "+
+				"reaches nothing", hook)
+		}
+	}
+
+	// And the tokens live in one place. Setting a --dgm-* on the host box works
+	// — custom properties inherit, and that is how this file did it before the
+	// skin existed — which is exactly the trap: it beats the skin silently, for
+	// the site's players only, out of reach of the drift table above. A
+	// deliberate override is a line here saying which token and why.
+	if i := strings.Index(mainframe, "--dgm-"); i >= 0 {
+		t.Errorf("mainframe.css declares %.24s…; the player's palette comes from the "+
+			"mainframe skin in runtime.css now, and a token set here would shadow it "+
+			"on this site alone", strings.TrimSpace(mainframe[i:]))
 	}
 }
 

@@ -110,6 +110,38 @@ A player mounted this way is a **guest on your page**, not a page of its own:
   player on the page redraws — Mermaid picks its colours per render, so this
   has to be a redraw rather than a restyle.
 
+## Giving it your palette
+
+The player's chrome — bar, captions, step list, panels — draws from a dozen CSS
+custom properties, `--dgm-bg` through `--dgm-fail`, and by default they are a
+neutral light/dark pair that sits quietly on any theme. Set them on `:root` in
+your own stylesheet and the chrome follows, no different from retuning
+Material's own variables.
+
+Cinegram ships one made-up palette of its own for the players it owns — the
+greenbar-and-phosphor look of this site, defined in `runtime.css` as a **skin**.
+Any site may wear it, with one declaration:
+
+```css
+:root { --cinegram-skin: mainframe; }
+```
+
+The loader reads that on a page carrying a diagram and stamps
+`data-dgm-skin="mainframe"` on `<html>`, which is what the skin's tokens hang
+off. It follows the light/dark toggle like everything else: greenbar under
+`default`, phosphor under `slate`. This site declares it in
+`assets/stylesheets/mainframe.css`, beside the `--cg-*` colours the same theme
+gives the prose — which is the argument for a stylesheet declaration over an
+attribute on every `<div>`: a skin is a fact about the site, and the next page
+you write cannot forget it.
+
+Nothing is skinned by default. A site that declares no `--cinegram-skin` gets
+the neutral palette, which is the right answer when the diagram should look
+like it belongs to *your* theme rather than to cinegram's.
+
+The diagram itself is not in scope either way: nodes and edges are Mermaid's own
+light and dark render. The skin is the chrome around the picture.
+
 ## Presenter mode
 
 Click **Present** and the diagram asks the browser for the screen: chrome off,
