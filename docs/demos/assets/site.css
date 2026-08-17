@@ -8,9 +8,25 @@
  * be loaded anywhere without claiming the document.
  */
 
+/* runtime.css bounds the standalone page by giving the player root the whole
+   viewport, which is what keeps a tall diagram's narration on screen. A sited
+   page has a header and a prev/next above and below the player, so the same
+   100vh there would overflow by exactly their height. The chrome is this
+   sheet's business, so the shell is too: the column is the viewport, the
+   header and footer take what they need, and the player is handed the rest.
+   site.css is linked after runtime.css, so these override it on equal
+   specificity. */
 body.dgm-sited {
   display: flex;
   align-items: flex-start;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.dgm-sited .dgm {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .dgm-site-nav {
@@ -77,6 +93,15 @@ body.dgm-sited {
 .dgm-site-main {
   flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 0;
+}
+
+.dgm-site-top,
+.dgm-site-prevnext {
+  flex: 0 0 auto;
 }
 
 .dgm-site-top {
@@ -148,10 +173,15 @@ body.dgm-sited {
 
 /* --- folder listings ----------------------------------------------------- */
 
+/* A folder index holds no player, so nothing inside it grows to fill the
+   column — it scrolls on its own instead, since the body no longer does. */
 .dgm-site-list {
   max-width: 44rem;
   margin: 0 auto;
   padding: 1.5rem 1.25rem 4rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 .dgm-site-list h1 {
@@ -218,6 +248,48 @@ ul.dgm-site-demos .blurb {
 }
 
 /* --- narrow screens ------------------------------------------------------ */
+
+/* 900px, not the 860px below, because that is where runtime.css lets the
+   player grow past the window again — the two shells have to give up at the
+   same width or the band between them would clip a player taller than the
+   column it is clipped to. */
+@media (max-width: 900px) {
+  body.dgm-sited {
+    height: auto;
+    overflow: visible;
+  }
+
+  .dgm-site-main {
+    display: block;
+    height: auto;
+  }
+
+  .dgm-site-list {
+    overflow: visible;
+  }
+}
+
+/* The short-window hatch, matching the one runtime.css states at the same
+   height. A sited page has less to give than the standalone one — the header
+   and the prev/next take their share before the player sees any — so if the
+   bounded shell has run out of room there, it has certainly run out here. Both
+   sheets have to relax together, or the player would be handed a scrolling
+   page inside a column still clipped to the viewport. */
+@media (max-height: 520px) {
+  body.dgm-sited {
+    height: auto;
+    overflow: visible;
+  }
+
+  .dgm-site-main {
+    display: block;
+    height: auto;
+  }
+
+  .dgm-site-list {
+    overflow: visible;
+  }
+}
 
 @media (max-width: 860px) {
   body.dgm-sited {

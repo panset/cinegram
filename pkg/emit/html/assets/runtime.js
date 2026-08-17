@@ -424,14 +424,25 @@
     // this.time, so the speed multiplier composes with it for free.
     this.present = false;
     this.stopAt = null;
+    // Whether this player is the browser's fullscreen element, as of the last
+    // fullscreenchange. See build(): it is what tells our own exit apart from
+    // somebody else's.
+    this._hadFull = false;
 
-    // Auto-follow camera state (reel mode only). camOverride is user-state
-    // like `revealed`, not clock-state: a manual gesture takes the wheel, a
-    // double-click hands it back, and a seek changes neither. camKeys caches
-    // the per-step pose keyframes; null means "rebuild from the DOM".
+    // Auto-follow camera state, live wherever following() is. camOverride is
+    // user-state like `revealed`, not clock-state: a manual gesture takes the
+    // wheel, a double-click hands it back, and a seek changes neither. camKeys
+    // caches the per-step pose keyframes; null means "rebuild from the DOM".
+    // `follow` is the reader's Cine toggle — reels follow regardless.
+    this.follow = false;
     this.camOverride = false;
     this.camKeys = null;
     this._camMoved = false;
+
+    // The minimap's own cache, invalidated in exactly the places camKeys is:
+    // it holds the layout half of the stage↔diagram mapping, which a resize, a
+    // render or a mode change moves and a pan or a zoom does not. See mapGeom.
+    this.mapKeys = null;
 
     // Removers for every listener this player puts somewhere that outlives its
     // own DOM — window, document, a media query. See `own` and dispose: a host
@@ -526,7 +537,10 @@
     // later cannot quietly change what a document shows.
     this.playBtn = button('Play', 'dgm-btn dgm-btn-primary dgm-authoring dgm-play', function () { self.toggle(); });
     controls.appendChild(this.playBtn);
-    controls.appendChild(button('Restart', 'dgm-btn dgm-authoring', function () { self.seek(0); }));
+    // Restart is not authoring: taking a demo from the top is one of the most
+    // ordinary things a presenter does, so it stays when presenter mode strips
+    // the building tools.
+    controls.appendChild(button('Restart', 'dgm-btn', function () { self.seek(0); }));
 
     this.speedBtn = button(speedLabel(this.speed), 'dgm-btn dgm-authoring', function () { self.cycleSpeed(); });
     controls.appendChild(this.speedBtn);
@@ -543,6 +557,16 @@
       self.setPresenter(!self.present);
     });
     controls.appendChild(this.presentBtn);
+
+    // Cine turns the reel's auto-follow camera on anywhere: each step framed
+    // and zoomed, reel-style. Off is the default everywhere but a reel — a
+    // diagram that fits the screen is best introduced whole — and the toggle
+    // survives presenter mode, so it sits outside dgm-authoring.
+    this.cineBtn = button('Cine', 'dgm-btn', function () {
+      self.setFollow(!self.follow);
+    });
+    this.cineBtn.title = 'Camera follows each step';
+    controls.appendChild(this.cineBtn);
 
     this.zoomBtn = button('⌂', 'dgm-btn dgm-btn-icon', function () { self.resetZoom(); });
     this.zoomBtn.title = 'Reset zoom and pan';
@@ -585,24 +609,90 @@
     this.stage = el('div', 'dgm-stage');
     this.overlay = el('div', 'dgm-overlay');
     this.stage.appendChild(this.overlay);
+
+    // The minimap, built once beside the overlay and re-appended by render()
+    // for the same reason: the stage is emptied there. It starts off screen
+    // and stays there until something zooms past fit — see syncMap.
+    this.map = el('div', 'dgm-map is-off');
+    this.mapBody = el('div', 'dgm-map-body');
+    this.mapRect = el('div', 'dgm-map-rect');
+    this.map.setAttribute('aria-hidden', 'true');
+    this.map.appendChild(this.mapBody);
+    this.map.appendChild(this.mapRect);
+    this.stage.appendChild(this.map);
+
     body.appendChild(this.stage);
+    // Map before stage, and the order is load-bearing: both attach a
+    // capture-phase click-swallower to the stage element, and when the stage
+    // is itself the click's target the DOM runs same-node listeners in
+    // registration order, capture flag notwithstanding. The map's swallower
+    // has to beat the stage's advance-a-step listener, or releasing a map
+    // drag over the stage's padding advances a beat.
+    this.bindMapGestures();
     this.bindStageGestures();
 
     // Camera keyframes bake the stage size in, so a resize invalidates them.
     // Same inline pattern as the window pointer listeners above this.
     own(self, window, 'resize', function () {
       self.camKeys = null;
-      if (self.reel && !self.camOverride && self.svg) {
+      self.mapKeys = null;
+      if (self.following() && !self.camOverride && self.svg) {
         self.apply(self.time);
         self.syncChips();
       }
+      // The map's box is a share of the stage and its rectangle is measured
+      // against it, so a resize moves both even when nothing else changed.
+      self.syncMap();
     });
+
+    // The browser owns the way out of fullscreen — Esc, F11, the system
+    // control — so the mode flag has to follow it rather than the other way
+    // round, or the button would read "Exit" over a windowed page. It is also
+    // why the Escape branch in onKey needs no change: in fullscreen the
+    // browser eats Esc, and this puts the player back.
+    //
+    // Whichever way it went, the stage is a different size than the camera
+    // measured against, and the change is not always accompanied by a resize.
+    //
+    // Only ever about *our* fullscreen, which is what _hadFull records. The
+    // event is document-level, so a page holding two players hears every
+    // change either of them makes — and the playground disposes one player and
+    // mounts the next on every keystroke, so a mount can hear the exit of the
+    // player it replaced. Reading only `fullscreenElement !== root` would take
+    // that as "the browser dropped me" and drop presenter mode on the reader
+    // mid-sentence.
+    var onFull = function () {
+      var mine = fullscreenElement() === self.root;
+      if (self.present && self._hadFull && !mine) {
+        // The browser exits fullscreen on Esc even when onKey meant that Esc
+        // for the innermost overlay — the lightbox or the help sheet. Ending
+        // the whole presentation because someone closed a storyboard frame is
+        // wrong, so with an overlay open the mode survives on the fill
+        // fallback; Esc pressed again then leaves presenter mode properly.
+        if (self.lightboxIsOpen() || self.helpOpen()) {
+          self.root.classList.add('dgm-present-fill');
+        } else {
+          self.setPresenter(false);
+        }
+      }
+      self._hadFull = mine;
+      self.camKeys = null;
+      self.mapKeys = null;
+      if (self.svg) {
+        self.apply(self.time);
+        self.syncChips();
+        self.syncMap();
+      }
+    };
+    own(self, document, 'fullscreenchange', onFull);
+    own(self, document, 'webkitfullscreenchange', onFull);
 
     // The storyboard sits between the stage and the step list: what the human
     // sees, beside what the system does. It is built once and hidden when the
     // showing scenario has no scenes, rather than being created per render —
     // the crossfade needs two layers that outlive a frame.
     body.appendChild(this.buildBoard());
+    this.bindBoardGestures();
 
     this.steps = el('ol', 'dgm-steps');
     body.appendChild(this.steps);
@@ -919,6 +1009,10 @@
     this.boardOn = frames.length > 0 && hasScenes(this.scenario());
     this.root.classList.toggle('dgm-has-board', this.boardOn);
     this.board.style.display = this.boardOn ? '' : 'none';
+    // A swiped-away thumbnail comes back with the context that changes under
+    // it: this re-runs per render, per view and per scenario, which is exactly
+    // the shape of "dismissed for now" rather than "dismissed forever".
+    this.board.classList.remove('is-flung');
 
     var title = (sb && sb.title) || '';
     this.boardTitle.textContent = title;
@@ -1207,17 +1301,17 @@
       // pinch-zoom arrives with.
       if (self.opts.inline && !ev.ctrlKey && !ev.metaKey) return;
       ev.preventDefault();
-      // A manual zoom in a reel takes the wheel from the auto-follow camera.
-      if (self.reel) self.camOverride = true;
+      // A manual zoom takes the wheel from the auto-follow camera.
+      if (self.following()) self.camOverride = true;
       var factor = Math.exp(-ev.deltaY * 0.0015);
       self.zoomAt(ev.clientX, ev.clientY, factor);
     }, { passive: false });
 
     this.stage.addEventListener('dblclick', function () {
-      // In a reel, a double-click hands the framing back to the camera; the
-      // resetZoom below re-applies the frame, and the camera reposes in the
-      // same apply pass now that the override is gone.
-      if (self.reel) self.camOverride = false;
+      // A double-click hands the framing back to the camera; the resetZoom
+      // below re-applies the frame, and the camera reposes in the same apply
+      // pass now that the override is gone.
+      if (self.following()) self.camOverride = false;
       self.resetZoom();
     });
 
@@ -1238,7 +1332,7 @@
       // the node still activates.
       if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
       moved = true;
-      if (self.reel) self.camOverride = true;
+      if (self.following()) self.camOverride = true;
       lastX = ev.clientX;
       lastY = ev.clientY;
       self.panX += dx;
@@ -1274,6 +1368,36 @@
   // exactly the next step, then stop".
   Player.prototype.stepwise = function () {
     return this.present || this.reel || !!this.scenario().stepwise;
+  };
+
+  // setFollow flips the Cine toggle. Turning it on hands the framing to the
+  // camera afresh; turning it off gives the whole diagram back, because being
+  // left stranded at the last step's zoom with the camera gone is exactly the
+  // exit experience setPresenter already refuses to give.
+  Player.prototype.setFollow = function (on) {
+    this.follow = !!on;
+    this.cineBtn.classList.toggle('is-on', this.follow);
+    this.camKeys = null;
+    this.mapKeys = null;
+    this.camOverride = false;
+    if (this.follow) {
+      this.apply(this.time);
+      this.syncChips();
+    } else if (!this.reel) {
+      // resetZoom relays out the overlays itself, via applyTransform.
+      this.resetZoom();
+    }
+  };
+
+  // following is the camera's own predicate, deliberately not stepwise():
+  // the transport playing one beat at a time and the camera zooming to each
+  // beat are different promises. A reel cannot work without the camera — a
+  // 9:16 frame shows nothing at fit — so it is always following; everywhere
+  // else the default is the whole diagram, and the Cine button is the one way
+  // in. That includes presenter mode and `stepwise:` scenarios: a room being
+  // walked through a diagram starts by seeing all of it.
+  Player.prototype.following = function () {
+    return this.reel || this.follow;
   };
 
   // restingTime is where an idle page sits: the author's poster moment, or the
@@ -1316,6 +1440,10 @@
     if (this.zoomBtn) {
       this.zoomBtn.classList.toggle('is-on', this.zoom !== 1 || this.panX !== 0 || this.panY !== 0);
     }
+    // This is the one place zoom/panX/panY are ever written, which is what
+    // lets the wheel, the drag, resetZoom and the camera all move the map's
+    // rectangle without any of them knowing the map exists.
+    this.syncMap();
   };
 
   Player.prototype.applyTransform = function () {
@@ -1326,7 +1454,384 @@
     this.syncChips();
   };
 
-  // --- auto-follow camera (reel mode) ------------------------------------
+  // --- minimap -----------------------------------------------------------
+  //
+  // Zoomed in — by wheel, by drag, or by the auto-follow camera — nothing on
+  // screen says which part of the diagram is showing. The map answers it
+  // spatially: the whole diagram in the stage's top-right corner with a
+  // rectangle around the visible region. It is on screen only while the stage
+  // shows less than the whole diagram, so a page at rest looks exactly as it
+  // did — and so does every recording, since `record` photographs `?embed` at
+  // rest, where the map is `is-off`.
+  //
+  // The thumbnail is a clone of the rendered SVG taken once per render, never
+  // per frame, and it is deliberately static: applyNodeStates rewrites the
+  // class attribute of live elements every frame and baseClass strips `dgm-*`,
+  // but the clone is outside that machinery entirely. The map says where you
+  // are, not what is happening.
+  //
+  // Every id *inside* the clone is stripped, and that is the load-bearing
+  // trick. Mermaid's `url(#…)` references to markers and clip paths then
+  // resolve document-wide to the *live* SVG's defs, which keep their ids and
+  // come first in document order — the clone borrows the arrowheads rather
+  // than duplicating their ids. Nothing the runtime binds to can be shadowed
+  // in return, because every lookup in index() is scoped to the live svg
+  // (`svg.querySelectorAll`) and this file contains no getElementById at all.
+  //
+  // The root id is the one exception: mermaid prefixes every rule of the
+  // <style> it embeds with the SVG's own id, so a clone with no id would draw
+  // unstyled — black boxes, no theme. The clone therefore gets a *fresh* id
+  // and its copy of that stylesheet is retargeted at it.
+
+  var MAP_MAX_W = 220;    // px, and the cap the CSS states as a share
+  var MAP_MAX_H = 240;
+  var MAP_SHARE_W = 0.28; // of the stage, whichever comes out smaller
+  var MAP_SHARE_H = 0.4;
+
+  // buildMap only resets: the clone itself is built lazily by ensureMapClone,
+  // on the first frame that would actually show the map. A page at rest — and
+  // every `?embed` capture record photographs — then never pays for cloning
+  // and walking the whole diagram for a thumbnail that stays hidden.
+  Player.prototype.buildMap = function () {
+    if (!this.map) return;
+    this.mapBody.innerHTML = '';
+    this.mapClone = null;
+    this.mapKeys = null;
+    this.syncMap();
+  };
+
+  Player.prototype.ensureMapClone = function () {
+    if (this.mapClone || !this.svg) return;
+    // A reel is a 9:16 frame with no room to spare, and its camera is the
+    // point of the format rather than something to orient against.
+    if (this.reel) return;
+    // Between the moment render() puts the new holder on the stage and the
+    // moment it finds the svg inside it, `this.svg` is still the previous
+    // diagram — detached, and about to be replaced. setTransform runs in that
+    // window, so without this a re-render at any zoom would clone the old
+    // diagram in full just to have buildMap throw it away a few lines later.
+    if (!this.holder || !this.holder.contains(this.svg)) return;
+    var clone = this.svg.cloneNode(true);
+    var old = clone.getAttribute('id') || '';
+    var fresh = 'dgm-map-svg-' + Math.floor(Math.random() * 1e9);
+    var kids = clone.querySelectorAll('[id]');
+    for (var i = 0; i < kids.length; i++) kids[i].removeAttribute('id');
+    clone.setAttribute('id', fresh);
+    if (old) {
+      var sheets = clone.querySelectorAll('style');
+      for (var j = 0; j < sheets.length; j++) {
+        sheets[j].textContent = sheets[j].textContent.split('#' + old).join('#' + fresh);
+      }
+    }
+    // Cloning re-arms what innerHTML left inert: an SVG <script> parsed via
+    // innerHTML never runs, but its clone does the moment it is inserted. The
+    // live SVG's safety rests on mermaid's sanitizers; the thumbnail should
+    // not depend on them, so anything executable is dropped from the copy.
+    var scripts = clone.querySelectorAll('script');
+    for (var k = 0; k < scripts.length; k++) scripts[k].parentNode.removeChild(scripts[k]);
+    var all = clone.querySelectorAll('*');
+    for (var m = 0; m < all.length; m++) {
+      var attrs = all[m].attributes;
+      for (var a = attrs.length - 1; a >= 0; a--) {
+        if (/^on/i.test(attrs[a].name)) all[m].removeAttribute(attrs[a].name);
+      }
+    }
+    clone.setAttribute('aria-hidden', 'true');
+    clone.removeAttribute('role');
+    // The box is already the diagram's own aspect ratio, so the viewBox does
+    // the scaling and the picture fills it exactly.
+    clone.style.width = '100%';
+    clone.style.height = '100%';
+    clone.style.maxWidth = 'none';
+    clone.style.maxHeight = 'none';
+    clone.style.pointerEvents = 'none';
+    this.mapBody.appendChild(clone);
+    this.mapClone = clone;
+  };
+
+  // mapGeom measures the stage, the holder and the diagram once, and returns
+  // the mapping between them. `o` and `d` are untransformed — divided back out
+  // of the client rects by the current zoom, exactly as cameraKeys does — so
+  // they describe the layout rather than the pose, and only a resize or a
+  // render can change them. Null means "there is nothing to draw a map of".
+  //
+  // Which is exactly why the answer is cached in mapKeys, the same way
+  // cameraKeys caches its poses: syncMap runs per frame through a camera glide
+  // and per pointermove through a pan, and three forced layouts on each of
+  // those is a cost with nothing to show for it. Everything that does move the
+  // mapping — a resize, a render, a mode change — nulls the cache, beside the
+  // camera's own. The box's size is written here for the same reason: it is a
+  // function of the keys, so it changes exactly when they are rebuilt.
+  Player.prototype.mapGeom = function () {
+    if (!this.map || !this.mapClone || !this.holder || !this.svg) return null;
+    if (this.mapKeys) return this.mapKeys;
+    var stageR = this.stage.getBoundingClientRect();
+    var holderR = this.holder.getBoundingClientRect();
+    var svgR = this.svg.getBoundingClientRect();
+    if (!stageR.width || !stageR.height || !svgR.width || !svgR.height) return null;
+    var z = this.zoom || 1;
+
+    // The holder's untransformed origin inside the stage: a holder-local point
+    // q draws at o + pan + q*zoom. That is cameraKeys' mapping, reused rather
+    // than derived a second time.
+    var o = { x: holderR.left - this.panX - stageR.left,
+              y: holderR.top - this.panY - stageR.top };
+
+    // The diagram's own untransformed box, holder-local. The map is a picture
+    // of the diagram, not of the empty room around it: a diagram narrower than
+    // its stage would otherwise draw as a sliver in a mostly blank box, and the
+    // rectangle would not line up with the picture it is drawn over.
+    var d = { x: (svgR.left - holderR.left) / z,
+              y: (svgR.top - holderR.top) / z,
+              w: svgR.width / z,
+              h: svgR.height / z };
+
+    // One scale factor for the whole map: fit the diagram's box into the cap,
+    // which keeps a tall diagram from claiming the height of the stage.
+    var s = Math.min(Math.min(MAP_MAX_W, stageR.width * MAP_SHARE_W) / d.w,
+                     Math.min(MAP_MAX_H, stageR.height * MAP_SHARE_H) / d.h);
+    this.mapKeys = { o: o, d: d, s: s, W: stageR.width, H: stageR.height,
+                     bw: d.w * s, bh: d.h * s };
+    this.map.style.width = this.mapKeys.bw + 'px';
+    this.map.style.height = this.mapKeys.bh + 'px';
+    return this.mapKeys;
+  };
+
+  // syncMap places the rectangle, and is the one place the map is ever built.
+  // It runs per frame during a camera glide and per pointermove during a pan,
+  // so it stays cheap: at fit it measures nothing at all, and off fit it reads
+  // a cache and writes four styles.
+  Player.prototype.syncMap = function () {
+    if (!this.map) return;
+
+    // At fit the whole diagram is on the stage, so there is nothing to orient
+    // and the map is off. Answering that from the transform alone — before any
+    // measuring, and before the clone exists — is what keeps a page at rest,
+    // an `?embed` capture and a resize storm from paying for a map nobody is
+    // going to see. It is also why the clone is lazy: this is the only path to
+    // it, so a page that never zooms never builds one.
+    if (this.zoom === 1 && this.panX === 0 && this.panY === 0) {
+      this.map.classList.add('is-off');
+      return;
+    }
+
+    this.ensureMapClone();
+    var g = this.mapGeom();
+    if (!g) { this.map.classList.add('is-off'); return; }
+
+    // Invert the mapping: the stage's own [0,W]x[0,H] is this holder-local
+    // rect, which the diagram's corner and one scale factor turn into map px.
+    var z = this.zoom || 1;
+    var l = ((0 - g.o.x - this.panX) / z - g.d.x) * g.s;
+    var t = ((0 - g.o.y - this.panY) / z - g.d.y) * g.s;
+    var r = l + (g.W / z) * g.s;
+    var b = t + (g.H / z) * g.s;
+    var cl = clamp(l, 0, g.bw), ct = clamp(t, 0, g.bh);
+    var cr = clamp(r, 0, g.bw), cb = clamp(b, 0, g.bh);
+
+    // A rectangle covering the whole thumbnail means the stage is already
+    // showing the whole diagram: there is nothing to orient, so the map goes
+    // away. The early-out above is the cheap half of this test — it catches
+    // the untouched transform; this catches zooming back out past fit, and a
+    // diagram small enough that a pan never takes it off the stage.
+    var off = cl <= 0.5 && ct <= 0.5 && cr >= g.bw - 0.5 && cb >= g.bh - 0.5;
+    this.map.classList.toggle('is-off', off);
+    if (off) return;
+    this.mapRect.style.left = cl + 'px';
+    this.mapRect.style.top = ct + 'px';
+    this.mapRect.style.width = Math.max(0, cr - cl) + 'px';
+    this.mapRect.style.height = Math.max(0, cb - ct) + 'px';
+  };
+
+  Player.prototype.bindMapGestures = function () {
+    var self = this;
+    var down = false, swallow = false;
+
+    // Centre the stage on the point pressed: the pan that puts a holder-local
+    // point at the stage's centre is cameraApply's last two lines, so a view
+    // moved by hand and one moved by the camera stay in one coordinate system.
+    function centreOn(ev) {
+      var g = self.mapGeom();
+      if (!g) return;
+      var r = self.map.getBoundingClientRect();
+      var qx = g.d.x + (ev.clientX - r.left) / g.s;
+      var qy = g.d.y + (ev.clientY - r.top) / g.s;
+      self.panX = g.W / 2 - g.o.x - qx * self.zoom;
+      self.panY = g.H / 2 - g.o.y - qy * self.zoom;
+      self.applyTransform();
+    }
+
+    this.map.addEventListener('pointerdown', function (ev) {
+      if (ev.button !== 0) return;
+      // The stage underneath reads a press as the start of a pan and, when the
+      // transport is stepwise, a click as "advance a step". Neither is what a
+      // press on the map means.
+      ev.preventDefault();
+      ev.stopPropagation();
+      down = true;
+      swallow = false;
+      // Capture keeps a drag that wanders off the little box scrubbing anyway,
+      // and hands the release back here wherever it happens.
+      if (self.map.setPointerCapture) {
+        try { self.map.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+      }
+      // Moving the view by hand takes it from the camera, exactly as a stage
+      // drag does — otherwise the next frame would put it straight back.
+      if (self.following()) self.camOverride = true;
+      centreOn(ev);
+    });
+
+    this.map.addEventListener('pointermove', function (ev) {
+      if (!down) return;
+      ev.preventDefault();
+      centreOn(ev);
+    });
+
+    this.map.addEventListener('pointerup', function (ev) {
+      if (!down) return;
+      down = false;
+      // The click that follows a captured drag lands on whatever is under the
+      // release — usually the stage, where a stepwise transport reads it as
+      // "advance a step". Take that one click back, exactly as the stage takes
+      // back the click that ends a pan. A release outside the stage produces no
+      // such click, so there is nothing to take and the flag stays down.
+      var r = self.stage.getBoundingClientRect();
+      swallow = ev.clientX >= r.left && ev.clientX <= r.right &&
+                ev.clientY >= r.top && ev.clientY <= r.bottom;
+    });
+
+    this.map.addEventListener('pointercancel', function () {
+      down = false;
+      swallow = false;
+    });
+
+    this.stage.addEventListener('click', function (ev) {
+      if (!swallow) return;
+      swallow = false;
+      ev.stopImmediatePropagation();
+      ev.preventDefault();
+    }, true);
+
+    this.map.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    this.map.addEventListener('dblclick', function (ev) { ev.stopPropagation(); });
+  };
+
+  // The picture-in-picture storyboard can be swiped away. Only while it is
+  // floating — the phone-present layout, where the stylesheet makes it
+  // position:absolute — which is read from the computed style at press time
+  // rather than from a duplicated breakpoint: as a panel in the grid it is
+  // furniture, and furniture does not fly. A dismissal lasts exactly as long
+  // as the context it was made in: syncBoard clears it, so a new render, view
+  // or scenario brings the thumbnail back, and setPresenter clears it in both
+  // directions.
+  Player.prototype.bindBoardGestures = function () {
+    var self = this;
+    var down = false, dragging = false, swallow = false;
+    var startX = 0, startY = 0;
+
+    function clearInline() {
+      self.board.style.transition = '';
+      self.board.style.transform = '';
+      self.board.style.opacity = '';
+    }
+
+    this.board.addEventListener('pointerdown', function (ev) {
+      if (ev.button !== 0) return;
+      if (getComputedStyle(self.board).position !== 'absolute') return;
+      down = true;
+      dragging = false;
+      swallow = false;
+      startX = ev.clientX;
+      startY = ev.clientY;
+      // Capture keeps a swipe that leaves the little box mid-flight delivering
+      // its release here, wherever the finger ends up.
+      if (self.board.setPointerCapture) {
+        try { self.board.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+      }
+    });
+
+    this.board.addEventListener('pointermove', function (ev) {
+      if (!down) return;
+      var dx = ev.clientX - startX, dy = ev.clientY - startY;
+      if (!dragging) {
+        // Horizontal intent only: a small wobble is a tap on its way to the
+        // lightbox, and a vertical pull means nothing here.
+        if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) return;
+        dragging = true;
+      }
+      ev.preventDefault();
+      self.board.style.transform = 'translateX(' + dx + 'px)';
+      // Fade with distance, so the gesture announces what letting go will do.
+      self.board.style.opacity = String(
+        Math.max(0.25, 1 - Math.abs(dx) / ((self.board.offsetWidth || 120) * 1.2)));
+    });
+
+    this.board.addEventListener('pointerup', function (ev) {
+      if (!down) return;
+      down = false;
+      if (!dragging) return;
+      dragging = false;
+      // The click the release manufactures belonged to the drag, not to the
+      // stack's tap-for-lightbox.
+      swallow = true;
+      var dx = ev.clientX - startX;
+      var w = self.board.offsetWidth || 120;
+      if (Math.abs(dx) > w * 0.5) {
+        // Past the point of no return: fly off in the direction of travel,
+        // then hide. The timeout is the transitionend that never comes if the
+        // element stops painting mid-flight; `settled` keeps whichever fires
+        // second from doing it all again.
+        var settled = false;
+        var settle = function () {
+          if (settled) return;
+          settled = true;
+          self.board.classList.add('is-flung');
+          clearInline();
+        };
+        // With animation turned off there is no flight to wait for — but
+        // settling here and now would hide the board inside the pointerup that
+        // is still on its way to producing a click, and that click would then
+        // land on the stage and advance a beat. A turn of the event loop is
+        // enough: the click finds the board still there and the swallower
+        // below takes it.
+        if (prefersReducedMotion()) { setTimeout(settle, 0); return; }
+        self.board.style.transition = 'transform 0.18s ease-in, opacity 0.18s ease-in';
+        self.board.style.transform = 'translateX(' + ((dx < 0 ? -1 : 1) * (w * 2 + 40)) + 'px)';
+        self.board.style.opacity = '0';
+        self.board.addEventListener('transitionend', settle);
+        setTimeout(function () {
+          self.board.removeEventListener('transitionend', settle);
+          settle();
+        }, 300);
+      } else {
+        // Not far enough: spring back.
+        self.board.style.transition = 'transform 0.15s ease-out, opacity 0.15s ease-out';
+        self.board.style.transform = '';
+        self.board.style.opacity = '';
+        setTimeout(function () { self.board.style.transition = ''; }, 200);
+      }
+    });
+
+    this.board.addEventListener('pointercancel', function () {
+      down = false;
+      dragging = false;
+      clearInline();
+    });
+
+    this.board.addEventListener('click', function (ev) {
+      if (!swallow) return;
+      swallow = false;
+      ev.stopPropagation();
+      ev.preventDefault();
+    }, true);
+  };
+
+  // --- auto-follow camera ------------------------------------------------
+  //
+  // It runs wherever following() is — a reel, or anywhere the reader pressed
+  // Cine — and nowhere else: by default a page shows the whole diagram and
+  // keeps the reader's own hands on the zoom, and only a reel, which is
+  // nothing but framing, follows without being asked.
   //
   // The camera frames each step's action: one pose per step, precomputed from
   // the timeline, with a short glide at each step boundary. The pose is a
@@ -1801,6 +2306,7 @@
     this.panY = 0;
     this.camOverride = false;
     this.camKeys = null;
+    this.mapKeys = null;
 
     this.buildPicker();
     this.adoptScenarioSpeed();
@@ -1851,16 +2357,26 @@
 
     // A fresh id each render keeps mermaid from reusing stale definitions.
     var id = 'dgm-svg-' + Math.floor(Math.random() * 1e9);
+    var drawn = false;
     window.mermaid
       .render(id, d.mermaid)
       .then(function (out) {
+        drawn = true;
         var holder = el('div', 'dgm-svg-holder');
         holder.innerHTML = out.svg;
         self.stage.innerHTML = '';
         self.stage.appendChild(holder);
         self.stage.appendChild(self.overlay);
+        self.stage.appendChild(self.map);
         self.holder = holder;
-        self.applyTransform();
+        self.mapClone = null;
+        self.mapKeys = null;
+        // The style write alone, not applyTransform: the id→element binds
+        // still point into the svg the innerHTML above just detached, and
+        // applyTransform would re-run apply() over them — an active flow then
+        // asks a non-rendered path for getTotalLength, which throws. The full
+        // apply comes a few lines down, after index() has rebound everything.
+        self.setTransform();
 
         self.svg = holder.querySelector('svg');
         if (self.svg) {
@@ -1869,11 +2385,19 @@
           self.svg.style.maxWidth = '100%';
           self.svg.style.height = 'auto';
         }
+        // Clone for the map before index() and apply() touch the live SVG, so
+        // the thumbnail is the diagram at rest rather than mid-animation.
+        self.buildMap();
         self.index();
         self.buildSteps();
         self.syncBoard();
         self.apply(self.time);
         self.syncChrome();
+        // Last, because buildSteps and the caption have both had a chance to
+        // change the shape of the page since buildMap measured it: a scenario
+        // with a taller step list leaves the stage a different size, and the
+        // map is a share of the stage.
+        self.syncMap();
 
         // Autoplay waits for a successful render: starting the clock over a
         // diagram mermaid failed to draw would just run it out invisibly.
@@ -1884,7 +2408,12 @@
         }
       })
       .catch(function (err) {
-        self.warn(['Mermaid failed to render the diagram: ' + err]);
+        // The catch spans the whole chain, so name the half that failed:
+        // blaming mermaid for an exception in the runtime's own post-render
+        // work sent one debugging session entirely the wrong way.
+        self.warn([(drawn
+          ? 'Displaying the diagram failed: '
+          : 'Mermaid failed to render the diagram: ') + err]);
       });
   };
 
@@ -2191,9 +2720,16 @@
     // let it redraw even if the new step happens to carry the same id.
     this.captionKey = null;
 
+    // The buttons syncChrome was following are gone with the list; the next
+    // pass finds the new one and scrolls to it.
+    this._activeStepEl = null;
+
     // Camera keyframes are per (view, scenario, layout); this runs on every
-    // render and scenario switch, which covers all three.
+    // render and scenario switch, which covers all three. The map's keys are
+    // per layout alone, but the step list this just rebuilt is part of it: a
+    // scenario with more steps than the last takes a taller column.
     this.camKeys = null;
+    this.mapKeys = null;
   };
 
   // buildScrubMarks lays a tick over the scrubber at each step boundary. They
@@ -2282,12 +2818,22 @@
   // flash back to light between two mounts.
   Player.prototype.dispose = function () {
     this.pause();
+    // A host tearing down a presenting player must not leave the page stuck
+    // fullscreen on an element it is about to remove.
+    if (fullscreenElement() === this.root) exitFull();
     for (var i = 0; i < this._unbind.length; i++) {
       // A remover cannot meaningfully fail, but a host disposing twice or
       // after its document went away should not throw at the caller.
       try { this._unbind[i](); } catch (e) { /* already gone */ }
     }
     this._unbind = [];
+
+    // The minimap holds a second copy of the whole diagram. A host that keeps
+    // a disposed player around — for its snapshot, say — should not be holding
+    // that too, and the clone is the largest thing this object owns.
+    if (this.mapBody) this.mapBody.innerHTML = '';
+    this.mapClone = null;
+    this.mapKeys = null;
   };
 
   Player.prototype.seek = function (ms) {
@@ -2314,6 +2860,7 @@
   // without knowing presenter mode exists.
 
   Player.prototype.setPresenter = function (on) {
+    var self = this;
     this.present = !!on;
     this.root.classList.toggle('dgm-present', this.present);
     this.presentBtn.textContent = this.present ? 'Exit' : 'Present';
@@ -2328,6 +2875,56 @@
     // the scenario the moment its stop is dropped.
     this.stopAt = null;
     this.pause();
+
+    // Either direction also changes the layout the camera measured against —
+    // the step list and the transport come and go — so the keys are stale, and
+    // a frame the reader took by hand in one mode should not be carried into
+    // the other.
+    this.camKeys = null;
+    this.mapKeys = null;
+    this.camOverride = false;
+    // A dismissal was made in one mode's layout and does not survive into the
+    // other: leaving must put the side panel back, and re-entering starts the
+    // presentation with its thumbnail.
+    this.board.classList.remove('is-flung');
+
+    // Presenting into one pane of a split view is not presenting, so the mode
+    // asks the browser for the screen. Whether it gets it is not something the
+    // caller can promise: this runs on page load for `?present`, with no user
+    // gesture, and inside hosts that refuse element fullscreen outright. The
+    // fallback is `dgm-present-fill`, which pins the player to the window in
+    // CSS — the same box, minus the browser chrome going away.
+    var owned = fullscreenElement() === this.root;
+    if (this.present) {
+      // Already the fullscreen element: re-requesting it would be a rejected
+      // promise and nothing else.
+      if (!owned) {
+        requestFull(this.root, function () {
+          // A refusal arrives a turn or more later, by which time the reader
+          // may have left presenter mode again — and a fill class added then
+          // would pin a windowed player over the whole page with nothing left
+          // to take it off.
+          if (self.present) self.root.classList.add('dgm-present-fill');
+        });
+      }
+      // The chrome has gone; reframe against what the stage is now. Entering
+      // real fullscreen resizes the window too, and the resize and
+      // fullscreenchange handlers in build() re-measure again when it lands.
+      this.apply(this.time);
+      this.syncChips();
+      // The map is measured against the stage as well, and nothing here writes
+      // the transform — so unlike the leaving branch, which reaches syncMap
+      // through resetZoom, this one has to ask for it.
+      this.syncMap();
+    } else {
+      this.root.classList.remove('dgm-present-fill');
+      // Only when it is ours. A host with its own fullscreen — a webview, a
+      // slide deck embedding the player — keeps it.
+      if (owned) exitFull();
+      // Leaving hands the whole diagram back. Without this the reader is left
+      // staring at the last step's pose with the camera that framed it gone.
+      this.resetZoom();
+    }
   };
 
   // advanceStep plays the next beat and stops at its end.
@@ -2351,7 +2948,7 @@
     // zoom is per-beat inspection, and on a phone — where an accidental drag
     // is easy and a double-click does not exist — the next tap is the only
     // hand-back gesture a viewer will ever find.
-    if (this.reel) this.camOverride = false;
+    if (this.following()) this.camOverride = false;
     var steps = this.scenario().steps;
     for (var i = 0; i < steps.length; i++) {
       // The millisecond of tolerance is the same one prevStep and nextStep
@@ -2360,7 +2957,24 @@
       if (steps[i].start < this.time - 1) continue;
       this.pause();
       this.seek(steps[i].start); // clears stopAt, so it is set after
-      this.stopAt = steps[i].end;
+      // One millisecond shy of the seam, not on it. A step's end IS the next
+      // step's start, and every "which step is this?" answer — the caption,
+      // the camera, the step list, the diagram's own per-step state — reads
+      // the last step whose start the clock has reached. Pausing exactly on
+      // the boundary therefore shows the NEXT step's narration over the beat
+      // that just played. Stopping inside the step keeps the whole paused
+      // world — notes included — on the beat the presenter is talking about,
+      // and stays a pure function of the clock. The lost millisecond is
+      // sub-pixel, and the next advance seeks the seam anyway.
+      //
+      // Only a step with a millisecond to spare, though. The scan above skips
+      // a step whose start the clock is already more than a millisecond past —
+      // the same tolerance, spent twice — so stopping inside a beat two
+      // milliseconds long or shorter would leave the next press selecting this
+      // same step again, and again. A beat that short is under one frame, so
+      // it stops on its end and the seam costs nothing anyone can see.
+      var span = steps[i].end - steps[i].start;
+      this.stopAt = steps[i].end - (span > 2 ? 1 : 0);
       this.play();
       return;
     }
@@ -2371,7 +2985,7 @@
   // replays it. Backing up and playing again is one mechanism, not two.
   Player.prototype.prevStep = function () {
     // Same hand-back as advanceStep: navigating beats restores the camera.
-    if (this.reel) this.camOverride = false;
+    if (this.following()) this.camOverride = false;
     var steps = this.scenario().steps;
     var target = 0;
     for (var i = 0; i < steps.length; i++) {
@@ -2503,14 +3117,34 @@
 
     var current = null;
     var kids = this.stepEls || [];
+    var activeEl = null;
     for (var i = 0; i < kids.length; i++) {
       var st = sc.steps[i];
       var active = st && this.time >= st.start && this.time < st.end;
       var done = st && this.time >= st.end;
-      if (active) current = st;
+      if (active) { current = st; activeEl = kids[i]; }
       kids[i].classList.toggle('is-active', !!active);
       kids[i].classList.toggle('is-done', !!done);
       kids[i].setAttribute('aria-current', active ? 'step' : 'false');
+    }
+
+    // The list scrolls inside the bounded shell, so a scenario with more steps
+    // than fit would run the highlight off the bottom and leave the reader
+    // watching a stationary index. Only when the active step actually changes:
+    // asking sixty times a second would fight a reader scrolling the list by
+    // hand. `nearest` then scrolls the least that will do, which is nothing
+    // while the step is already in view.
+    //
+    // And only when the list is the thing that scrolls. In an auto-height host
+    // — an inline block in a Markdown preview — the list has no overflow of
+    // its own, so the nearest scrollable ancestor is the reader's document,
+    // and every beat would drag the page back to the diagram.
+    if (activeEl !== this._activeStepEl) {
+      this._activeStepEl = activeEl;
+      if (activeEl && activeEl.scrollIntoView &&
+          this.steps.scrollHeight > this.steps.clientHeight + 1) {
+        activeEl.scrollIntoView({ block: 'nearest' });
+      }
     }
 
     // The reel bar's fills ride the same loop shape: done segments read
@@ -2538,12 +3172,30 @@
     if (key === this.captionKey) return;
     this.captionKey = key;
 
+    // The caption is a row of the bounded shell, so a step with three lines of
+    // narration where the last had one takes its extra height off the stage.
+    // The camera and the map both measured against the stage that was, and
+    // this is the only place that height ever changes without a resize.
+    var was = this.caption.offsetHeight;
+
     this.caption.innerHTML = '';
     this.caption.classList.toggle('is-on', !!step);
-    if (!step) return;
+    if (step) {
+      this.caption.appendChild(elText('span', 'dgm-caption-name', step.name || step.id));
+      if (step.desc) this.caption.appendChild(elText('span', 'dgm-caption-desc', step.desc));
+      // The box scrolls when narration outgrows its cap, and the browser keeps
+      // an element's scroll position across a rewrite — so a step read to the
+      // bottom would hand the next step over already scrolled past its opening.
+      this.caption.scrollTop = 0;
+    }
 
-    this.caption.appendChild(elText('span', 'dgm-caption-name', step.name || step.id));
-    if (step.desc) this.caption.appendChild(elText('span', 'dgm-caption-desc', step.desc));
+    // Both caches are keyed to a stage of a given size, and it just changed
+    // under them. Nulling is all that is needed: each rebuilds itself the next
+    // time it is asked for, which is this same frame.
+    if (this.caption.offsetHeight !== was) {
+      this.camKeys = null;
+      this.mapKeys = null;
+    }
   };
 
   // ---------------------------------------------------------------------
@@ -2560,7 +3212,7 @@
     // The camera writes the transform before anything is measured: notes,
     // pills and particles are all positioned from client rects later in this
     // same pass, so they see the framing they will be photographed under.
-    if (this.reel && !this.camOverride) this.cameraApply(t);
+    if (this.following() && !this.camOverride) this.cameraApply(t);
     var sc = this.scenario();
 
     var wantNode = {};   // node id -> {cls, color, key}
@@ -3370,6 +4022,54 @@
 
   function fmt(ms) {
     return (ms / 1000).toFixed(1) + 's';
+  }
+
+  // --- fullscreen -------------------------------------------------------
+  //
+  // Both spellings, because Safari still ships only the webkit* ones. Every
+  // path here is silent: build() asks for fullscreen on load whenever the page
+  // opens in presenter mode, with no user gesture behind it, and a browser is
+  // entitled to refuse that — as is a VS Code webview and an iframe without
+  // `allowfullscreen`. Refusal is a mode the caller handles (the fill
+  // fallback), never an exception it has to catch.
+
+  function fullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
+
+  // requestFull calls onFail when the browser will not, or does not, give the
+  // element the screen. The unprefixed API says so by rejecting its promise;
+  // legacy webkit returns nothing and fires an event instead, so that spelling
+  // is answered with a pair of one-shot listeners that take each other off.
+  function requestFull(node, onFail) {
+    var fn = node.requestFullscreen || node.webkitRequestFullscreen;
+    // No element fullscreen at all — iOS Safari, most notably.
+    if (!fn) { onFail(); return; }
+    try {
+      var p = fn.call(node);
+      if (p && p.catch) { p.catch(function () { onFail(); }); return; }
+      // Legacy webkit returns undefined and reports refusal — if at all — by
+      // event. A listener pair here leaked (a request the browser ignores
+      // fires neither event, and dispose() cannot reach raw document
+      // listeners) and cross-talked (any element's fullscreenchange reads as
+      // success). One probe answers the only question that matters: after a
+      // beat, is the node the fullscreen element or not. A grant lands within
+      // the gesture's task, so the delay is generous.
+      setTimeout(function () {
+        if (fullscreenElement() !== node) onFail();
+      }, 150);
+    } catch (e) {
+      onFail();
+    }
+  }
+
+  function exitFull() {
+    var fn = document.exitFullscreen || document.webkitExitFullscreen;
+    if (!fn) return;
+    try {
+      var p = fn.call(document);
+      if (p && p.catch) p.catch(function () { /* already out */ });
+    } catch (e) { /* already out */ }
   }
 
   // normalize fills in the list-valued fields a timeline is entitled to omit.
