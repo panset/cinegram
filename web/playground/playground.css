@@ -525,8 +525,13 @@ body.pg {
 
 /* --- player host -------------------------------------------------------- */
 
+/* A definite height, not a floor: runtime.css only fits the diagram to the
+   room it has when the player root is handed a height, and min-height let a
+   tall diagram grow the host past the pane instead — the narration and the
+   scrubber went with it, below the fold of a page that cannot scroll. */
 .pg-player-host {
-  min-height: 100%;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -539,10 +544,14 @@ body.pg {
 /* A compile error keeps the last drawing on screen rather than clearing the
    panel — mid-keystroke breakage is the normal state of an editor, and a page
    that blanks on every half-typed line is unusable. Dimming says "this is not
-   what you just typed" without taking the reference away. */
+   what you just typed" without taking the reference away.
+
+   Opacity alone, deliberately: a `filter` makes the element a containing block
+   for fixed-position descendants, so the player's own full-window present
+   overlay would be trapped inside this pane — and painted at 40% into the
+   bargain. Dimming says enough on its own. */
 .pg-player-host.is-stale {
   opacity: 0.4;
-  filter: saturate(0.5);
   transition: opacity 120ms ease;
 }
 
