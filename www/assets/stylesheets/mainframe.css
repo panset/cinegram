@@ -1,0 +1,800 @@
+/* Cinegram's theme: a 3270 terminal and the listing it printed.
+ *
+ * The site had no visual identity of its own — Zensical's classic variant with
+ * the stock palette, which is a fine default and says nothing. This says
+ * something. Cinegram is a compiler for diagrams that play; it is written by a
+ * couple of people who like software the way people liked it when a diagram
+ * was drawn on a character grid. So the theme is the mainframe operator's
+ * desk, and it has two halves that are both historically real:
+ *
+ *   dark  (slate)    an IBM 3279 colour display. Blue-black glass, and the
+ *                    seven-colour field palette the 3279 actually had —
+ *                    default green, intensified white, turquoise, yellow,
+ *                    red, pink, blue. Not "hacker green on black": on a 3279
+ *                    colour *was* the field attribute, so here it stays
+ *                    semantic. White = the thing itself. Turquoise = protected
+ *                    text you read. Green = an unprotected field you can act
+ *                    on, which is exactly what a link is. Yellow = a literal.
+ *                    Red = it went wrong.
+ *
+ *   light (default)  greenbar. The other half of the same room: fanfold
+ *                    continuous-form paper off the line printer, pale green
+ *                    bands every other row, ink that was never quite black.
+ *                    It is not the dark theme inverted — it is the output the
+ *                    dark theme produced.
+ *
+ * Everything is set in one monospace family, because a 3270 had one. Roles are
+ * separated by weight, case, tracking and colour instead of by typeface. That
+ * is the whole conceit, and it is why this file overrides Material's font
+ * variables rather than adding a display face on top.
+ *
+ * No @font-face and no CDN: a webfont this site cannot fetch is a silent
+ * fallback to something arbitrary. The stack below is ordered so that a
+ * machine with IBM Plex Mono installed gets the closest thing to Plex — which
+ * IBM drew looking at exactly these terminals — and every other machine still
+ * lands on a real monospace.
+ *
+ * Structure: palette first (both schemes, tokens only), then the typeset, then
+ * the chrome. Nothing below the palette blocks names a raw colour, so a
+ * scheme is changed in one place.
+ */
+
+/* ------------------------------------------------------------------ *
+ * Type
+ * ------------------------------------------------------------------ */
+
+:root {
+  /* Material composes --md-*-font-family from --md-*-font plus its own
+     fallbacks, and its fallback for text is a sans stack. Overriding the
+     composed family instead is what keeps prose from quietly landing on
+     system-ui on a machine with no Plex. */
+  --md-text-font-family:
+    "IBM Plex Mono", "SF Mono", SFMono-Regular, "Berkeley Mono", ui-monospace,
+    Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+  --md-code-font-family: var(--md-text-font-family);
+
+  /* One cell. Rules, insets and the hanging markers below are multiples of it,
+     so the page keeps the character grid even where the content is not text. */
+  --cg-cell: 0.6rem;
+}
+
+/* ------------------------------------------------------------------ *
+ * Palette — greenbar (light)
+ * ------------------------------------------------------------------ */
+
+[data-md-color-scheme="default"] {
+  --cg-ground: #f4f4ec;         /* fanfold stock, warm off-white */
+  --cg-bar: #dfe9d8;            /* the printed band */
+  --cg-field: #e9ebe0;          /* a slightly recessed field */
+  --cg-rule: #b4c2ac;
+  --cg-rule-strong: #8b9c85;
+  --cg-ink: #17201c;            /* never quite black; ribbon on paper */
+  --cg-dim: #5a6a60;
+  --cg-white: #17201c;          /* "intensified" reads as full ink on paper */
+  --cg-turquoise: #10666a;
+  --cg-green: #14713d;
+  --cg-yellow: #8a6212;         /* yellow is illegible on paper; ochre is its ink */
+  --cg-red: #a9261b;
+  --cg-pink: #7e3269;
+  --cg-blue: #2a5aa8;
+  --cg-glow: none;
+
+  --md-default-bg-color: var(--cg-ground);
+  --md-default-fg-color: var(--cg-ink);
+  --md-default-fg-color--light: var(--cg-dim);
+  --md-default-fg-color--lighter: var(--cg-rule-strong);
+  --md-default-fg-color--lightest: var(--cg-rule);
+
+  --md-primary-fg-color: #1f2a24;
+  --md-primary-fg-color--light: #2e3b33;
+  --md-primary-fg-color--dark: #121a16;
+  --md-primary-bg-color: #e6ebe0;
+  --md-primary-bg-color--light: #b7c2b6;
+
+  --md-accent-fg-color: var(--cg-green);
+  --md-accent-fg-color--transparent: rgba(20, 113, 61, 0.1);
+  --md-accent-bg-color: var(--cg-ground);
+
+  --md-code-bg-color: var(--cg-bar);
+  --md-code-fg-color: var(--cg-ink);
+
+  --md-footer-bg-color: #1f2a24;
+  --md-footer-bg-color--dark: #141d18;
+  --md-footer-fg-color: #e6ebe0;
+  --md-footer-fg-color--light: #b7c2b6;
+  --md-footer-fg-color--lighter: #8b9c85;
+}
+
+/* ------------------------------------------------------------------ *
+ * Palette — phosphor (dark)
+ * ------------------------------------------------------------------ */
+
+[data-md-color-scheme="slate"] {
+  /* Not #000: a CRT face in a lit room is a blue-black, and the whole palette
+     is keyed off that cast so the greens do not read as neon. */
+  --cg-ground: #080d0c;
+  --cg-bar: #0e1614;
+  --cg-field: #0e1614;
+  --cg-rule: #1b2926;
+  --cg-rule-strong: #2a3e39;
+  --cg-ink: #c9d6ce;
+  --cg-dim: #6c918a;
+  --cg-white: #dfe9e2;          /* the intensified attribute */
+  --cg-turquoise: #45c9c0;
+  --cg-green: #34d96a;
+  --cg-yellow: #e8b646;
+  --cg-red: #f2604f;
+  --cg-pink: #de73c0;
+  --cg-blue: #5c9fe6;
+  --cg-glow: 0 0 0.35rem rgba(52, 217, 106, 0.28);
+
+  --md-default-bg-color: var(--cg-ground);
+  --md-default-fg-color: var(--cg-ink);
+  --md-default-fg-color--light: var(--cg-dim);
+  --md-default-fg-color--lighter: var(--cg-rule-strong);
+  --md-default-fg-color--lightest: var(--cg-rule);
+
+  --md-primary-fg-color: #0b1211;
+  --md-primary-fg-color--light: #16211e;
+  --md-primary-fg-color--dark: #060a09;
+  --md-primary-bg-color: var(--cg-white);
+  --md-primary-bg-color--light: var(--cg-dim);
+
+  --md-accent-fg-color: var(--cg-green);
+  --md-accent-fg-color--transparent: rgba(52, 217, 106, 0.12);
+  --md-accent-bg-color: var(--cg-ground);
+
+  --md-code-bg-color: var(--cg-bar);
+  --md-code-fg-color: var(--cg-ink);
+
+  --md-footer-bg-color: #0b1211;
+  --md-footer-bg-color--dark: #060a09;
+  --md-footer-fg-color: var(--cg-ink);
+  --md-footer-fg-color--light: var(--cg-dim);
+  /* Not --cg-rule-strong: that is a hairline colour, and the copyright strip
+     it lands on is text. On this ground it measured as unreadable. */
+  --md-footer-fg-color--lighter: var(--cg-dim);
+
+  --md-shadow-z1: 0 0 0 1px var(--cg-rule);
+  --md-shadow-z2: 0 0 0 1px var(--cg-rule-strong);
+  --md-shadow-z3: 0 0 0 1px var(--cg-rule-strong);
+}
+
+/* Typeset tokens shared by both schemes. They are listed once, after the two
+   palettes, because every one of them resolves through a --cg-* token. */
+[data-md-color-scheme="default"],
+[data-md-color-scheme="slate"] {
+  --md-typeset-color: var(--cg-ink);
+  --md-typeset-a-color: var(--cg-green);
+  --md-typeset-mark-color: var(--md-accent-fg-color--transparent);
+  --md-typeset-del-color: rgba(242, 96, 79, 0.18);
+  --md-typeset-ins-color: rgba(52, 217, 106, 0.18);
+  --md-typeset-kbd-color: var(--cg-field);
+  --md-typeset-kbd-accent-color: var(--cg-rule);
+  --md-typeset-kbd-border-color: var(--cg-rule-strong);
+  --md-typeset-table-color: var(--cg-rule);
+
+  /* Syntax highlighting is the field palette again, applied to a listing:
+     keywords intensified, literals yellow, strings turquoise, comments dimmed
+     to the colour of protected text nobody has to read. */
+  --md-code-hl-keyword-color: var(--cg-white);
+  --md-code-hl-function-color: var(--cg-green);
+  --md-code-hl-name-color: var(--cg-ink);
+  --md-code-hl-string-color: var(--cg-turquoise);
+  --md-code-hl-number-color: var(--cg-yellow);
+  --md-code-hl-constant-color: var(--cg-yellow);
+  --md-code-hl-special-color: var(--cg-pink);
+  --md-code-hl-operator-color: var(--cg-pink);
+  --md-code-hl-punctuation-color: var(--cg-dim);
+  --md-code-hl-comment-color: var(--cg-dim);
+  --md-code-hl-variable-color: var(--cg-blue);
+  --md-code-hl-generic-color: var(--cg-dim);
+}
+
+/* ------------------------------------------------------------------ *
+ * The ground
+ * ------------------------------------------------------------------ */
+
+/* Phosphor texture. The scheme attribute sits on <body> itself, so this is a
+ * self-selector and not a descendant one — `[data-md-color-scheme] body` would
+ * never match anything.
+ *
+ * Three pixels of period at 2% alpha is a texture and not a
+   filter: it survives a screenshot, it does not shimmer while scrolling, and
+   it never touches a pixel of type contrast. Fixed, so the page moves over the
+   glass rather than dragging it along. */
+body[data-md-color-scheme="slate"]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(201, 214, 206, 0.022) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+/* A field the cursor has landed on inverts. That is what a 3270 does, and it
+   is the single cheapest way to make a selection read as terminal. */
+::selection {
+  background: var(--cg-green);
+  color: var(--cg-ground);
+  text-shadow: none;
+}
+
+/* ------------------------------------------------------------------ *
+ * Typeset
+ * ------------------------------------------------------------------ */
+
+.md-typeset {
+  line-height: 1.72;
+  letter-spacing: 0;
+}
+
+/* Monospace prose needs the extra leading above and a shorter measure than a
+   sans would; past ~72 characters the eye loses the line return. */
+.md-typeset p,
+.md-typeset li,
+.md-typeset blockquote {
+  max-width: 72ch;
+}
+
+/* Headings are the panel's intensified fields: full ink, tracked out, upper
+   case at the two levels that structure a page and sentence case below, where
+   uppercase would start shouting at paragraph rhythm. */
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4,
+.md-typeset h5,
+.md-typeset h6 {
+  font-family: var(--md-text-font-family);
+  color: var(--cg-white);
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+.md-typeset h1 {
+  font-size: 1.45rem;
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  margin-bottom: 1.2rem;
+}
+
+/* The panel identifier. A 3270 screen told you which panel you were on before
+   it told you anything else; on a docs page that is the section you are in,
+   and Zensical already knows it. Decorative and inert — the real answer lives
+   in the breadcrumb and the nav. */
+.md-typeset h1::before {
+  content: "▌";
+  color: var(--cg-green);
+  margin-right: 0.55em;
+  text-shadow: var(--cg-glow);
+}
+
+.md-typeset h2 {
+  font-size: 1.05rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  margin-top: 2.4em;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--cg-rule-strong);
+}
+
+.md-typeset h3 {
+  font-size: 0.9rem;
+  letter-spacing: 0.03em;
+  color: var(--cg-turquoise);
+}
+
+.md-typeset h4,
+.md-typeset h5,
+.md-typeset h6 {
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  color: var(--cg-turquoise);
+}
+
+/* Links are unprotected fields: green, and on hover the cursor lands and the
+   field inverts. The underline is an offset hairline rather than Material's
+   default so it clears the descenders of a monospace face. */
+.md-typeset a {
+  color: var(--cg-green);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+  text-decoration-color: color-mix(in srgb, var(--cg-green) 45%, transparent);
+  transition: none;
+}
+
+.md-typeset a:hover,
+.md-typeset a:focus-visible {
+  background: var(--cg-green);
+  color: var(--cg-ground);
+  text-decoration: none;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--cg-green);
+}
+
+/* Keyboard focus has to stay visible on the chrome too, where the rule above
+   does not reach. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--cg-green);
+  outline-offset: 2px;
+}
+
+/* Inline code is a literal, and yellow is the whole of the mark.
+
+   It used to carry a bordered field as well. That is the right treatment on a
+   theme whose prose is a sans, where a literal has to interrupt the line to be
+   seen — but here the body face *is* the code face, so the box was a second
+   signal doing a job the colour had already done. On a paragraph of the
+   language guide carrying seven literals it stippled the whole block and the
+   sentence stopped being readable. Colour alone, and the line stays quiet. */
+.md-typeset code {
+  background: transparent;
+  color: var(--cg-yellow);
+  border: none;
+  border-radius: 0;
+  padding: 0 0.08em;
+  font-size: 1em;
+}
+
+/* Where a literal sits outside running prose it has no sentence to sit in, so
+   the field comes back to give it an edge. */
+.md-typeset table:not([class]) code,
+.md-typeset .grid.cards code {
+  background: var(--cg-field);
+  padding: 0.05em 0.35em;
+}
+
+.md-typeset a code {
+  color: inherit;
+  border-color: currentcolor;
+  background: transparent;
+}
+
+.md-typeset pre > code {
+  border: none;
+  color: var(--cg-ink);
+  padding: 0.9rem 1rem;
+}
+
+/* A listing is a bordered field with a hard edge and a scroll of its own, so a
+   wide line never pushes the page sideways. */
+.md-typeset .highlight,
+.md-typeset pre {
+  border-radius: 0;
+}
+
+.md-typeset .highlight > pre,
+.md-typeset > pre {
+  border: 1px solid var(--cg-rule-strong);
+  border-radius: 0;
+  overflow-x: auto;
+}
+
+.md-typeset .highlight code,
+.md-typeset pre code {
+  border-radius: 0;
+}
+
+/* The copy button is chrome on a listing, not a control worth a shadow. */
+.md-clipboard {
+  color: var(--cg-dim);
+  border-radius: 0;
+}
+
+.md-clipboard:hover,
+.md-clipboard:focus {
+  color: var(--cg-green);
+}
+
+/* Quotes: a marginal note struck down the left rule in turquoise, which is the
+   colour a 3279 gave text you were meant to read and not touch. */
+.md-typeset blockquote {
+  border-left: 2px solid var(--cg-turquoise);
+  color: var(--cg-dim);
+  padding-left: 1rem;
+  margin-left: 0;
+}
+
+/* Lists get a hanging marker on the cell grid instead of a bullet glyph. */
+.md-typeset ul li::marker {
+  content: "▪ ";
+  color: var(--cg-turquoise);
+}
+
+/* …except where the <ul> is not a list. The card grid is markup's way of
+   spelling a menu, and `list-style: none` does not clear a marker whose
+   `content` has been set — the property forces one back on. It has to be
+   emptied by hand or every card wears a bullet. */
+.md-typeset .grid.cards > ul > li::marker,
+.md-nav__list li::marker {
+  content: "";
+}
+
+.md-typeset ol li::marker {
+  color: var(--cg-turquoise);
+}
+
+/* Horizontal rules are the panel separator. */
+.md-typeset hr {
+  border-bottom: 1px solid var(--cg-rule-strong);
+  margin: 2.2em 0;
+}
+
+.md-typeset mark {
+  background: var(--md-accent-fg-color--transparent);
+  color: var(--cg-white);
+  box-shadow: 0 0 0 1px var(--cg-green);
+}
+
+/* ------------------------------------------------------------------ *
+ * Tables — the greenbar band
+ * ------------------------------------------------------------------ */
+
+.md-typeset table:not([class]) {
+  border: 1px solid var(--cg-rule-strong);
+  border-radius: 0;
+  box-shadow: none;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.md-typeset table:not([class]) th {
+  background: var(--cg-bar);
+  color: var(--cg-white);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.66rem;
+  font-weight: 700;
+  border-bottom: 1px solid var(--cg-rule-strong);
+}
+
+/* The bands. On paper this is literally what greenbar was for — keeping the
+   eye on one row across a wide listing — and it does the same job here. */
+.md-typeset table:not([class]) tbody tr:nth-child(odd) {
+  background: var(--cg-bar);
+}
+
+.md-typeset table:not([class]) tbody tr:hover {
+  background: var(--md-accent-fg-color--transparent);
+  box-shadow: inset 2px 0 0 var(--cg-green);
+}
+
+.md-typeset table:not([class]) td {
+  border-top: none;
+}
+
+/* ------------------------------------------------------------------ *
+ * Admonitions — the message line
+ * ------------------------------------------------------------------ */
+
+/* A 3270 wrote its messages on one line at a known place, prefixed with a
+   code. These keep the idea: a hard box, a tracked uppercase label, and the
+   field colour that matches the severity. No rounded card, no icon tile. */
+.md-typeset .admonition,
+.md-typeset details {
+  border: 1px solid var(--cg-rule-strong);
+  border-left-width: 3px;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--cg-field);
+  font-size: 0.74rem;
+}
+
+.md-typeset .admonition-title,
+.md-typeset summary {
+  background: transparent;
+  border-radius: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-weight: 700;
+  font-size: 0.68rem;
+  color: var(--cg-white);
+}
+
+.md-typeset .admonition-title::before,
+.md-typeset summary::before {
+  background-color: currentcolor;
+}
+
+.md-typeset .note,
+.md-typeset .info {
+  border-left-color: var(--cg-turquoise);
+}
+.md-typeset .note > .admonition-title,
+.md-typeset .info > .admonition-title {
+  color: var(--cg-turquoise);
+}
+
+.md-typeset .tip,
+.md-typeset .success,
+.md-typeset .example {
+  border-left-color: var(--cg-green);
+}
+.md-typeset .tip > .admonition-title,
+.md-typeset .success > .admonition-title,
+.md-typeset .example > .admonition-title {
+  color: var(--cg-green);
+}
+
+.md-typeset .warning,
+.md-typeset .caution {
+  border-left-color: var(--cg-yellow);
+}
+.md-typeset .warning > .admonition-title,
+.md-typeset .caution > .admonition-title {
+  color: var(--cg-yellow);
+}
+
+.md-typeset .danger,
+.md-typeset .failure,
+.md-typeset .bug {
+  border-left-color: var(--cg-red);
+}
+.md-typeset .danger > .admonition-title,
+.md-typeset .failure > .admonition-title,
+.md-typeset .bug > .admonition-title {
+  color: var(--cg-red);
+}
+
+/* ------------------------------------------------------------------ *
+ * Cards and buttons — the selection panel
+ * ------------------------------------------------------------------ */
+
+/* The home page's card grid is a menu of panels to jump to, so it is drawn as
+   one: hard boxes on the grid, and the one under the cursor lights its rule. */
+.md-typeset .grid.cards > ul > li,
+.md-typeset .grid > .card {
+  border: 1px solid var(--cg-rule-strong);
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--cg-field);
+  padding: 1rem 1.1rem;
+  transition: none;
+}
+
+.md-typeset .grid.cards > ul > li:hover,
+.md-typeset .grid > .card:hover {
+  border-color: var(--cg-green);
+  box-shadow: inset 0 0 0 1px var(--cg-green);
+}
+
+.md-typeset .grid.cards > ul > li > p:first-child strong {
+  color: var(--cg-white);
+}
+
+/* PF keys: a labelled key, squared off, uppercase. */
+.md-typeset .md-button {
+  border-radius: 0;
+  border: 1px solid var(--cg-green);
+  color: var(--cg-green);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.5em 1.1em;
+  transition: none;
+}
+
+.md-typeset .md-button:hover,
+.md-typeset .md-button:focus,
+.md-typeset .md-button--primary {
+  background: var(--cg-green);
+  color: var(--cg-ground);
+  border-color: var(--cg-green);
+}
+
+.md-typeset .md-button--primary:hover,
+.md-typeset .md-button--primary:focus {
+  background: var(--cg-ground);
+  color: var(--cg-green);
+}
+
+/* ------------------------------------------------------------------ *
+ * Chrome — header, nav, search, footer
+ * ------------------------------------------------------------------ */
+
+.md-header {
+  border-bottom: 1px solid var(--cg-rule-strong);
+  box-shadow: none;
+}
+
+.md-header__title,
+.md-header__topic:first-child {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.78rem;
+}
+
+.md-tabs {
+  border-bottom: 1px solid var(--cg-rule);
+}
+
+.md-tabs__link {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.66rem;
+  opacity: 0.75;
+}
+
+.md-tabs__item--active .md-tabs__link,
+.md-tabs__link:hover {
+  opacity: 1;
+}
+
+/* Nav: section labels as tracked uppercase, and the active page marked with a
+   hanging caret on the cell grid rather than a colour change alone. */
+.md-nav {
+  font-size: 0.68rem;
+}
+
+.md-nav__title {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.62rem;
+  color: var(--cg-dim);
+  font-weight: 700;
+}
+
+.md-nav__link {
+  border-radius: 0;
+}
+
+.md-nav__link--active,
+.md-nav__link[href]:hover {
+  color: var(--cg-green);
+}
+
+.md-nav__item .md-nav__link--active {
+  font-weight: 700;
+}
+
+.md-nav__link--active::before {
+  content: "›";
+  position: absolute;
+  margin-left: calc(var(--cg-cell) * -1.4);
+  color: var(--cg-green);
+}
+
+/* The right-hand table of contents is the panel's own field list. */
+.md-nav--secondary .md-nav__title {
+  box-shadow: 0 0 0 0;
+  border-bottom: 1px solid var(--cg-rule);
+}
+
+/* Search reads as a command line. The prompt is inert decoration; the input
+   keeps its own placeholder and label. */
+.md-search__form {
+  border-radius: 0;
+  background: var(--cg-field);
+  box-shadow: inset 0 0 0 1px var(--cg-rule-strong);
+}
+
+.md-search__form:hover,
+[data-md-toggle="search"]:checked ~ .md-header .md-search__form {
+  background: var(--cg-field);
+  box-shadow: inset 0 0 0 1px var(--cg-green);
+}
+
+.md-search__input {
+  font-family: var(--md-text-font-family);
+  letter-spacing: 0.04em;
+}
+
+.md-search__input::placeholder {
+  color: var(--cg-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.9em;
+}
+
+.md-search-result__meta,
+.md-search-result__article .md-search-result__title {
+  font-family: var(--md-text-font-family);
+}
+
+/* The footer is the operator information area: one strip at the bottom of the
+   glass, small, tracked, telling you where you are and what the machine is
+   doing. Squaring it and dropping the shadow is most of the work. */
+.md-footer {
+  border-top: 1px solid var(--cg-rule-strong);
+}
+
+.md-footer-meta {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+}
+
+.md-footer__link {
+  border-radius: 0;
+}
+
+.md-footer__title {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.7rem;
+}
+
+.md-footer__direction {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.58rem;
+  opacity: 0.8;
+}
+
+/* ------------------------------------------------------------------ *
+ * The player
+ * ------------------------------------------------------------------ */
+
+/* A cinegram on this site is the screen inside the screen: a hard-edged field
+   with the rule the rest of the page uses, and in the dark scheme a faint
+   phosphor bloom on the border so it reads as lit glass rather than a cut-out.
+
+   Untuned, the player is the one thing on the page that still looks like a
+   different website — stock blue accent, grey chrome. The fix is not to reach
+   inside it. runtime.css defines its colours as `--dgm-*` tokens on :root and
+   says in its own header that "the tokens above are safe to share; laying out
+   the page is not", so this sets the tokens on the host and touches nothing
+   else. Custom properties inherit, so a value set here beats the runtime's
+   :root for everything the player draws, and presenter mode — which the
+   runtime owns end to end — keeps working untouched.
+
+   The mapping is the field palette applied to a story: the moving request is
+   the actionable green, the return leg turquoise, waiting is yellow, a failure
+   is red. That is the same four colours the prose above already uses, and more
+   separation than the stock blue/green/amber/red carried. */
+.cinegram {
+  border: 1px solid var(--cg-rule-strong);
+  border-radius: 0;
+  background: var(--cg-ground);
+
+  /* One family on the page includes the player's own chrome. */
+  font-family: var(--md-text-font-family);
+
+  --dgm-bg: var(--cg-ground);
+  --dgm-panel: var(--cg-field);
+  --dgm-border: var(--cg-rule-strong);
+  --dgm-fg: var(--cg-ink);
+  --dgm-muted: var(--cg-dim);
+  --dgm-accent: var(--cg-green);
+  --dgm-accent-soft: var(--md-accent-fg-color--transparent);
+  --dgm-busy: var(--cg-yellow);
+  --dgm-response: var(--cg-turquoise);
+  --dgm-fail: var(--cg-red);
+  --dgm-warn-bg: var(--cg-field);
+  --dgm-warn-fg: var(--cg-yellow);
+}
+
+[data-md-color-scheme="default"] .cinegram {
+  --dgm-shadow: rgba(23, 32, 28, 0.14);
+}
+
+[data-md-color-scheme="slate"] .cinegram {
+  --dgm-shadow: rgba(0, 0, 0, 0.55);
+  box-shadow: 0 0 0 1px var(--cg-rule), 0 0 1.6rem rgba(52, 217, 106, 0.05);
+}
+
+/* ------------------------------------------------------------------ *
+ * Motion
+ * ------------------------------------------------------------------ */
+
+/* There is almost none by design — a terminal did not animate, and the one
+   thing on these pages that legitimately moves is the diagram. What is left is
+   Material's own transitions, which are cut above on the elements where an
+   instant state change reads more like a field attribute flipping. */
+@media (prefers-reduced-motion: reduce) {
+  body[data-md-color-scheme="slate"]::before {
+    display: none;
+  }
+}

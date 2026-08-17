@@ -25,7 +25,14 @@ site_dir = "_site"
 # (2.6 MB), runtime.js, runtime.css — is fetched by the loader only on the
 # pages that show a diagram, which is why it is not listed here. That is the
 # same arrangement any other site takes; see www/embedding.md.
-extra_css = ["assets/cinegram/cinegram-embed.css"]
+# `mainframe.css` is the site's theme and is listed last on purpose: it
+# retunes Material's palette variables and squares off the chrome, and the
+# one rule it aims at the player's host box has to land after the embed kit's
+# own. See the file's header for what the two schemes are.
+extra_css = [
+  "assets/cinegram/cinegram-embed.css",
+  "assets/stylesheets/mainframe.css",
+]
 extra_javascript = ["assets/cinegram/cinegram-embed.js"]
 
 # No `nav`. The folder tree is the navigation, which is also how `cinegram
