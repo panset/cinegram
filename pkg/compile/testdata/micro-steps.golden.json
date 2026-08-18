@@ -1,0 +1,87 @@
+{
+  "version": 2,
+  "root": "main",
+  "views": [
+    {
+      "id": "main",
+      "title": "micro",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% Steps shorter than the transport's tolerances. advanceStep stops 1ms before\n%% a step's seam, so a span of 1ms or less holds no interior stop point and\n%% the presenter's press would re-select the same step forever; the compiler\n%% clamps such spans to 4ms and says so. This fixture pins the clamp.\nflowchart LR\n  a[Sensor]\n  b[Collector]\n  a --\u003e b\n"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "label": "Sensor",
+          "shape": "rect"
+        },
+        {
+          "id": "b",
+          "label": "Collector",
+          "shape": "rect"
+        }
+      ],
+      "groups": [],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "a",
+          "to": "b",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "micro",
+          "duration": 508,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "blink",
+              "name": "A one-millisecond step",
+              "start": 0,
+              "end": 4,
+              "tracks": [
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 4,
+                  "target": "a",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "tick",
+              "name": "A three-millisecond wait",
+              "start": 4,
+              "end": 8,
+              "tracks": []
+            },
+            {
+              "id": "settle",
+              "name": "An ordinary step after the clamped ones",
+              "start": 8,
+              "end": 508,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 8,
+                  "end": 508,
+                  "edge": "e0",
+                  "from": "a",
+                  "to": "b"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
