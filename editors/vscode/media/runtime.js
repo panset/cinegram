@@ -1963,18 +1963,25 @@
   // but the clone is outside that machinery entirely. The map says where you
   // are, not what is happening.
   //
-  // Every id *inside* the clone is stripped, and that is the load-bearing
-  // trick. Mermaid's `url(#…)` references to markers and clip paths then
-  // resolve document-wide to the *live* SVG's defs, which keep their ids and
-  // come first in document order — the clone borrows the arrowheads rather
-  // than duplicating their ids. Nothing the runtime binds to can be shadowed
-  // in return, because every lookup in index() is scoped to the live svg
-  // (`svg.querySelectorAll`) and this file contains no getElementById at all.
+  // Every id *inside* the clone is renamed under a per-clone prefix, and every
+  // reference to one is rewritten to follow it, so the thumbnail is
+  // self-contained. The earlier trick — stripping the ids so `url(#…)`
+  // resolved document-wide to the live SVG's defs — worked with one player and
+  // broke with two: mermaid's sequence marker ids are unprefixed (`arrowhead`,
+  // `crosshead`, `sequencenumber`), so both players' clones borrowed whichever
+  // SVG came first in document order, and a VS Code Markdown preview with two
+  // ```dgm blocks — a supported, routine configuration — gave the second
+  // thumbnail the first diagram's markers, or none at all once the preview's
+  // diff reverted that block to its placeholder. Renaming keeps each clone on
+  // its own defs whatever else the document holds. Nothing the runtime binds
+  // to can be shadowed in return, because every lookup in index() is scoped to
+  // the live svg (`svg.querySelectorAll`) and this file contains no
+  // getElementById at all.
   //
-  // The root id is the one exception: mermaid prefixes every rule of the
-  // <style> it embeds with the SVG's own id, so a clone with no id would draw
-  // unstyled — black boxes, no theme. The clone therefore gets a *fresh* id
-  // and its copy of that stylesheet is retargeted at it.
+  // The root id gets the same treatment for its own reason: mermaid prefixes
+  // every rule of the <style> it embeds with the SVG's own id, so a clone with
+  // no fresh id would draw unstyled — black boxes, no theme. Its copy of that
+  // stylesheet is retargeted in the same pass that follows the renamed ids.
 
   var MAP_MAX_W = 220;    // px, and the cap the CSS states as a share
   var MAP_MAX_H = 240;
@@ -2006,16 +2013,41 @@
     if (!this.holder || !this.holder.contains(this.svg)) return;
     var clone = this.svg.cloneNode(true);
     var old = clone.getAttribute('id') || '';
-    var fresh = 'dgm-map-svg-' + Math.floor(Math.random() * 1e9);
+    // One namespace per clone: ids keep their names but move under a prefix,
+    // so two players' thumbnails can share a document without sharing defs.
+    var prefix = 'dgm-map-' + Math.floor(Math.random() * 1e9) + '-';
+    var fresh = prefix + (old || 'svg');
+
+    var ids = {};
     var kids = clone.querySelectorAll('[id]');
-    for (var i = 0; i < kids.length; i++) kids[i].removeAttribute('id');
-    clone.setAttribute('id', fresh);
-    if (old) {
-      var sheets = clone.querySelectorAll('style');
-      for (var j = 0; j < sheets.length; j++) {
-        sheets[j].textContent = sheets[j].textContent.split('#' + old).join('#' + fresh);
-      }
+    for (var i = 0; i < kids.length; i++) {
+      ids[kids[i].getAttribute('id')] = true;
+      kids[i].setAttribute('id', prefix + kids[i].getAttribute('id'));
     }
+    clone.setAttribute('id', fresh);
+
+    // followUrls rewrites url(#…) references — markers, clip paths, masks,
+    // paint servers, filters — onto the renamed ids. Only ids the clone
+    // actually holds are touched, so a reference out of the document (or a
+    // colour that merely looks like one, `#fff`) passes through untouched.
+    function followUrls(value) {
+      return value.replace(/url\(\s*(["']?)#([^"')\s]+)\1\s*\)/g, function (whole, q, id) {
+        return ids[id] ? 'url(' + q + '#' + prefix + id + q + ')' : whole;
+      });
+    }
+    var REF_ATTRS = ['marker-start', 'marker-mid', 'marker-end', 'clip-path',
+                     'mask', 'fill', 'stroke', 'filter', 'style'];
+
+    var sheets = clone.querySelectorAll('style');
+    for (var j = 0; j < sheets.length; j++) {
+      var css = sheets[j].textContent;
+      if (old) css = css.split('#' + old).join('#' + fresh);
+      css = css.replace(/#([A-Za-z_][-\w]*)/g, function (whole, id) {
+        return ids[id] ? '#' + prefix + id : whole;
+      });
+      sheets[j].textContent = css;
+    }
+
     // Cloning re-arms what innerHTML left inert: an SVG <script> parsed via
     // innerHTML never runs, but its clone does the moment it is inserted. The
     // live SVG's safety rests on mermaid's sanitizers; the thumbnail should
@@ -2027,6 +2059,18 @@
       var attrs = all[m].attributes;
       for (var a = attrs.length - 1; a >= 0; a--) {
         if (/^on/i.test(attrs[a].name)) all[m].removeAttribute(attrs[a].name);
+      }
+      for (var ra = 0; ra < REF_ATTRS.length; ra++) {
+        var v = all[m].getAttribute(REF_ATTRS[ra]);
+        if (v && v.indexOf('url(') !== -1) all[m].setAttribute(REF_ATTRS[ra], followUrls(v));
+      }
+      var href = all[m].getAttribute('href');
+      if (href && href.charAt(0) === '#' && ids[href.slice(1)]) {
+        all[m].setAttribute('href', '#' + prefix + href.slice(1));
+      }
+      var xhref = all[m].getAttribute('xlink:href');
+      if (xhref && xhref.charAt(0) === '#' && ids[xhref.slice(1)]) {
+        all[m].setAttribute('xlink:href', '#' + prefix + xhref.slice(1));
       }
       // And the keyboard affordances a clickable node carries. bindClicks gives
       // every one of them tabindex, role and a name; the *listeners* are not
