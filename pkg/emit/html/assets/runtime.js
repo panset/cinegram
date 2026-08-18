@@ -399,19 +399,30 @@
     // cleared only when the view changes.
     this.revealed = {};
 
-    // themePref is the reader's explicit choice, or null to keep following the
-    // system. Storing the *absence* of a choice separately is what lets the
-    // page track a system theme that changes while it is open, and stop the
-    // moment the reader says otherwise.
+    // `<html data-theme>` is the page's answer, not this player's: page chrome
+    // writes it, an editor writes it, a site's palette toggle writes it, and
+    // every player on the document reads the same one. pageTheme is what it
+    // said at mount, or null for a page that has not answered.
     //
-    // A host that has its own theme states it, and then it is not a preference
-    // to remember or a system setting to follow: an editor's light/dark is
-    // already the reader's answered question.
+    // A host that has its own theme states it instead, and then it is not a
+    // system setting to follow: an editor's light/dark is already the reader's
+    // answered question.
+    this.pageTheme = document.documentElement.getAttribute('data-theme');
+    if (this.pageTheme !== 'dark' && this.pageTheme !== 'light') this.pageTheme = null;
     this.hostTheme = this.opts.theme === 'dark' || this.opts.theme === 'light'
       ? this.opts.theme
       : null;
-    this.themePref = this.hostTheme || prefGet('dgm.theme');
-    this.theme = this.themePref || (systemDark() ? 'dark' : 'light');
+    // Whether the page carries a theme control of its own — the marker the
+    // chrome emits, upgraded at the bottom of this file. The attribute alone
+    // cannot answer that question, because "follow the system" *is* the
+    // attribute's absence: a cinegram page whose reader chose to follow the
+    // system looks exactly like a document that has never heard of cinegram.
+    // So it is the control that says who writes, and a player that finds one
+    // never writes the attribute itself.
+    this.pageChrome = !!document.querySelector('[data-dgm-theme-toggle]');
+    // mermaid needs a concrete palette per render, so an unanswered page still
+    // resolves to one — through the same media query the stylesheet uses.
+    this.theme = this.pageTheme || this.hostTheme || (systemDark() ? 'dark' : 'light');
 
     // Stage transform. Reset per view: a zoom that made sense for one diagram
     // is meaningless over the next.
@@ -576,9 +587,30 @@
     this.map = el('div', 'dgm-map is-off');
     this.mapBody = el('div', 'dgm-map-body');
     this.mapRect = el('div', 'dgm-map-rect');
-    this.map.setAttribute('aria-hidden', 'true');
+    // The whole box used to be aria-hidden: a thumbnail of the diagram and a
+    // rectangle drawn on it are decoration, and a screen reader has no use for
+    // a picture of a picture. It holds a real control now, and a focusable
+    // element inside an aria-hidden subtree is the one arrangement the
+    // standard calls an error — the reader can tab to it and hear nothing
+    // there. So the attribute moves down onto the two decorative children and
+    // the box itself becomes a named group with one button in it.
+    this.mapBody.setAttribute('aria-hidden', 'true');
+    this.mapRect.setAttribute('aria-hidden', 'true');
+    this.map.setAttribute('role', 'group');
+    this.map.setAttribute('aria-label', 'Diagram minimap');
     this.map.appendChild(this.mapBody);
     this.map.appendChild(this.mapRect);
+
+    // Fit belongs here rather than in the rail because the map already knows
+    // the answer the button gives: syncMap shows this box exactly while the
+    // stage is showing less than the whole diagram, which is exactly when
+    // there is anything to fit. In the rail the same button sat lit or dead
+    // beside a map saying the same thing twice; here it inherits the map's
+    // appearing and disappearing for free and exists only when it can act.
+    this.mapFit = iconButton('fit', 'Fit the whole diagram', 'dgm-map-fit', function () {
+      self.resetZoom();
+    });
+    this.map.appendChild(this.mapFit);
     this.stage.appendChild(this.map);
 
     // The tool rail, overlaying the stage's right edge. Built once here and
@@ -597,7 +629,6 @@
     this.bindMapGestures();
     this.bindStageGestures();
     this.bindRailGestures();
-    this.watchRailCollapse();
 
     // Camera keyframes bake the stage size in, so a resize invalidates them.
     // Same inline pattern as the window pointer listeners above this.
@@ -701,10 +732,37 @@
     this.lightbox = this.buildLightbox();
     this.root.appendChild(this.lightbox);
 
-    document.documentElement.setAttribute('data-theme', this.theme);
+    // The palette a document is wearing has to be legible from the document
+    // itself: pkg/embedkit reads the stamp back, and runtime.css keys its
+    // tokens off it. So a player that is the only thing here which knows the
+    // answer says it — and a player on a page with chrome of its own says
+    // nothing, because the chrome already did and the reader may have asked to
+    // follow the system, which is this attribute being absent.
+    if (!this.pageChrome) document.documentElement.setAttribute('data-theme', this.theme);
 
-    // Follow the system theme until the reader overrides it. Without this a
-    // page left open across a scheduled light/dark switch keeps the old one.
+    // Watch the attribute rather than any particular control. Page chrome, an
+    // editor's theme switch and a Material palette toggle all write the same
+    // one thing, so one observer serves every host — and two players on a page
+    // can no longer disagree about the palette, because neither of them owns
+    // it. A removed attribute is "follow the system" and resolves like a page
+    // that never had one.
+    if (window.MutationObserver) {
+      var watcher = new MutationObserver(function () {
+        var at = document.documentElement.getAttribute('data-theme');
+        self.setTheme(at === 'dark' || at === 'light' ? at : (systemDark() ? 'dark' : 'light'));
+      });
+      watcher.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+      // Straight onto the same list `own` keeps, so dispose() reaches it: the
+      // playground disposes a player and mounts the next on every keystroke,
+      // and an observer nobody disconnects holds the player it was built for
+      // for as long as the document lives.
+      this._unbind.push(function () { watcher.disconnect(); });
+    }
+
+    // Follow the system theme while nothing else has answered. Without this a
+    // page left open across a scheduled light/dark switch keeps the old one —
+    // and mermaid picks its palette per render, so following it means redrawing
+    // rather than merely restyling, which is what setTheme does.
     //
     // A host that states a theme is already tracking its own, and following the
     // OS underneath it would make an editor in forced-light show a dark diagram.
@@ -712,11 +770,13 @@
       try {
         var mq = matchMedia('(prefers-color-scheme: dark)');
         var follow = function (ev) {
-          if (self.themePref) return;
-          self.theme = ev.matches ? 'dark' : 'light';
-          self.themeBtn.textContent = self.theme === 'dark' ? 'Light' : 'Dark';
-          document.documentElement.setAttribute('data-theme', self.theme);
-          self.render();
+          // On a page with chrome, the attribute is the reader's explicit
+          // choice and the OS does not overrule it; its absence is the reader
+          // asking for exactly this. In a document with no chrome the only
+          // data-theme on the page is the one this player stamped, so there is
+          // nothing to ask and the system decides as it always has.
+          if (self.pageChrome && document.documentElement.getAttribute('data-theme')) return;
+          self.setTheme(ev.matches ? 'dark' : 'light');
         };
         if (mq.addEventListener) {
           own(self, mq, 'change', follow);
@@ -803,23 +863,44 @@
   //
   // Everything that is not Play or Present, in one translucent column over the
   // stage's right edge. The bar carried ten controls and read as a control
-  // panel with a diagram attached; the reader needs two of them, and the other
-  // seven are a keystroke or a hover away here instead.
+  // panel with a diagram attached; the reader needs two of them, and the rest
+  // are a keystroke or a hover away here instead.
+  //
+  // Three of them at rest — Cine, Copy link, help — which is few enough to
+  // stand at any width. That is why there is no ⋯ collapse behind them any
+  // more: a toggle, an is-open state and a media query that had to reset it
+  // were a state machine standing in for a column that no longer needs one.
+  //
+  // What is *not* here is as deliberate:
+  //
+  //   - Dark and light is a property of the page, so its control is page
+  //     chrome and lives at the bottom of this file, not in one diagram's
+  //     column of tools.
+  //   - Fit did nothing until something had zoomed, and it stood beside a
+  //     minimap that appears at exactly that moment — so it moved into the
+  //     map, in build(), where its own visibility is the answer.
+  //   - Speed was the most expensive control here: its label was its own
+  //     value, so the whole column had to be wide enough for "0.25x". It is
+  //     also a preference, remembered for every cinegram this browser opens,
+  //     which is not what prime real estate is for. It moved into the settings
+  //     sheet, in buildHelp — where a presenter can reach it too, which
+  //     dgm-authoring never let them.
   //
   // Vertically centred, because the corners are taken: the minimap parks
   // top-right and the presenter storyboard top-left.
   //
   // Nothing here is a mode. Each button keeps the classes it carried in the
   // bar, so `.dgm-present .dgm-authoring` strips exactly the set it always
-  // stripped — the rail thins to Restart, Cine, zoom, theme and help while
-  // presenting rather than disappearing — and `.dgm-inline .dgm-rail` hides
-  // the whole column, which is what keeps a diagram in a document showing what
-  // it showed before the rail existed.
+  // stripped — the rail thins to Restart, Cine and help while presenting
+  // rather than disappearing — and `.dgm-inline .dgm-rail` hides the whole
+  // column, which is what keeps a diagram in a document showing what it showed
+  // before the rail existed.
   Player.prototype.buildRail = function () {
     var self = this;
     var rail = el('div', 'dgm-rail');
     // A group, not a toolbar. `role="toolbar"` is a promise of single-tab-stop
-    // arrow-key navigation, and these are seven plain tab stops — but the
+    // arrow-key navigation, and these are four plain tab stops, three of them
+    // at rest — Restart only stands in the modes with no scrub — but the
     // roving tabindex that would make the promise true has to own the arrow
     // keys, and the transport already does: onKey reads ArrowLeft and
     // ArrowRight as previous and next step, which is the more valuable binding
@@ -828,53 +909,25 @@
     rail.setAttribute('role', 'group');
     rail.setAttribute('aria-label', 'Diagram tools');
 
-    // The narrow-screen collapse. Seven targets stacked over a phone-sized
-    // diagram is most of the diagram, so below the breakpoint the stylesheet
-    // hides the column and shows this instead; the class it toggles is what the
-    // stylesheet puts back. Hidden by CSS at every other width, so the toggle
-    // never competes with the tools it stands in for.
-    this.railMore = iconButton('more', 'More controls', 'dgm-btn dgm-rail-more', function () {
-      self.setRailOpen(!self.rail.classList.contains('is-open'));
-    });
-    this.railMore.setAttribute('aria-expanded', 'false');
-    rail.appendChild(this.railMore);
-
-    // One wrapper for the tools themselves, so the collapse can hide them by
-    // name — a `display` rule on the buttons would have to outrank the
-    // presenter rule, and would then put the authoring set back mid-talk.
-    var items = el('div', 'dgm-rail-items');
-    rail.appendChild(items);
-
-    // Using a tool closes the collapse again, which is the whole shape of the
-    // gesture on a phone: tap ⋯, tap the thing. Leaving the column standing
-    // over the diagram after it has done its job means a third tap to put it
-    // away. On the toggle itself this listener never runs — railMore is a
-    // sibling of items, not a child.
-    //
-    // The walk is by hand rather than through closest(): a press usually lands
-    // on the glyph, and an inline SVG element is where closest and classList
-    // are least reliable across the browsers this file still means to work in.
-    // A tagName comparison asks nothing of either.
-    items.addEventListener('click', function (ev) {
-      for (var n = ev.target; n && n !== items; n = n.parentNode) {
-        if (n.tagName && String(n.tagName).toLowerCase() === 'button') {
-          self.setRailOpen(false);
-          return;
-        }
-      }
-    });
+    // The buttons are children of the column itself. They used to sit in a
+    // `.dgm-rail-items` wrapper, so that the narrow-screen collapse could hide
+    // the whole set by name without a `display` rule on the buttons — one on
+    // them would have had to outrank the presenter rule, and would then have
+    // put the authoring set back mid-talk. With the collapse gone the wrapper
+    // wraps nothing, and a box whose only job was to be hidden is one fewer
+    // element between a press and the stylesheet.
 
     // Restart is not authoring: taking a demo from the top is one of the most
     // ordinary things a presenter does, so it stays when presenter mode strips
     // the building tools.
-    items.appendChild(iconButton('restart', 'Restart', 'dgm-btn', function () { self.seek(0); }));
-
-    // The speed button's label is its icon: a rate is a value, and a glyph for
-    // "1.5x" would be a worse drawing of the two characters that say it. Its
-    // accessible name carries the rate too — see syncSpeed.
-    this.speedBtn = button(speedLabel(this.speed), 'dgm-btn dgm-authoring', function () { self.cycleSpeed(); });
-    this.speedBtn.title = 'Playback speed';
-    items.appendChild(this.speedBtn);
+    //
+    // It is not much anywhere else, though — Home does it, clicking step 1 does
+    // it, and dragging the scrub to zero does it while being the gesture a
+    // reader reaches for first. So it carries dgm-nofoot, which shows it in
+    // exactly the modes that hide `.dgm-foot` and so have no scrub to drag:
+    // presenter and reel. The class says that reason rather than naming the
+    // modes, because the reason is what would have to change first.
+    rail.appendChild(iconButton('restart', 'Restart', 'dgm-btn dgm-nofoot', function () { self.seek(0); }));
 
     // Cine turns the reel's auto-follow camera on anywhere: each step framed
     // and zoomed, reel-style. Off is the default everywhere but a reel — a
@@ -883,7 +936,14 @@
     this.cineBtn = iconButton('cine', 'Camera follows each step', 'dgm-btn', function () {
       self.setFollow(!self.follow);
     });
-    items.appendChild(this.cineBtn);
+    // A toggle has to say which way it is set. The is-on class draws that for
+    // an eye and said nothing at all to a screen reader, which heard the same
+    // "Camera follows each step" whether the camera was following or not — a
+    // name that describes the button rather than its state. setFollow is the
+    // one writer of the class, so it writes this beside it; here is only the
+    // resting value.
+    this.cineBtn.setAttribute('aria-pressed', this.follow ? 'true' : 'false');
+    rail.appendChild(this.cineBtn);
 
     // "Look at *this* step" is most of why anyone sends a diagram to a
     // colleague, and reproducing a moment by describing it never works.
@@ -894,64 +954,12 @@
     this.shareNote = el('span', 'dgm-rail-note');
     this.shareNote.setAttribute('aria-hidden', 'true');
     this.shareBtn.appendChild(this.shareNote);
-    items.appendChild(this.shareBtn);
+    rail.appendChild(this.shareBtn);
 
-    this.zoomBtn = iconButton('fit', 'Reset zoom and pan', 'dgm-btn', function () { self.resetZoom(); });
-    items.appendChild(this.zoomBtn);
-
-    // Theme keeps its word rather than a sun and a moon, because the word is
-    // the state: a reader can see which way the switch will go without having
-    // to know whether the glyph means "is" or "becomes". No aria-label for the
-    // same reason — one would replace the label that carries the state.
-    this.themeBtn = button(this.theme === 'dark' ? 'Light' : 'Dark', 'dgm-btn', function () {
-      self.theme = self.theme === 'dark' ? 'light' : 'dark';
-      // An explicit choice also stops the page following the system, which is
-      // what the reader just overrode.
-      self.themePref = self.theme;
-      prefSet('dgm.theme', self.theme);
-      self.themeBtn.textContent = self.theme === 'dark' ? 'Light' : 'Dark';
-      document.documentElement.setAttribute('data-theme', self.theme);
-      self.render();
-    });
-    this.themeBtn.title = 'Switch between the light and dark palette';
-    items.appendChild(this.themeBtn);
-
-    this.helpBtn = iconButton('help', 'Keyboard shortcuts', 'dgm-btn', function () { self.toggleHelp(); });
-    items.appendChild(this.helpBtn);
+    this.helpBtn = iconButton('help', 'Settings and shortcuts', 'dgm-btn', function () { self.toggleHelp(); });
+    rail.appendChild(this.helpBtn);
 
     return rail;
-  };
-
-  // The collapse's one writer, so the class and the attribute a screen reader
-  // hears cannot disagree.
-  Player.prototype.setRailOpen = function (open) {
-    this.rail.classList.toggle('is-open', !!open);
-    this.railMore.setAttribute('aria-expanded', open ? 'true' : 'false');
-  };
-
-  // is-open is a narrow-screen state, and nothing about widening the window
-  // touches it: above the breakpoint the toggle is display:none and the items
-  // are shown regardless, so a phone turned to landscape and back would come
-  // back with the column standing open and no press that opened it. Reset it
-  // when the query stops matching — the width that made the collapse make sense
-  // is the width that owns it.
-  Player.prototype.watchRailCollapse = function () {
-    var self = this;
-    try {
-      var mq = matchMedia('(max-width: 520px)');
-      var onChange = function (ev) {
-        if (!ev.matches) self.setRailOpen(false);
-      };
-      if (mq.addEventListener) {
-        own(self, mq, 'change', onChange);
-      } else if (mq.addListener) {
-        // Same legacy pair as the prefers-color-scheme watcher in build():
-        // MediaQueryList predates EventTarget there, so `own` cannot express
-        // it and the remover goes on by hand.
-        mq.addListener(onChange);
-        self._unbind.push(function () { mq.removeListener(onChange); });
-      }
-    } catch (e) { /* no matchMedia: the collapse is only reachable by pressing it */ }
   };
 
   // The rail is a child of the stage, which reads a press as the start of a pan
@@ -970,11 +978,13 @@
     });
   };
 
-  // ICONS are the rail's glyphs, as path data on a 24-unit grid, stroked in
+  // ICONS are the runtime's glyphs, as path data on a 24-unit grid, stroked in
   // currentColor so a button inherits the theme's foreground. Drawn here rather
   // than fetched or set in a font because the emitted page carries no external
   // URL at all — html_test.go enforces it — and because an icon font would be
-  // a second copy of the alphabet for seven pictures.
+  // a second copy of the alphabet for a handful of pictures. Every glyph in
+  // the table is stroke-only, which is what lets icon() below be a loop with
+  // no special cases in it.
   var ICONS = {
     // A reload arc, three quarters of a circle with its head at the top.
     restart: ['M20 12a8 8 0 1 1-8-8', 'M9.5 1.5 12 4 9.5 6.5'],
@@ -990,9 +1000,15 @@
       'M9.5 20H6a2 2 0 0 1-2-2v-3.5'
     ],
     help: ['M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z', 'M9.3 9.4a2.8 2.8 0 0 1 5.5.9c0 1.9-2.7 2.3-2.7 4.1', 'M12 17.6v.01'],
-    // Three dots. A zero-length segment with a round cap is a dot, which keeps
-    // every glyph in this table stroke-only.
-    more: ['M12 6.5v.01', 'M12 12v.01', 'M12 17.5v.01']
+    // The two theme states, named for the state each *is* rather than the one
+    // a press goes to: a sun for light, a moon for dark.
+    'theme-light': [
+      'M16.2 12a4.2 4.2 0 1 1-8.4 0 4.2 4.2 0 0 1 8.4 0',
+      'M12 3v2', 'M12 19v2', 'M3 12h2', 'M19 12h2',
+      'M5.6 5.6l1.5 1.5', 'M16.9 16.9l1.5 1.5',
+      'M18.4 5.6l-1.5 1.5', 'M7.1 16.9l-1.5 1.5'
+    ],
+    'theme-dark': ['M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z']
   };
 
   function icon(name) {
@@ -1029,6 +1045,137 @@
     return b;
   }
 
+  // --- the page's theme control -------------------------------------------
+  //
+  // Dark and light describe the *page*, so the control belongs to the page's
+  // chrome and every player on it merely listens. It is written here all the
+  // same, because runtime.js is the one file all three of cinegram's own
+  // surfaces already carry — the emitted page, the listings `cinegram site`
+  // builds, the playground — and a control implemented three times is a
+  // control that works on two of them.
+  //
+  // Two states: a press flips light to dark and back, and that is the whole
+  // vocabulary. A page nobody has pressed carries no data-theme at all, so
+  // runtime.css's prefers-color-scheme rules answer for it — a fresh reader
+  // opens in whatever the system is showing, and an OS switch moves the page
+  // with no script in the way. That is the state every page starts in.
+  //
+  // The first press ends the following. It stores a side, and from then on
+  // this browser shows that side whatever the system does. The trade is
+  // deliberate rather than overlooked: a reader who asked for dark meant dark,
+  // including at sunrise. It does mean the glyph can outlive the system it was
+  // drawn from, which is why drawing goes through the *effective* theme below
+  // rather than the stored one, and why the control watches the media query
+  // itself for as long as nothing is stored.
+
+  // The one storage key, unchanged from the rail button so a reader who chose
+  // dark keeps dark, and the same key the boot script in pkg/emit/html reads
+  // before the first paint. Only 'light' and 'dark' are ever written to it.
+  var THEME_KEY = 'dgm.theme';
+
+  // themeChoice is the side the reader picked, or null while they have picked
+  // none. Anything else in the key reads as null — a value some other page
+  // wrote, or a stale one from a build that had a third state — which is
+  // exactly how the boot script treats it, so the attribute and the glyph
+  // agree from the very first frame.
+  function themeChoice() {
+    var v = prefGet(THEME_KEY);
+    return v === 'light' || v === 'dark' ? v : null;
+  }
+
+  // effectiveTheme is what the reader is actually looking at: the stored side
+  // if there is one, and the system's answer if there is not. It is what the
+  // glyph draws and what a press flips, because "the other one" only means
+  // anything against the palette on screen.
+  function effectiveTheme() {
+    return themeChoice() || (systemDark() ? 'dark' : 'light');
+  }
+
+  // chooseTheme is the only writer of the page's theme, and it writes both
+  // halves of it: the key the next page load reads, and the attribute every
+  // player on this one is watching. Nothing here needs a player handle — which
+  // is why the playground can dispose and remount players underneath it all
+  // day without the control noticing.
+  function chooseTheme(state) {
+    prefSet(THEME_KEY, state);
+    document.documentElement.setAttribute('data-theme', state);
+  }
+
+  // drawThemeToggle draws the state the page is *in* and names the action the
+  // press will take. The rail's button carried the word "Light" or "Dark"
+  // because the word was the state, and a 24px glyph cannot say that on its
+  // own; the accessible name says it instead, and aria-live on the button
+  // means the new state is announced rather than only shown.
+  function drawThemeToggle(btn) {
+    var state = effectiveTheme();
+    var label = 'Theme: ' + state + ' — click for ' + (state === 'dark' ? 'light' : 'dark');
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.innerHTML = '';
+    btn.appendChild(icon('theme-' + state));
+  }
+
+  // While nothing is stored, the effective theme can change without this page
+  // doing anything at all: the stylesheet re-resolves the media query and no
+  // data-theme mutation fires, so a button that only redrew on its own press
+  // would sit there showing a sun on a dark page. This is the listener that
+  // keeps it honest, and it goes quiet the moment a choice exists, because
+  // from then on the system is no longer what the page is showing.
+  //
+  // Nothing takes it off again: unlike a player, which the playground disposes
+  // and remounts on every keystroke, the control is built once and lives as
+  // long as the document does.
+  function watchSystemTheme(btn) {
+    try {
+      var mq = matchMedia('(prefers-color-scheme: dark)');
+      var redraw = function () {
+        if (themeChoice()) return;
+        drawThemeToggle(btn);
+      };
+      if (mq.addEventListener) {
+        mq.addEventListener('change', redraw);
+      } else if (mq.addListener) {
+        // The legacy pair predates EventTarget on MediaQueryList.
+        mq.addListener(redraw);
+      }
+    } catch (e) { /* no matchMedia: the glyph drawn at load stands */ }
+  }
+
+  // wireThemeToggle turns a bare button into the control: one this file built,
+  // or the placeholder a page emitted in its own HTML so that the control is
+  // there, and styled, before a single script has run.
+  function wireThemeToggle(btn) {
+    // A page is free to emit the placeholder *and* call themeToggle(); the
+    // flag is what keeps the sweep below from binding a second click.
+    if (btn.dgmThemeWired) return btn;
+    btn.dgmThemeWired = true;
+    btn.addEventListener('click', function () {
+      chooseTheme(effectiveTheme() === 'dark' ? 'light' : 'dark');
+      drawThemeToggle(btn);
+    });
+    drawThemeToggle(btn);
+    watchSystemTheme(btn);
+    return btn;
+  }
+
+  function upgradeThemeToggles() {
+    var all = document.querySelectorAll('[data-dgm-theme-toggle]');
+    for (var i = 0; i < all.length; i++) {
+      // `?embed` and `?reel` say the page is a picture rather than a page: an
+      // embed's furniture belongs to the document around it, a reel is watched
+      // rather than operated, and `cinegram record` photographs `?embed` frame
+      // by frame — so a control here would be in every GIF the recorder makes.
+      // The rail hides itself in those modes for the same three reasons; this
+      // is the page's half of it, and it is a removal rather than a `display`
+      // rule because the mode is in the URL, which no stylesheet can read.
+      if (isEmbedded(null) || isReel(null)) {
+        if (all[i].parentNode) all[i].parentNode.removeChild(all[i]);
+        continue;
+      }
+      wireThemeToggle(all[i]);
+    }
+  }
+
   // SHARE_LABEL is the copy button's resting name, restored after the
   // confirmation flashShare puts in its place.
   var SHARE_LABEL = 'Copy link';
@@ -1043,8 +1190,9 @@
     ['Esc', 'Leave presenter mode, or back out of a drilled-in view'],
     ['Click stage', 'In presenter mode, advance one step'],
     ['Click scene', 'Open the storyboard frame full size — scroll zooms, Esc closes'],
-    ['?', 'Show or hide this list'],
-    ['Scroll', 'Zoom the diagram; drag to pan, double-click to reset']
+    ['?', 'Show or hide this sheet — settings and shortcuts'],
+    ['Scroll', 'Zoom the diagram; drag to pan, double-click to reset'],
+    ['Minimap', 'Shown while zoomed: click or drag it to move the view, double-click it to fit']
   ];
 
   Player.prototype.onKey = function (ev) {
@@ -1094,15 +1242,27 @@
     }
   };
 
+  // SPEED_PRESETS is the sheet's speed menu. Five rates, coarse on purpose:
+  // this is a reader asking for slower or faster, not an author timing a beat
+  // — `speed:` in the scenario is for that, and outranks this.
+  var SPEED_PRESETS = [0.25, 0.5, 1, 1.5, 2];
+
+  // The sheet is settings *and* shortcuts. It was a read-only list, and speed
+  // was a button in the rail: a preference, persisted across every diagram on
+  // the origin, sitting in the narrowest and most contested column on the page,
+  // hidden from presenters by dgm-authoring, and reachable only by cycling
+  // forwards through five rates — four clicks to get from 2x back to 0.25x.
+  // Somewhere a reader opens deliberately is where a preference belongs, and
+  // once there is one such place there is somewhere for the next one to go.
   Player.prototype.buildHelp = function () {
     var self = this;
     var box = el('div', 'dgm-help');
     box.setAttribute('role', 'dialog');
-    box.setAttribute('aria-label', 'Keyboard shortcuts');
+    box.setAttribute('aria-label', 'Settings and shortcuts');
     box.style.display = 'none';
 
     var panel = el('div', 'dgm-help-panel');
-    panel.appendChild(elText('div', 'dgm-help-title', 'Keyboard shortcuts'));
+    panel.appendChild(elText('div', 'dgm-help-title', 'Settings and shortcuts'));
 
     // With reduced motion there is no autoplay, so stepping is not a fallback
     // — it is how the diagram is meant to be read. Say so where it is useful.
@@ -1111,6 +1271,33 @@
         'Your system asks for reduced motion, so playback does not start on its own. ' +
         'Step through with the arrow keys.'));
     }
+
+    panel.appendChild(elText('div', 'dgm-help-section', 'Playback'));
+
+    // A <label> wrapping the control rather than a `for`/id pair: one document
+    // can hold several players, ids have to be unique across it, and the pair
+    // would need a counter nothing else in this file needs. Wrapping asks for
+    // no id at all.
+    var speedRow = el('label', 'dgm-help-row');
+    speedRow.appendChild(elText('span', '', 'Speed'));
+    this.speedSel = el('select', 'dgm-select dgm-help-speed');
+    for (var i = 0; i < SPEED_PRESETS.length; i++) {
+      var opt = document.createElement('option');
+      opt.value = String(SPEED_PRESETS[i]);
+      opt.textContent = speedLabel(SPEED_PRESETS[i]);
+      this.speedSel.appendChild(opt);
+    }
+    this.speedSel.addEventListener('change', function () {
+      self.setSpeed(parseFloat(self.speedSel.value));
+    });
+    speedRow.appendChild(this.speedSel);
+    panel.appendChild(speedRow);
+    // The menu exists before any scenario has been adopted, so it is written
+    // once from whatever this.speed already is; adoptScenarioSpeed writes it
+    // again the moment a scenario has an opinion.
+    this.syncSpeed();
+
+    panel.appendChild(elText('div', 'dgm-help-section', 'Shortcuts'));
 
     var list = el('dl', 'dgm-help-list');
     SHORTCUTS.forEach(function (row) {
@@ -1126,6 +1313,20 @@
     box.addEventListener('click', function (ev) {
       if (ev.target === box) self.toggleHelp();
     });
+    // Escape is caught here rather than in onKey, and that is the price of
+    // putting a control in the sheet: onKey's first line refuses to steal a key
+    // from an input, a select or a textarea — which is what makes the speed
+    // menu safe to open over a live player — so with focus in the menu, which
+    // is exactly where opening the sheet puts it, onKey never sees the Escape
+    // at all. A listener on the sheet does, ahead of the one on the root or the
+    // document, and stops it there so nothing else reads the same press as
+    // "leave presenter mode".
+    box.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Escape' || !self.helpOpen()) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      self.toggleHelp();
+    });
     return box;
   };
 
@@ -1133,8 +1334,28 @@
     return this.help && this.help.style.display !== 'none';
   };
 
+  // Opening moves focus into the sheet, and that is not a nicety: the player
+  // behind it is still holding Space and the arrow keys, so a dialog that
+  // leaves focus outside itself is a dialog whose reader is driving the thing
+  // underneath it. Focus lands on the speed menu, and onKey's
+  // input/select/textarea guard then keeps all of those keys inside it.
+  //
+  // Closing puts focus back where it came from rather than on the Help button:
+  // `?` opens the sheet from wherever the reader already was, and leaving them
+  // on a button they never pressed would mean the next Space re-opened the
+  // sheet instead of playing the diagram.
   Player.prototype.toggleHelp = function () {
-    this.help.style.display = this.helpOpen() ? 'none' : '';
+    var open = !this.helpOpen();
+    if (open) this.helpReturn = document.activeElement;
+    this.help.style.display = open ? '' : 'none';
+    var to = open ? this.speedSel : this.helpReturn;
+    if (!open) this.helpReturn = null;
+    // The element focus came from can be gone by now — the playground disposes
+    // a player and mounts the next on every keystroke — so it is checked
+    // rather than assumed. Focus is a courtesy; the sheet opens either way.
+    try {
+      if (to && to.focus && document.contains(to)) to.focus();
+    } catch (e) { /* nothing to hand the focus to */ }
   };
 
   // ---------------------------------------------------------------------
@@ -1600,6 +1821,9 @@
   Player.prototype.setFollow = function (on) {
     this.follow = !!on;
     this.cineBtn.classList.toggle('is-on', this.follow);
+    // Beside the class, not anywhere else: one writer means the tint an eye
+    // reads and the state a screen reader hears cannot come apart.
+    this.cineBtn.setAttribute('aria-pressed', this.follow ? 'true' : 'false');
     this.camKeys = null;
     this.mapKeys = null;
     this.camOverride = false;
@@ -1660,9 +1884,10 @@
       this.holder.style.transform =
         'translate(' + this.panX + 'px,' + this.panY + 'px) scale(' + this.zoom + ')';
     }
-    if (this.zoomBtn) {
-      this.zoomBtn.classList.toggle('is-on', this.zoom !== 1 || this.panX !== 0 || this.panY !== 0);
-    }
+    // Nothing here has to light a "zoomed" state any more: the minimap *is*
+    // that state, drawn as the thing it means, and syncMap below is what shows
+    // and hides it.
+    //
     // This is the one place zoom/panX/panY are ever written, which is what
     // lets the wheel, the drag, resetZoom and the camera all move the map's
     // rectangle without any of them knowing the map exists.
@@ -1758,6 +1983,16 @@
       for (var a = attrs.length - 1; a >= 0; a--) {
         if (/^on/i.test(attrs[a].name)) all[m].removeAttribute(attrs[a].name);
       }
+      // And the keyboard affordances a clickable node carries. bindClicks gives
+      // every one of them tabindex, role and a name; the *listeners* are not
+      // cloned, so the copies are tab stops that do nothing — a second set of
+      // every control on the diagram, sitting in a subtree marked aria-hidden.
+      // A focusable element inside one of those is the same error the map's
+      // own attribute was moved down to avoid, and it is why the map can hold
+      // a real button at all.
+      all[m].removeAttribute('tabindex');
+      all[m].removeAttribute('role');
+      all[m].removeAttribute('aria-label');
     }
     clone.setAttribute('aria-hidden', 'true');
     clone.removeAttribute('role');
@@ -1936,7 +2171,33 @@
     }, true);
 
     this.map.addEventListener('click', function (ev) { ev.stopPropagation(); });
-    this.map.addEventListener('dblclick', function (ev) { ev.stopPropagation(); });
+
+    // Double-click means "put the whole diagram back" on the stage, so it means
+    // it on the picture of the stage too — the gesture a reader has already
+    // learned, in the one place they are looking while zoomed in. The
+    // stopPropagation is the same one the plain click needs: the stage below
+    // reads a double-click as a fit as well, and would run a second one.
+    //
+    // Unlike the stage's, this one does not also clear camOverride. The stage's
+    // double-click is documented as handing the framing back to the camera;
+    // here the camera is often the reason the map is on screen at all, so
+    // handing it back would re-zoom to the current step and the fit would look
+    // like it had failed. Both ways to fit from this box therefore agree, and
+    // agree with the button the rail used to carry.
+    this.map.addEventListener('dblclick', function (ev) {
+      ev.stopPropagation();
+      self.resetZoom();
+    });
+
+    // The fit control sits inside the box whose every press is "centre the view
+    // here", so its own press has to stop before the listeners above see it —
+    // otherwise fitting the diagram would first jump the pan somewhere. One
+    // stop covers the stage too: a stopped event reaches no ancestor at all, so
+    // the stage neither starts a pan nor, in a stepwise transport, advances a
+    // beat. Same three events and same reasoning as bindRailGestures.
+    ['pointerdown', 'click', 'dblclick'].forEach(function (type) {
+      self.mapFit.addEventListener(type, function (ev) { ev.stopPropagation(); });
+    });
   };
 
   // The picture-in-picture storyboard can be swiped away. Only while it is
@@ -2330,20 +2591,26 @@
 
   // setTheme switches the palette from outside.
   //
-  // A page discovers its theme, by asking the system or remembering a choice. A
-  // host does not have to be asked: an editor that has just gone light knows,
-  // and nothing else on the page will tell the player. Without this a diagram
-  // embedded in a document keeps the palette it was mounted with for as long as
-  // its element survives, which is until the block's own text changes.
+  // A page discovers its theme, by reading the root element or asking the
+  // system. A host does not have to be asked: an editor that has just gone
+  // light knows, and nothing else on the page will tell the player. Without
+  // this a diagram embedded in a document keeps the palette it was mounted with
+  // for as long as its element survives, which is until the block's own text
+  // changes.
+  //
+  // It is also the one way in: the attribute watcher in build() lands here too,
+  // and the guard below is what keeps a player's own mirror-write from coming
+  // back round through it.
   Player.prototype.setTheme = function (kind) {
     if (kind !== 'dark' && kind !== 'light') return;
     if (this.theme === kind) return;
 
     this.theme = kind;
-    this.themePref = kind;
     if (this.hostTheme) this.hostTheme = kind;
-    if (this.themeBtn) this.themeBtn.textContent = kind === 'dark' ? 'Light' : 'Dark';
-    document.documentElement.setAttribute('data-theme', kind);
+    // Only where nothing else writes it — see build(). On a page with chrome of
+    // its own the attribute is what *told* us, and writing it back would stamp
+    // the page of a reader who asked to follow the system.
+    if (!this.pageChrome) document.documentElement.setAttribute('data-theme', kind);
     // mermaid's theme is chosen per render, so the diagram has to be redrawn
     // rather than merely restyled.
     this.render();
@@ -3272,11 +3539,11 @@
   // toggle does not throw away a rate the viewer chose with the button.
   Player.prototype.adoptScenarioSpeed = function () {
     // An authored rate outranks the remembered one: the saved key is written
-    // by the speed button on ANY diagram on this origin, and letting it shadow
-    // a scenario that explicitly declares `speed:` would mean one 0.25x click
-    // on some other diagram permanently overrides every author's pacing. A
-    // scenario speed of 1 is indistinguishable from "not declared", so the
-    // remembered rate fills exactly that gap.
+    // by the sheet's speed menu on ANY diagram on this origin, and letting it
+    // shadow a scenario that explicitly declares `speed:` would mean one 0.25x
+    // picked on some other diagram permanently overrides every author's
+    // pacing. A scenario speed of 1 is indistinguishable from "not declared",
+    // so the remembered rate fills exactly that gap.
     var s = this.scenario().speed;
     var declared = (typeof s === 'number' && s > 0 && s !== 1) ? s : 0;
     var saved = parseFloat(prefGet('dgm.speed'));
@@ -3286,26 +3553,70 @@
     this.syncSpeed();
   };
 
+  // syncSpeed is the one place the sheet's menu is written from this.speed.
+  // Everything that moves the rate — an authored `speed:`, the remembered
+  // preference, a scenario change — arrives through adoptScenarioSpeed or
+  // setSpeed, and both end here.
   Player.prototype.syncSpeed = function () {
-    if (!this.speedBtn) return;
-    this.speedBtn.textContent = speedLabel(this.speed);
-    // "1x" alone is a rate with nothing to attach it to when it is read out of
-    // context, and in the rail there is no neighbouring word to supply one.
-    this.speedBtn.setAttribute('aria-label', 'Playback speed ' + speedLabel(this.speed));
+    var sel = this.speedSel;
+    if (!sel) return;
+
+    // A scenario may declare a rate that is not on the menu: `speed: 0.8`. The
+    // button this replaced stepped to the next preset *by value* rather than by
+    // index precisely so that such a rate went somewhere sensible instead of
+    // snapping to the slowest, and a <select> has no equivalent affordance — an
+    // unlisted value leaves the menu showing its first option, so a 0.8x
+    // scenario would read as 0.25x and be wrong rather than merely coarse. So
+    // the property is kept the other way round: the declared rate joins the
+    // menu, in rate order, for exactly as long as it is the rate in force.
+    // Choosing a preset drops it again, because nothing is then holding it.
+    var i, declared = null;
+    for (i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].getAttribute('data-dgm-declared')) {
+        declared = sel.options[i];
+        break;
+      }
+    }
+    if (declared) sel.removeChild(declared);
+
+    var listed = false;
+    for (i = 0; i < SPEED_PRESETS.length; i++) {
+      if (Math.abs(SPEED_PRESETS[i] - this.speed) < 1e-9) { listed = true; break; }
+    }
+    if (!listed) {
+      var opt = document.createElement('option');
+      opt.setAttribute('data-dgm-declared', '1');
+      opt.value = String(this.speed);
+      opt.textContent = speedLabel(this.speed);
+      // In rate order rather than tacked on the end: a menu reading 0.25x,
+      // 0.5x, 1x, 1.5x, 2x, 0.8x is a menu nobody can scan. insertBefore(x,
+      // null) appends, which is the right answer for a rate above them all.
+      var at = null;
+      for (i = 0; i < sel.options.length; i++) {
+        if (parseFloat(sel.options[i].value) > this.speed) { at = sel.options[i]; break; }
+      }
+      sel.insertBefore(opt, at);
+    }
+
+    sel.value = String(this.speed);
+    // The rate is deliberately no longer part of the accessible name. The
+    // button this replaced had to carry it, because its label *was* the rate
+    // and "1x" read out of context is a number attached to nothing; a select
+    // announces its own value, so repeating it in the name would have a screen
+    // reader say the rate twice and re-announce the control on every change.
+    // What the name has to supply is the word the visible "Speed" leaves to its
+    // heading.
+    sel.setAttribute('aria-label', 'Playback speed');
   };
 
-  // cycleSpeed steps to the next preset above the current rate, wrapping at the
-  // top. Picking by value rather than by index means a scenario speed that is
-  // not itself a preset (0.8, say) still cycles somewhere sensible instead of
-  // snapping to the slowest.
-  Player.prototype.cycleSpeed = function () {
-    var order = [0.25, 0.5, 1, 1.5, 2];
-    var next = order[0];
-    for (var i = 0; i < order.length; i++) {
-      if (order[i] > this.speed + 1e-9) { next = order[i]; break; }
-    }
-    this.speed = next;
-    prefSet('dgm.speed', String(next));
+  // setSpeed is the reader's own pacing, and the one writer of the remembered
+  // key. That key is global to the origin — 0.25x chosen here is 0.25x on every
+  // cinegram this browser opens next — which is exactly why adoptScenarioSpeed
+  // lets an authored `speed:` outrank it.
+  Player.prototype.setSpeed = function (v) {
+    if (!(v > 0)) return;
+    this.speed = v;
+    prefSet('dgm.speed', String(v));
     this.syncSpeed();
   };
 
@@ -4371,6 +4682,28 @@
     // { inline: true, keys: 'scoped', hash: false, autoplay: false, theme }.
     mount: function (root, timeline, opts) {
       return new Player(root, normalize(timeline), opts);
+    },
+    // themeToggle hands page chrome the light/dark control, ready to drop
+    // wherever the page keeps its own buttons. A page that would rather have
+    // the control in its markup — so it is there before this file loads —
+    // emits pkg/emit/html's ThemeToggleHTML instead and gets the same button,
+    // upgraded by the sweep below.
+    themeToggle: function () {
+      var btn = el('button', 'dgm-page-theme');
+      btn.type = 'button';
+      btn.setAttribute('data-dgm-theme-toggle', '');
+      btn.setAttribute('aria-live', 'polite');
+      return wireThemeToggle(btn);
     }
   };
+
+  // Adopt the placeholders the page emitted. This file is loaded at the end of
+  // the body on every surface that emits one, so the elements are already
+  // there — but a host free to load it from the head should get the control
+  // too, hence the readyState branch rather than a bare call.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', upgradeThemeToggles);
+  } else {
+    upgradeThemeToggles();
+  }
 })();

@@ -27,7 +27,7 @@ panel stays — a demo is exactly when someone wants to point at what the user
 sees. Escape leaves.
 
 Nothing about the timeline changes: the stop is a moment in the same
-milliseconds the clock already runs in, so the speed button, deep links and
+milliseconds the clock already runs in, so the playback speed, deep links and
 `CINEGRAM_PLAYER.seek()` all keep working.
 
 ## Reels

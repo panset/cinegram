@@ -2,7 +2,8 @@
 //
 // Simpler than the Markdown preview's job in every respect: one player, a page
 // of its own, and no diffing host to fight. The panel is rebuilt wholesale on
-// save, so there is nothing to carry across and nothing to observe.
+// save, so there is nothing to carry across — and one thing to observe, since a
+// theme change is not a save: see the end of start().
 //
 // It reads its payload from a <script type="application/json"> island rather
 // than a global, so that the only executable scripts on the page are the three
@@ -78,6 +79,16 @@
       hash: false,
       theme: themeKind()
     });
+
+    // The editor writes its theme as a class on <body>, and changing it rebuilds
+    // nothing here: the panel is regenerated on save, not on a colour change. So
+    // the player is told, exactly as media/preview.js tells the players in a
+    // Markdown document. Nothing else on this page could put it right — the
+    // editor is the authority on a webview's palette, and the runtime offers no
+    // control of its own to press.
+    new MutationObserver(function () {
+      window.CINEGRAM_PLAYER.setTheme(themeKind());
+    }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
   }
 
   function whenReady() {
