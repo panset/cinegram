@@ -1,0 +1,56 @@
+%% Every "did you mean" that carries a machine-applicable edit, in one file, so
+%% that each namespace's fix stays under review rather than being discovered by
+%% whoever runs `lint --fix` against it.
+flowchart LR
+  client[Client]
+  ing[Ingress]
+  svc[Service]
+  db[(Database)]
+
+  client --> ing
+  ing --> svc
+  svc --> db
+
+storyboard "Frames" {
+  frame opening { caption: "the only frame there is" }
+}
+
+scenario "base"
+
+  step one "the shared opening" {
+    flow client -> ing
+  }
+
+  step two "and on to the service" {
+    flow ing -> svc { colour: teal }
+  }
+
+scenario "misspelt targets"
+
+  step three "a node and a frame, both nearly right" {
+    highlight ingres
+    scene openning
+  }
+
+%% The base does not resolve, so the value carrying the name is what gets fixed
+%% — and it is quoted, which the edit has to put back.
+scenario "inherits from a name that is nearly right" { variant: "bse" }
+
+  step four "nothing to inherit" {
+    flow svc -> db
+  }
+
+scenario "inherits up to a step that is nearly right" { variant: "base", until: tow }
+
+  step five "no such step in the base" {
+    flow svc -> db
+  }
+
+view detail "Detail" from "pod-a.dgm"
+
+interact {
+  click clint -> reveal svc
+  click ing -> view detial
+  click svc -> reveal ingres
+  click db -> step twoo
+}

@@ -95,19 +95,27 @@ Read `references/language.md` first. The rules that most often trip authors:
 ### 3. Lint until clean — this loop is mandatory
 
 ```sh
-cinegram lint out.dgm --format=json --strict
+cinegram lint out.dgm --fix --format=json --strict
 ```
 
-Emits `[{"file","line","col","severity","message","hint"}]` on stdout; with
+`--fix` is the first move: it rewrites the file with the corrections the
+"did you mean" diagnostics already carry — a misspelled node, frame, view
+alias, step id, scenario name or attribute key — and reports each edit on
+stderr as `fixed file:line:col: old -> new`. It never guesses: an edit is
+applied only where the parser was confident enough to name the right spelling,
+and only while the text on disk still matches. Then read the array for what is
+left.
+
+The array is `[{"file","line","col","severity","message","hint"}]` on stdout,
+each entry optionally carrying `"fix": {"line","col","old","new"}`; with
 `--strict` the exit code is 0 only when that output is `[]`, so warnings stop
-the loop exactly as errors do. Fix **every** diagnostic — the hints usually
-name the fix (e.g. a misspelled node id suggests the right one). Warnings
-matter too: they describe animations that compile but won't do what was meant.
-Re-run until the output is `[]`.
+the loop exactly as errors do. Fix **every** remaining diagnostic by hand — the
+hints usually name the fix. Warnings matter too: they describe animations that
+compile but won't do what was meant. Re-run until the output is `[]`.
 
 (Without `--strict` the exit code is 0 with warnings and 1 with errors, and the
-JSON is identical — an older binary that rejects the flag still lints, you just
-have to read the array rather than the status.)
+JSON is identical — an older binary that rejects either flag still lints, you
+just have to read the array rather than the status, and fix by hand.)
 
 ### 4. Show the user the result
 

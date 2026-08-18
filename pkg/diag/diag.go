@@ -28,12 +28,35 @@ func (s Severity) String() string {
 	return "error"
 }
 
+// Fix is the machine-applicable half of a hint: replace Old with New at Pos.
+//
+// It is a plain value struct with no slice, map or pointer field, because
+// Bag.add de-duplicates diagnostics with `==` and a diagnostic carrying a
+// reference type could not be compared at all. One edit is enough: every site
+// that offers a fix is a "did you mean" over a single token.
+//
+// Pos is where the replaced text starts, which is not always where the
+// diagnostic itself is reported — a misspelt attribute key is reported at the
+// value, because that is where the reader is looking, while the text to swap is
+// the key.
+type Fix struct {
+	Pos source.Pos `json:"pos"`
+	Old string     `json:"old"`
+	New string     `json:"new"`
+}
+
+// Valid reports whether f names a real edit. An applier must ignore anything
+// else: a fix with no position has nothing to anchor to, and one with an empty
+// side would either delete or insert rather than replace.
+func (f Fix) Valid() bool { return f.Pos.IsValid() && f.Old != "" && f.New != "" }
+
 // Diagnostic is a single problem found in a source file.
 type Diagnostic struct {
 	Pos      source.Pos `json:"pos"`
 	Severity Severity   `json:"-"`
 	Msg      string     `json:"msg"`
 	Hint     string     `json:"hint,omitempty"`
+	Fix      Fix        `json:"fix,omitzero"`
 }
 
 // Bag accumulates diagnostics during a parse or compile pass.
@@ -55,6 +78,17 @@ func (b *Bag) ErrorHintf(pos source.Pos, hint, format string, args ...any) {
 	b.add(Diagnostic{Pos: pos, Severity: SeverityError, Msg: fmt.Sprintf(format, args...), Hint: hint})
 }
 
+// ErrorFixf records an error at pos carrying both a hint and the same
+// suggestion as an edit a tool can apply.
+//
+// The hint is not redundant: it is what a human reads, and it survives when the
+// fix does not. An invalid fix is stored as the zero one rather than rejected,
+// so a caller can pass whatever its suggester produced without first asking
+// whether there was anything to suggest.
+func (b *Bag) ErrorFixf(pos source.Pos, fix Fix, hint, format string, args ...any) {
+	b.add(Diagnostic{Pos: pos, Severity: SeverityError, Msg: fmt.Sprintf(format, args...), Hint: hint, Fix: validOrZero(fix)})
+}
+
 // Warnf records a warning at pos.
 func (b *Bag) Warnf(pos source.Pos, format string, args ...any) {
 	b.add(Diagnostic{Pos: pos, Severity: SeverityWarning, Msg: fmt.Sprintf(format, args...)})
@@ -63,6 +97,21 @@ func (b *Bag) Warnf(pos source.Pos, format string, args ...any) {
 // WarnHintf records a warning at pos along with a suggested fix.
 func (b *Bag) WarnHintf(pos source.Pos, hint, format string, args ...any) {
 	b.add(Diagnostic{Pos: pos, Severity: SeverityWarning, Msg: fmt.Sprintf(format, args...), Hint: hint})
+}
+
+// WarnFixf records a warning at pos carrying both a hint and the same
+// suggestion as an edit a tool can apply.
+func (b *Bag) WarnFixf(pos source.Pos, fix Fix, hint, format string, args ...any) {
+	b.add(Diagnostic{Pos: pos, Severity: SeverityWarning, Msg: fmt.Sprintf(format, args...), Hint: hint, Fix: validOrZero(fix)})
+}
+
+// validOrZero drops an unusable fix, so that "has a fix" and "has a valid fix"
+// are the same question everywhere downstream.
+func validOrZero(f Fix) Fix {
+	if f.Valid() {
+		return f
+	}
+	return Fix{}
 }
 
 // add records d, ignoring an exact repeat.

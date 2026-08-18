@@ -14,6 +14,7 @@ go_library(
     srcs = [
         "assets.go",
         "capture.go",
+        "fix.go",
         "main.go",
         "record.go",
         "serve.go",
@@ -74,6 +75,7 @@ go_test(
     name = "cinegram_test",
     srcs = [
         "assets_test.go",
+        "fix_test.go",
         "main_test.go",
         "record_test.go",
         "serve_test.go",

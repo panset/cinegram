@@ -13,7 +13,7 @@ cinegram assets             -o dir/         # the embed kit, for a site of your 
 cinegram frame   <file.dgm> --at 1620ms -o still.png   # one exact moment
 cinegram record  <file.dgm> -o out.gif      # a GIF, mp4 or webm of one scenario
 cinegram narrate <file.dgm> [--format=md|json]   # the animation, written out
-cinegram lint    <file.dgm> [--format=text|json] [--strict] # diagnostics only
+cinegram lint    <file.dgm> [--format=text|json] [--strict] [--fix] # diagnostics only
 ```
 
 ### Authoring
@@ -160,7 +160,9 @@ the fields it was built from, so filtering for "every failing flow" does not
 mean parsing the prose back apart.
 
 `lint --format=json` emits
-`[{"file","line","col","severity","message","hint"}]` on stdout. Exit codes stay
+`[{"file","line","col","severity","message","hint"}]` on stdout, each entry
+optionally carrying `"fix": {"line","col","old","new"}` — the same suggestion in
+a form something other than a person can act on. Exit codes stay
 out of the payload — warnings 0, errors 1 — so a caller can branch on the status
 *and* read the detail instead of choosing between them. Adding `--strict` makes
 a warning exit 1 too, leaving the document byte-identical: an agent can then
@@ -171,6 +173,36 @@ and plays only when asked: pressing Play, or a scenario that declares
 `autoplay: true` (still skipped when the reader's system asks for reduced
 motion). `window.CINEGRAM_PLAYER` is the same player, so
 `CINEGRAM_PLAYER.seek(2400)` lands on a moment deterministically.
+
+### Fixing what lint finds
+
+```
+cinegram lint out.dgm --fix
+```
+
+The "did you mean" diagnostics — a misspelt node, frame, view alias, step id,
+scenario name or attribute key — carry the correction as a structured edit, not
+only as English. `--fix` applies them and prints one line per edit on stderr:
+
+```
+fixed out.dgm:11:15: ingres -> ing
+applied 1 fix
+```
+
+An edit is verified against the file before it is spliced: the text has to
+still be what the compiler saw, or the fix is skipped and said so. Fixes are
+applied right to left within a line so earlier columns cannot move, and the
+file is re-parsed between rounds — up to five — because one correction can
+uncover the next.
+
+Whether a fix exists at all is decided in the parser, by the same closeness
+bound that decides whether to say "did you mean" in the first place. There is
+no second, looser rule at the command layer, so `--fix` can never apply an edit
+the diagnostic would not have suggested out loud.
+
+Everything else is unchanged: `--fix` composes with `--strict` and
+`--format=json`, the JSON still goes to stdout on its own, and the exit status
+is exactly the one a plain lint of the repaired file would earn.
 
 ### Driving the player
 

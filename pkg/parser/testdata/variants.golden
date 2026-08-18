@@ -65,6 +65,7 @@ diagnostics:
     hint: name the scenario this one diverges from
   51:36: error: no scenario named "bse" to inherit from
     hint: did you mean base?
+    fix: 51:36 "\"bse\"" -> "\"base\""
   57:56: error: `until` names a step to inherit up to, but no scenario is being inherited from
     hint: add `variant: "<scenario name>"` to say which scenario to inherit from
   63:80: error: scenario "base" has no step "seventeen" to inherit up to

@@ -103,6 +103,79 @@ func TestCollectNoBags(t *testing.T) {
 	}
 }
 
+// TestCollectCarriesTheFix pins the machine-applicable half of a hint across
+// the wire, including the thing that is easy to get wrong: the fix's position
+// is the text to replace, which is not always where the diagnostic is reported
+// — a misspelt attribute key is reported at the value and rewritten at the key.
+func TestCollectCarriesTheFix(t *testing.T) {
+	bag := diag.NewBag("scene.dgm")
+	bag.WarnFixf(
+		source.Pos{Line: 27, Col: 34},
+		diag.Fix{Pos: source.Pos{Line: 27, Col: 26}, Old: "colour", New: "color"},
+		"did you mean color?", "unknown flow attribute %q", "colour")
+
+	got, _ := Collect([]*diag.Bag{bag})
+	if len(got) != 1 {
+		t.Fatalf("got %d diagnostics, want 1", len(got))
+	}
+
+	d := got[0]
+	if d.Fix == nil {
+		t.Fatal("the fix did not survive Collect")
+	}
+	if d.Fix.Line != 27 || d.Fix.Col != 26 {
+		t.Errorf("fix position = %d:%d, want 27:26 — the key, not the value", d.Fix.Line, d.Fix.Col)
+	}
+	if d.Fix.Old != "colour" || d.Fix.New != "color" {
+		t.Errorf("fix = %q -> %q, want colour -> color", d.Fix.Old, d.Fix.New)
+	}
+	if d.Line != 27 || d.Col != 34 {
+		t.Errorf("diagnostic position = %d:%d, want 27:34 — reporting is unaffected", d.Line, d.Col)
+	}
+
+	encoded, err := json.Marshal(d)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(encoded), `"fix":{"line":27,"col":26,"old":"colour","new":"color"}`) {
+		t.Errorf("wire shape is not the documented one:\n%s", encoded)
+	}
+}
+
+// TestFixIsOmittedWhenInvalid keeps a host from having to ask whether what it
+// was handed can be applied. An edit with nothing to anchor to, or with an
+// empty side, is not a narrower fix — it is no fix, and must not appear.
+func TestFixIsOmittedWhenInvalid(t *testing.T) {
+	unfixable := []struct {
+		name string
+		fix  diag.Fix
+	}{
+		{"no fix at all", diag.Fix{}},
+		{"no position", diag.Fix{Old: "ingres", New: "ing"}},
+		{"nothing to replace", diag.Fix{Pos: source.Pos{Line: 1, Col: 1}, New: "ing"}},
+		{"nothing to replace it with", diag.Fix{Pos: source.Pos{Line: 1, Col: 1}, Old: "ingres"}},
+	}
+
+	for _, tc := range unfixable {
+		t.Run(tc.name, func(t *testing.T) {
+			bag := diag.NewBag("plain.dgm")
+			bag.ErrorFixf(source.Pos{Line: 1, Col: 1}, tc.fix, "a hint", "a message")
+
+			got, _ := Collect([]*diag.Bag{bag})
+			if got[0].Fix != nil {
+				t.Fatalf("fix = %+v, want none", got[0].Fix)
+			}
+			encoded, err := json.Marshal(got[0])
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			if strings.Contains(string(encoded), `"fix"`) {
+				t.Errorf("fix should be absent from the wire shape, got:\n%s", encoded)
+			}
+		})
+	}
+}
+
 // TestHintIsOmittedWhenEmpty keeps the wire shape as narrow as it was: a
 // diagnostic with no hint must not carry an empty field for one.
 func TestHintIsOmittedWhenEmpty(t *testing.T) {

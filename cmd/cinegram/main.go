@@ -134,6 +134,11 @@ Usage:
                               [--strict]         exit 1 on warnings too, for a
                                                  CI job or an agent loop that
                                                  should stop at the first one
+                              [--fix]            rewrite the source with the
+                                                 edits the diagnostics carry —
+                                                 the "did you mean" ones — then
+                                                 report what is left. Composes
+                                                 with --strict and --format
   cinegram version
   cinegram upgrade [--check]                  replace this binary with the
                                                  latest GitHub release;
@@ -480,10 +485,11 @@ func rootHasNoScenarios(t *ir.Timeline) bool {
 
 func cmdLint(args []string, stdout, stderr io.Writer) error {
 	var format string
-	var strict bool
+	var strict, fix bool
 	input, _, err := parseArgsWith("lint", args, func(fs *flag.FlagSet) {
 		fs.StringVar(&format, "format", "text", "text or json")
 		fs.BoolVar(&strict, "strict", false, "fail on warnings too, not only errors")
+		fs.BoolVar(&fix, "fix", false, "rewrite the source with the edits the diagnostics carry")
 	})
 	if err != nil {
 		return err
@@ -497,6 +503,12 @@ func cmdLint(args []string, stdout, stderr io.Writer) error {
 	// Compile as well: some problems (a bad duration on an action that
 	// validation skipped) only surface during the timing pass.
 	compile.CompileBundle(bundle)
+
+	if fix {
+		if bundle, err = runFixes(input, bundle, stderr); err != nil {
+			return err
+		}
+	}
 
 	if format == "json" {
 		return lintJSON(bundle.Bags(), stdout, strict)

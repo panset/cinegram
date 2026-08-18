@@ -154,7 +154,8 @@ func checkAttrs(attrs ast.Attrs, allowed map[string]string, what string, b *diag
 		v, _ := attrs.Get(k)
 		typ, ok := allowed[k]
 		if !ok {
-			b.WarnHintf(v.At, suggestAttr(k, allowed), "unknown %s attribute %q", what, k)
+			hint, best := suggestAttr(k, allowed)
+			b.WarnFixf(v.At, attrKeyFix(v, k, best), hint, "unknown %s attribute %q", what, k)
 			continue
 		}
 		var err error
@@ -196,32 +197,35 @@ func checkAttrs(attrs ast.Attrs, allowed map[string]string, what string, b *diag
 	}
 }
 
-// suggestAttr proposes a correction for an unknown attribute key.
+// suggestAttr proposes a correction for an unknown attribute key, returning the
+// winning candidate alongside the hint.
 //
 // The distance bound is tighter than the one used for node names. Attribute
 // vocabularies are small sets of short similar words, so the generous bound
 // that works for user-chosen ids would confidently offer "label" for "wobble".
-// Below the bound, listing the vocabulary is the more useful answer.
-func suggestAttr(key string, allowed map[string]string) string {
+// Below the bound, listing the vocabulary is the more useful answer — and, as
+// in suggestFrom, best comes back empty there, so the bound doubles as the rule
+// for when a rewrite may be offered.
+func suggestAttr(key string, allowed map[string]string) (hint, best string) {
 	keys := make([]string, 0, len(allowed))
 	for k := range allowed {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
-	best, bestDist := "", 1<<30
+	bestDist := 1 << 30
 	for _, c := range keys {
 		if d := editDistance(strings.ToLower(key), c); d < bestDist {
 			best, bestDist = c, d
 		}
 	}
 	if best != "" && bestDist <= 2 && 2*bestDist < len(key) {
-		return "did you mean " + best + "?"
+		return "did you mean " + best + "?", best
 	}
 	if len(keys) == 0 {
-		return "this construct takes no attributes"
+		return "this construct takes no attributes", ""
 	}
-	return "known here: " + strings.Join(keys, ", ")
+	return "known here: " + strings.Join(keys, ", "), ""
 }
 
 func oneOf(candidates []string, s string) bool {

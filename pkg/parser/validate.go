@@ -84,7 +84,8 @@ func validateVariants(scenarios []*ast.Scenario, b *diag.Bag) {
 		}
 		base, ok := byName[want.Raw]
 		if !ok {
-			b.ErrorHintf(want.At, suggestFrom(want.Raw, names, "scenarios"),
+			hint, best := suggestFrom(want.Raw, names, "scenarios")
+			b.ErrorFixf(want.At, valueFix(want, best), hint,
 				"no scenario named %q to inherit from", want.Raw)
 			continue
 		}
@@ -100,7 +101,8 @@ func validateVariants(scenarios []*ast.Scenario, b *diag.Bag) {
 		if hasUntil {
 			i := stepIndex(base, until.Raw)
 			if i < 0 {
-				b.ErrorHintf(until.At, suggestFrom(until.Raw, effectiveIDs(base), "steps"),
+				hint, best := suggestFrom(until.Raw, effectiveIDs(base), "steps")
+				b.ErrorFixf(until.At, valueFix(until, best), hint,
 					"scenario %q has no step %q to inherit up to", want.Raw, until.Raw)
 				continue
 			}
@@ -245,7 +247,8 @@ func validateActions(actions []ast.Action, t *symbol.Table, names []string, fram
 		if a.Kind == ast.ActionScene {
 			for _, tgt := range a.Targets {
 				if !frames.contains(tgt.Name) {
-					b.ErrorHintf(tgt.At, suggestFrom(tgt.Name, frames.list(), "frames"),
+					hint, best := suggestFrom(tgt.Name, frames.list(), "frames")
+					b.ErrorFixf(tgt.At, targetFix(tgt, best), hint,
 						"no storyboard frame named %q", tgt.Name)
 				}
 			}
@@ -259,7 +262,8 @@ func validateActions(actions []ast.Action, t *symbol.Table, names []string, fram
 			if _, ok := t.Group(tgt.Name); ok {
 				continue
 			}
-			b.ErrorHintf(tgt.At, suggest(tgt.Name, names),
+			hint, best := suggest(tgt.Name, names)
+			b.ErrorFixf(tgt.At, targetFix(tgt, best), hint,
 				"%q is not a node in this diagram", tgt.Name)
 		}
 
@@ -366,7 +370,8 @@ func validateInteract(doc *ast.Document, t *symbol.Table, b *diag.Bag) {
 		checkAttrs(bd.Attrs, bindingAttrs, "click", b)
 
 		if !resolves(bd.Source.Name, t) {
-			b.ErrorHintf(bd.Source.At, suggest(bd.Source.Name, names),
+			hint, best := suggest(bd.Source.Name, names)
+			b.ErrorFixf(bd.Source.At, targetFix(bd.Source, best), hint,
 				"%q is not a node in this diagram", bd.Source.Name)
 		} else if bound[bd.Source.Name] {
 			b.ErrorHintf(bd.Source.At, "give each clickable element a single behaviour",
@@ -378,12 +383,14 @@ func validateInteract(doc *ast.Document, t *symbol.Table, b *diag.Bag) {
 			switch bd.Kind {
 			case ast.BindView:
 				if !views[tgt.Name] {
-					b.ErrorHintf(tgt.At, suggestFrom(tgt.Name, viewNames, "views"),
+					hint, best := suggestFrom(tgt.Name, viewNames, "views")
+					b.ErrorFixf(tgt.At, targetFix(tgt, best), hint,
 						"no view named %q is declared", tgt.Name)
 				}
 			case ast.BindReveal:
 				if !resolves(tgt.Name, t) {
-					b.ErrorHintf(tgt.At, suggest(tgt.Name, names),
+					hint, best := suggest(tgt.Name, names)
+					b.ErrorFixf(tgt.At, targetFix(tgt, best), hint,
 						"%q is not a node in this diagram", tgt.Name)
 				} else if tgt.Name == bd.Source.Name {
 					b.ErrorHintf(tgt.At, "a hidden element cannot be clicked to reveal itself",
@@ -391,7 +398,8 @@ func validateInteract(doc *ast.Document, t *symbol.Table, b *diag.Bag) {
 				}
 			case ast.BindStep:
 				if !steps[tgt.Name] {
-					b.ErrorHintf(tgt.At, suggestFrom(tgt.Name, sortedKeys(steps), "steps"),
+					hint, best := suggestFrom(tgt.Name, sortedKeys(steps), "steps")
+					b.ErrorFixf(tgt.At, targetFix(tgt, best), hint,
 						"no step named %q in this document", tgt.Name)
 				}
 			case ast.BindURL:
@@ -486,16 +494,22 @@ func knownNames(t *symbol.Table) []string {
 	return out
 }
 
-// suggest returns a "did you mean" hint for an unresolved node or group name.
-func suggest(name string, candidates []string) string {
+// suggest returns a "did you mean" hint for an unresolved node or group name,
+// along with the candidate it named, if any.
+func suggest(name string, candidates []string) (hint, best string) {
 	return suggestFrom(name, candidates, "nodes")
 }
 
 // suggestFrom is suggest over an arbitrary namespace. noun names what the
 // candidates are, so the fallback list reads correctly for views and steps as
 // well as for nodes.
-func suggestFrom(name string, candidates []string, noun string) string {
-	best, bestDist := "", 1<<30
+//
+// best is the winning candidate and is returned only on the "did you mean"
+// branch: the distance bound below is the whole fixability policy, so a caller
+// building a machine-applicable edit needs no threshold of its own — an empty
+// best means there was nothing confident enough to rewrite.
+func suggestFrom(name string, candidates []string, noun string) (hint, best string) {
+	bestDist := 1 << 30
 	for _, c := range candidates {
 		d := editDistance(strings.ToLower(name), strings.ToLower(c))
 		if d < bestDist {
@@ -505,16 +519,60 @@ func suggestFrom(name string, candidates []string, noun string) string {
 	// Only suggest when the names are genuinely close; otherwise list what
 	// is available, which is more useful than a bad guess.
 	if best != "" && bestDist <= len(name)/2+1 {
-		return "did you mean " + best + "?"
+		return "did you mean " + best + "?", best
 	}
 	if len(candidates) == 0 {
-		return "this document declares no " + noun
+		return "this document declares no " + noun, ""
 	}
 	shown := candidates
 	if len(shown) > 8 {
 		shown = shown[:8]
 	}
-	return "known " + noun + ": " + strings.Join(shown, ", ")
+	return "known " + noun + ": " + strings.Join(shown, ", "), ""
+}
+
+// The three fix constructors below turn a winning candidate into the edit that
+// applies it. They all return the zero fix for an empty candidate, so every
+// call site reads the same whether or not there was anything to suggest.
+
+// targetFix replaces a misspelt reference — a node, group, frame, view alias or
+// step id — where it was written. A target is always a bare identifier, so the
+// text on disk is exactly its name.
+func targetFix(t ast.Target, best string) diag.Fix {
+	if best == "" {
+		return diag.Fix{}
+	}
+	return diag.Fix{Pos: t.At, Old: t.Name, New: best}
+}
+
+// valueFix replaces a misspelt attribute value.
+//
+// A quoted value is stored unescaped and positioned at its opening quote, so
+// the edit has to carry the quotes on both sides of the swap to line up with
+// the bytes on disk. Where an escape makes the reconstruction differ from what
+// was actually written, the applier's Old check simply fails and the fix is
+// skipped — a wrong edit is far worse than one not offered.
+func valueFix(v ast.Value, best string) diag.Fix {
+	if best == "" {
+		return diag.Fix{}
+	}
+	if v.Quoted {
+		return diag.Fix{Pos: v.At, Old: `"` + v.Raw + `"`, New: `"` + best + `"`}
+	}
+	return diag.Fix{Pos: v.At, Old: v.Raw, New: best}
+}
+
+// attrKeyFix replaces a misspelt attribute key.
+//
+// The diagnostic is reported at the value, which is where the reader is
+// looking, but the text to swap is the key — so the fix carries the key's own
+// position. An attribute the parser synthesized was never typed and has no key
+// position, which leaves nothing to rewrite.
+func attrKeyFix(v ast.Value, key, best string) diag.Fix {
+	if best == "" {
+		return diag.Fix{}
+	}
+	return diag.Fix{Pos: v.KeyAt, Old: key, New: best}
 }
 
 func editDistance(a, b string) int {

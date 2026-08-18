@@ -256,12 +256,15 @@ interact {
 
 ## The lint loop
 
-`cinegram lint file.dgm --format=json --strict` →
-`[{"file","line","col","severity","message","hint"}]`; with `--strict` exit 0
-only when that is `[]`. Without it, warnings exit 0 and errors exit 1, and the
-JSON is the same either way. Fix everything — hints usually name the fix
-(misspelled ids get a did-you-mean; a missing edge suggests what to add or
-reroute).
+`cinegram lint file.dgm --fix --format=json --strict` →
+`[{"file","line","col","severity","message","hint"}]`, each entry optionally
+carrying `"fix": {"line","col","old","new"}`; with `--strict` exit 0 only when
+that is `[]`. Without it, warnings exit 0 and errors exit 1, and the JSON is the
+same either way. `--fix` applies the did-you-mean edits to the file first —
+misspelled node, frame, view, step, scenario and attribute names — and prints
+`fixed file:line:col: old -> new` per edit on stderr; the exit status is still
+the one the repaired file earns. Fix the rest by hand — hints usually name the
+fix (a missing edge suggests what to add or reroute).
 
 ## Pitfalls (all verified against the parser)
 

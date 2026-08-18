@@ -1,0 +1,74 @@
+diagram: flowchart (flowchart LR)
+direction: LR
+
+nodes:
+  client     label="Client"                 shape=rect      
+  ing        label="Ingress"                shape=rect      
+  svc        label="Service"                shape=rect      
+  db         label="Database"               shape=cylinder  
+
+edges:
+  e0   client -> ing style=normal head=arrow
+  e1   ing -> svc style=normal head=arrow
+  e2   svc -> db style=normal head=arrow
+
+views:
+  detail     title="Detail"             from="pod-a.dgm"
+
+storyboard "Frames"
+  frame opening      img=""                           caption="the only frame there is"
+
+interact:
+  click clint      -> reveal svc
+  click ing        -> view detial
+  click svc        -> reveal ingres
+  click db         -> step twoo
+
+scenario "base"
+  step one "the shared opening"
+    flow client -> ing
+  step two "and on to the service"
+    flow ing -> svc {colour="teal"}
+
+scenario "misspelt targets"
+  step three "a node and a frame, both nearly right"
+    highlight ingres
+    scene openning
+
+scenario "inherits from a name that is nearly right" {variant="bse"}
+  step four "nothing to inherit"
+    flow svc -> db
+
+scenario "inherits up to a step that is nearly right" {variant="base" until="tow"}
+  step five "no such step in the base"
+    flow svc -> db
+
+diagnostics:
+  25:31: warning: unknown flow attribute "colour"
+    hint: did you mean color?
+    fix: 25:23 "colour" -> "color"
+  31:15: error: "ingres" is not a node in this diagram
+    hint: did you mean ing?
+    fix: 31:15 "ingres" -> "ing"
+  32:11: error: no storyboard frame named "openning"
+    hint: did you mean opening?
+    fix: 32:11 "openning" -> "opening"
+  37:65: error: no scenario named "bse" to inherit from
+    hint: did you mean base?
+    fix: 37:65 "\"bse\"" -> "\"base\""
+  43:81: error: scenario "base" has no step "tow" to inherit up to
+    hint: did you mean two?
+    fix: 43:81 "tow" -> "two"
+  49:1: warning: view "detail" is declared but nothing clicks through to it
+  52:9: error: "clint" is not a node in this diagram
+    hint: did you mean client?
+    fix: 52:9 "clint" -> "client"
+  53:21: error: no view named "detial" is declared
+    hint: did you mean detail?
+    fix: 53:21 "detial" -> "detail"
+  54:23: error: "ingres" is not a node in this diagram
+    hint: did you mean ing?
+    fix: 54:23 "ingres" -> "ing"
+  55:20: error: no step named "twoo" in this document
+    hint: did you mean two?
+    fix: 55:20 "twoo" -> "two"
