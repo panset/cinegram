@@ -139,6 +139,7 @@ reading the `.dgm`.
 | Vertical story clip for LinkedIn/Shorts/Slack (9:16, big captions, auto-follow camera) | `cinegram record out.dgm --reel -o out.mp4` — Chrome + ffmpeg (mp4 preferred at this size; `?reel` on the HTML page is the live version) |
 | One scenario / one sub-view | add `--scenario s1` / `--view <id>` to `record`/`frame` |
 | Still of one moment | `cinegram frame out.dgm --at 1620ms -o still.png` — Chrome |
+| Every step at a glance, for a PR review or an agent to read | `cinegram sheet out.dgm -o sheet.png --manifest sheet.json` — Chrome (one captioned cell per step; `--cols N` to reshape the grid) |
 | Plain Mermaid back out | `cinegram mermaid out.dgm` |
 | Written walkthrough for docs | `cinegram narrate out.dgm -o walkthrough.md` |
 | Timeline as data | `cinegram compile out.dgm -o timeline.json` |
@@ -162,6 +163,18 @@ at a time). Scenarios are addressed as `s0`, `s1`, … in declaration order.
 
 ### 6. Verify visually when it matters
 
-`cinegram frame` captures one exact, deterministic moment. Read the PNG to
-confirm a key beat looks right — e.g. that a `status: fail` ✕ lands where
-intended.
+**Read the sheet first, then use `frame` for close-ups.**
+
+```sh
+cinegram sheet out.dgm -o sheet.png --manifest sheet.json
+```
+
+`sheet` is one PNG with a captioned cell per step — the whole scenario checked
+in a single image read, instead of one screenshot per beat. Each cell is shot a
+millisecond before its step ends, so its flows have landed and the caption
+names the step it belongs to. `--manifest` maps every rectangle back to its
+step id and the moment it shows.
+
+Then `cinegram frame out.dgm --at 1620ms -o still.png` for anything the sheet
+made you suspicious of: it captures that one exact, deterministic moment at
+full size — e.g. that a `status: fail` ✕ lands where intended.

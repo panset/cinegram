@@ -9,6 +9,7 @@
 //	cinegram mermaid <file.dgm>   # the diagram as plain Mermaid
 //	cinegram preview <file.dgm>   # self-contained animated HTML
 //	cinegram record  <file.dgm>   # a GIF, mp4 or webm of one scenario
+//	cinegram sheet   <file.dgm>   # a labelled contact sheet, one cell per step
 //	cinegram narrate <file.dgm>   # the animation as a written walkthrough
 //	cinegram lint    <file.dgm>   # diagnostics only
 //	cinegram assets  -o dir/      # the embed kit, for a site of your own
@@ -68,6 +69,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return cmdFrame(rest, stdout, stderr)
 	case "record":
 		return cmdRecord(rest, stdout, stderr)
+	case "sheet":
+		return cmdSheet(rest, stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintln(stdout, "cinegram", version)
 		return nil
@@ -127,6 +130,14 @@ Usage:
                               [--progress]       report each captured frame on
                                                  stderr, for a host drawing a
                                                  progress bar
+  cinegram sheet   <file.dgm> -o out.png [--manifest map.json]
+                                                 one labelled contact sheet: a
+                                                 grid with one captioned cell
+                                                 per step, so a whole scenario
+                                                 can be checked in one image
+                              [--cols N]         columns (default: from the
+                                                 step count, at most 4)
+                              [--scenario ID] [--view ID] [--width N] [--height N]
   cinegram narrate <file.dgm> [-o out.md] [--format=md|json]
                                                  the animation as a walkthrough
   cinegram lint    <file.dgm> [--format=text|json]

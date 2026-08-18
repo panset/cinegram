@@ -18,6 +18,7 @@ go_library(
         "main.go",
         "record.go",
         "serve.go",
+        "sheet.go",
         "site.go",
         "upgrade.go",
         "version.go",
@@ -79,6 +80,7 @@ go_test(
         "main_test.go",
         "record_test.go",
         "serve_test.go",
+        "sheet_test.go",
         "upgrade_test.go",
     ],
     embed = [":cinegram_lib"],
@@ -86,6 +88,7 @@ go_test(
         "//pkg/diag",
         "//pkg/embedkit",
         "//pkg/envelope",
+        "//pkg/ir",
         "//pkg/source",
     ],
 )

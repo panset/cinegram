@@ -255,16 +255,18 @@ func TestCaptureProgressTicksOncePerFrame(t *testing.T) {
 	}
 
 	var log bytes.Buffer
-	paths, err := captureFrames(stub, "http://127.0.0.1:1/", "v0", "s0", dir, times,
-		recordOptions{width: 400, height: 300}, report, &log)
-	if err != nil {
+	shots := frameShots(dir, times)
+	if err := captureFrames(stub, "http://127.0.0.1:1/", "v0", "s0", "?embed", shots,
+		400, 300, report, &log); err != nil {
 		t.Fatalf("captureFrames: %v", err)
 	}
 	if log.Len() != 0 {
 		t.Errorf("a run where nothing failed should say nothing: %s", log.String())
 	}
-	if len(paths) != len(times) {
-		t.Fatalf("captured %d paths, want %d", len(paths), len(times))
+	for _, s := range shotPaths(shots) {
+		if _, err := os.Stat(s); err != nil {
+			t.Fatalf("frame %s was not written: %v", s, err)
+		}
 	}
 
 	if len(seen) != len(times) {
@@ -280,8 +282,8 @@ func TestCaptureProgressTicksOncePerFrame(t *testing.T) {
 	}
 
 	// nil is the off switch, and it must not be called into.
-	if _, err := captureFrames(stub, "http://127.0.0.1:1/", "v0", "s0", dir, times[:2],
-		recordOptions{width: 400, height: 300}, nil, &log); err != nil {
+	if err := captureFrames(stub, "http://127.0.0.1:1/", "v0", "s0", "?embed",
+		frameShots(dir, times[:2]), 400, 300, nil, &log); err != nil {
 		t.Fatalf("captureFrames without a reporter: %v", err)
 	}
 }
@@ -313,14 +315,13 @@ func TestCaptureRetriesAStarvedBrowser(t *testing.T) {
 
 	var ticks int
 	var log bytes.Buffer
-	paths, err := captureFrames(stub, "http://127.0.0.1:1/", "v0", "s0", dir, []int{0},
-		recordOptions{width: 400, height: 300},
-		func(done, total int) { ticks++ }, &log)
-	if err != nil {
+	shots := frameShots(dir, []int{0})
+	if err := captureFrames(stub, "http://127.0.0.1:1/", "v0", "s0", "?embed", shots,
+		400, 300, func(done, total int) { ticks++ }, &log); err != nil {
 		t.Fatalf("a frame that succeeded on the third attempt still failed the run: %v", err)
 	}
-	if len(paths) != 1 {
-		t.Fatalf("captured %d paths, want 1", len(paths))
+	if _, err := os.Stat(shots[0].path); err != nil {
+		t.Fatalf("the frame that finally succeeded was not written: %v", err)
 	}
 
 	// The progress bar must count the frame once, not once per attempt.
@@ -354,8 +355,8 @@ func TestCaptureGivesUpAfterTheAttempts(t *testing.T) {
 	}
 
 	var log bytes.Buffer
-	_, err := captureFrames(stub, "http://127.0.0.1:1/", "v0", "s0", dir, []int{0},
-		recordOptions{width: 400, height: 300}, nil, &log)
+	err := captureFrames(stub, "http://127.0.0.1:1/", "v0", "s0", "?embed",
+		frameShots(dir, []int{0}), 400, 300, nil, &log)
 	if err == nil {
 		t.Fatal("a browser that never succeeds was reported as success")
 	}

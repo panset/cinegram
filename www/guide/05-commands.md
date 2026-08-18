@@ -12,6 +12,7 @@ cinegram site    <folder>   -o out/         # a browsable site from a folder tre
 cinegram assets             -o dir/         # the embed kit, for a site of your own
 cinegram frame   <file.dgm> --at 1620ms -o still.png   # one exact moment
 cinegram record  <file.dgm> -o out.gif      # a GIF, mp4 or webm of one scenario
+cinegram sheet   <file.dgm> -o sheet.png    # a labelled grid, one cell per step
 cinegram narrate <file.dgm> [--format=md|json]   # the animation, written out
 cinegram lint    <file.dgm> [--format=text|json] [--strict] [--fix] # diagnostics only
 ```
@@ -134,6 +135,43 @@ first".
 | `--reel` | off | The `?reel` story page at 1080×1920, auto-follow camera included. Explicit dimensions still win, per axis. |
 | `--scenario`, `--view` | the first / the entry document | Which walkthrough to record. |
 | `--progress` | off | `cinegram-progress capture <i> <n>` per frame and one `cinegram-progress encode`, on stderr, for a host drawing a progress bar. Purely additive: the human-readable lines are unchanged. |
+
+### Contact sheets
+
+A recording is legible to a reader who can watch it. `sheet` is the same
+walkthrough for a reader who cannot — one PNG, one captioned cell per step:
+
+```
+cinegram sheet examples/02-storytelling/01-payment-checkout.dgm -o checkout.png
+cinegram sheet examples/02-storytelling/01-payment-checkout.dgm --scenario "gateway outage" \
+  -o outage.png --manifest outage.json
+```
+
+Each cell is photographed one millisecond before its step ends. Not at the
+start, where its flows have not gone anywhere yet; and not at the end either,
+because "which step is this" resolves to the last step whose start is at or
+before the clock, so the end of a step already belongs to the next one and
+would caption the cell with the wrong name. One millisecond earlier is the last
+instant that is unambiguously this step, with everything it did already done.
+
+The labels cost nothing to draw: the cells are shot in `?embed`, which hides
+the toolbar and the step list but keeps the caption, so every cell is titled by
+the document in the document's own words. Nothing in cinegram renders text into
+an image — the browser was already doing it correctly.
+
+`--manifest` writes the map from pixels back to the document: the grid, the
+cell size, and for every cell its step id, name, description, the moment it
+shows and the rectangle it occupies. That is what makes the sheet addressable —
+spot something wrong in the third cell, read off its step and its `at`, and
+re-shoot exactly that moment with `frame` for a close-up.
+
+| Flag | Default | |
+| --- | --- | --- |
+| `-o` | *required* | Where the PNG goes. |
+| `--manifest` | off | Also write the cell map as JSON. |
+| `--cols` | from the step count | Columns in the grid: as square as the count allows, at most 4 across. |
+| `--width`, `--height` | `900`, `600` | One cell, which is the viewport each still is shot at. |
+| `--scenario`, `--view` | the first / the entry document | Which walkthrough to lay out. |
 
 ### What an agent sees
 
