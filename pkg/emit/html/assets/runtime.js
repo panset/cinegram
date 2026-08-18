@@ -439,11 +439,13 @@
     // Armed by a drag's release, read once by the click-swallower in build().
     this.swallowNext = false;
 
-    // Auto-follow camera state, live wherever following() is. camOverride is
+    // Auto-follow camera state, live wherever `follow` is. camOverride is
     // user-state like `revealed`, not clock-state: a manual gesture takes the
     // wheel, a double-click hands it back, and a seek changes neither. camKeys
     // caches the per-step pose keyframes; null means "rebuild from the DOM".
-    // `follow` is the reader's Cine toggle — reels follow regardless.
+    // `follow` means the camera follows, full stop: true from the start in a
+    // reel (set in build(), where reel is first known, and clamped true by
+    // setFollow), toggled by the Cine button everywhere else.
     this.follow = false;
     this.camOverride = false;
     this.camKeys = null;
@@ -705,7 +707,14 @@
     own(self, window, 'resize', function () {
       self.camKeys = null;
       self.mapKeys = null;
-      if (self.following() && !self.camOverride && self.svg) {
+      // A layout change is a new context, so a dismissed thumbnail returns:
+      // otherwise a rotate to landscape and back would resurrect and then
+      // re-hide the panel with no gesture ever made in the new layout.
+      if (self.boardDismissed) {
+        self.boardDismissed = false;
+        self.syncBoard();
+      }
+      if (self.follow && !self.camOverride && self.svg) {
         self.apply(self.time);
         self.syncChips();
       }
@@ -898,6 +907,10 @@
     // flag rather than anything setPresenter-shaped.
     this.reel = isReel(this.opts);
     if (this.reel) this.root.classList.add('dgm-reel');
+    // A reel cannot work without the camera — a 9:16 frame shows nothing at
+    // fit — so in a reel `follow` is simply true from the start, and
+    // setFollow's clamp keeps it there. One spelling for one fact.
+    this.follow = this.reel;
     this.setPresenter(isPresenter(this.opts));
 
     this.viewIndex = Math.max(0, this.viewIndexOf(this.hashView()));
@@ -1480,6 +1493,11 @@
 
     this.boardOn = false;
     this.boardKey = null;
+    // "The reader dismissed the thumbnail", as a fact rather than a DOM class:
+    // the swipe sets it, syncBoard folds it into boardOn, and the sites that
+    // change the context a dismissal was made in — a render, a scenario
+    // switch, a mode change, a resize — reset it and ask syncBoard again.
+    this.boardDismissed = false;
     this.frames = {};
     return this.board;
   };
@@ -1499,13 +1517,14 @@
       this.frames[frames[i].id] = frames[i];
     }
 
-    this.boardOn = frames.length > 0 && hasScenes(this.scenario());
+    // The one writer of the panel's visibility. boardDismissed is part of the
+    // computation rather than a class competing with it, so "should the panel
+    // show" has exactly one answer in exactly one place; whoever changes the
+    // context a dismissal was made in resets the field and calls back here.
+    this.boardOn = frames.length > 0 && hasScenes(this.scenario()) &&
+      !this.boardDismissed;
     this.root.classList.toggle('dgm-has-board', this.boardOn);
     this.board.style.display = this.boardOn ? '' : 'none';
-    // A swiped-away thumbnail comes back with the context that changes under
-    // it: this re-runs per render, per view and per scenario, which is exactly
-    // the shape of "dismissed for now" rather than "dismissed forever".
-    this.board.classList.remove('is-flung');
 
     var title = (sb && sb.title) || '';
     this.boardTitle.textContent = title;
@@ -1802,7 +1821,7 @@
       if (self.opts.inline && !ev.ctrlKey && !ev.metaKey) return;
       ev.preventDefault();
       // A manual zoom takes the wheel from the auto-follow camera.
-      if (self.following()) self.camOverride = true;
+      if (self.follow) self.camOverride = true;
       var factor = Math.exp(-ev.deltaY * 0.0015);
       self.zoomAt(ev.clientX, ev.clientY, factor);
     }, { passive: false });
@@ -1811,7 +1830,7 @@
       // A double-click hands the framing back to the camera; the resetZoom
       // below re-applies the frame, and the camera reposes in the same apply
       // pass now that the override is gone.
-      if (self.following()) self.camOverride = false;
+      if (self.follow) self.camOverride = false;
       self.resetZoom();
     });
 
@@ -1829,7 +1848,7 @@
           // Now it is a pan, not a click on its way to a node.
           st.claim(ev);
         }
-        if (self.following()) self.camOverride = true;
+        if (self.follow) self.camOverride = true;
         self.panX += st.dx - st.ax;
         self.panY += st.dy - st.ay;
         st.ax = st.dx;
@@ -1863,8 +1882,14 @@
   // camera afresh; turning it off gives the whole diagram back, because being
   // left stranded at the last step's zoom with the camera gone is exactly the
   // exit experience setPresenter already refuses to give.
+  // setFollow flips what `follow` says, except in a reel, where the clamp
+  // keeps it true: the format cannot work without the camera, and the Cine
+  // button does not exist in a reel's hidden bar anyway. `follow` is
+  // deliberately not stepwise(): the transport playing one beat at a time and
+  // the camera zooming to each beat are different promises — presenter mode
+  // and `stepwise:` scenarios start by seeing the whole diagram.
   Player.prototype.setFollow = function (on) {
-    this.follow = !!on;
+    this.follow = this.reel || !!on;
     this.cineBtn.classList.toggle('is-on', this.follow);
     // Beside the class, not anywhere else: one writer means the tint an eye
     // reads and the state a screen reader hears cannot come apart.
@@ -1875,21 +1900,10 @@
     if (this.follow) {
       this.apply(this.time);
       this.syncChips();
-    } else if (!this.reel) {
+    } else {
       // resetZoom relays out the overlays itself, via applyTransform.
       this.resetZoom();
     }
-  };
-
-  // following is the camera's own predicate, deliberately not stepwise():
-  // the transport playing one beat at a time and the camera zooming to each
-  // beat are different promises. A reel cannot work without the camera — a
-  // 9:16 frame shows nothing at fit — so it is always following; everywhere
-  // else the default is the whole diagram, and the Cine button is the one way
-  // in. That includes presenter mode and `stepwise:` scenarios: a room being
-  // walked through a diagram starts by seeing all of it.
-  Player.prototype.following = function () {
-    return this.reel || this.follow;
   };
 
   // restingTime is where an idle page sits: the author's poster moment, or the
@@ -2256,7 +2270,7 @@
         st.claim(ev);
         // Moving the view by hand takes it from the camera, exactly as a stage
         // drag does — otherwise the next frame would put it straight back.
-        if (self.following()) self.camOverride = true;
+        if (self.follow) self.camOverride = true;
         centreOn(ev);
       },
       move: function (ev) {
@@ -2306,9 +2320,9 @@
   // position:absolute — which is read from the computed style at press time
   // rather than from a duplicated breakpoint: as a panel in the grid it is
   // furniture, and furniture does not fly. A dismissal lasts exactly as long
-  // as the context it was made in: syncBoard clears it, so a new render, view
-  // or scenario brings the thumbnail back, and setPresenter clears it in both
-  // directions.
+  // as the context it was made in: it is the boardDismissed field, and every
+  // context change — a render, a scenario switch, presenter entered or left,
+  // a resize — resets it and asks syncBoard again.
   Player.prototype.bindBoardGestures = function () {
     var self = this;
 
@@ -2334,10 +2348,14 @@
 
     drag(this.board, {
       start: function () {
-        // Only while the stylesheet floats it — the phone-present layout,
-        // where it is position:absolute — read from the computed style at
-        // press time rather than from a duplicated breakpoint: as a panel in
-        // the grid it is furniture, and furniture does not fly.
+        // Only while presenting *and* while the stylesheet floats it — the
+        // phone-present layout, where it is position:absolute — read from the
+        // computed style at press time rather than from a duplicated
+        // breakpoint: as a panel in the grid it is furniture, and furniture
+        // does not fly. The mode check is the belt to that brace: a host
+        // stylesheet that floats the board for reasons of its own must not
+        // arm flick-to-dismiss on a full-size panel.
+        if (!self.present) return false;
         if (getComputedStyle(self.board).position !== 'absolute') return false;
       },
       move: function (ev, st) {
@@ -2371,7 +2389,8 @@
           // even a 0.01ms transition settles on a later frame, so the click
           // finds the board still there and the swallower takes it.
           settleOn('is-flinging', function () {
-            self.board.classList.add('is-flung');
+            self.boardDismissed = true;
+            self.syncBoard();
             clearInline();
           });
           self.board.style.transform =
@@ -2391,7 +2410,7 @@
 
   // --- auto-follow camera ------------------------------------------------
   //
-  // It runs wherever following() is — a reel, or anywhere the reader pressed
+  // It runs wherever `follow` is — a reel, or anywhere the reader pressed
   // Cine — and nowhere else: by default a page shows the whole diagram and
   // keeps the reader's own hands on the zoom, and only a reel, which is
   // nothing but framing, follows without being asked.
@@ -2866,6 +2885,8 @@
     this.stopAt = null;
     this.adoptScenarioSpeed();
     this.buildSteps();
+    // A new scenario is a new context; a dismissal does not carry into it.
+    this.boardDismissed = false;
     this.syncBoard();
     this.apply(this.time);
     this.syncChrome();
@@ -2986,6 +3007,8 @@
         self.buildMap();
         self.index();
         self.buildSteps();
+        // A fresh render is a fresh context; a dismissal does not survive it.
+        self.boardDismissed = false;
         self.syncBoard();
         self.apply(self.time);
         self.syncChrome();
@@ -3487,7 +3510,10 @@
     // A dismissal was made in one mode's layout and does not survive into the
     // other: leaving must put the side panel back, and re-entering starts the
     // presentation with its thumbnail.
-    this.board.classList.remove('is-flung');
+    if (this.boardDismissed) {
+      this.boardDismissed = false;
+      this.syncBoard();
+    }
 
     // Presenting into one pane of a split view is not presenting, so the mode
     // asks the browser for the screen. Whether it gets it is not something the
@@ -3545,7 +3571,7 @@
     // zoom is per-beat inspection, and on a phone — where an accidental drag
     // is easy and a double-click does not exist — the next tap is the only
     // hand-back gesture a viewer will ever find.
-    if (this.following()) this.camOverride = false;
+    if (this.follow) this.camOverride = false;
     var steps = this.scenario().steps;
     for (var i = 0; i < steps.length; i++) {
       // The millisecond of tolerance is the same one prevStep and nextStep
@@ -3582,7 +3608,7 @@
   // replays it. Backing up and playing again is one mechanism, not two.
   Player.prototype.prevStep = function () {
     // Same hand-back as advanceStep: navigating beats restores the camera.
-    if (this.following()) this.camOverride = false;
+    if (this.follow) this.camOverride = false;
     var steps = this.scenario().steps;
     var target = 0;
     for (var i = 0; i < steps.length; i++) {
@@ -3857,7 +3883,7 @@
     // The camera writes the transform before anything is measured: notes,
     // pills and particles are all positioned from client rects later in this
     // same pass, so they see the framing they will be photographed under.
-    if (this.following() && !this.camOverride) this.cameraApply(t);
+    if (this.follow && !this.camOverride) this.cameraApply(t);
     var sc = this.scenario();
 
     var wantNode = {};   // node id -> {cls, color, key}

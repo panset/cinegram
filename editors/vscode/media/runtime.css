@@ -772,12 +772,6 @@ body.dgm-standalone {
 
   .dgm-present .dgm-board-img { -webkit-user-drag: none; }
 
-  /* Swiped away. Inline display is '' while the scenario has scenes, so a
-     class rule is enough — and it lives inside this media block deliberately:
-     widening the window past the phone breakpoint restores the side panel
-     without waiting for the next syncBoard. */
-  .dgm-board.is-flung { display: none; }
-
   /* The title and the caption are panel furniture; at thumbnail size they
      would crowd out the picture they describe. */
   .dgm-present .dgm-board-title,
