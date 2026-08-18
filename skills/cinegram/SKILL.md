@@ -63,6 +63,14 @@ answers `unknown command "upgrade"`, which predates 0.2.0: replace that one
 by re-running the install download above over it (the URL always fetches the
 latest release).
 
+If your harness speaks MCP, the same binary is also a server: `cinegram mcp`
+offers `lint`, `narrate`, `mermaid`, `frame` and `sheet` as tools, each taking
+a `path` or an inline `source`, and serves this language reference as the
+resource `cinegram://reference/language.md`. Use it when the host already has
+it configured — the results come back in the conversation rather than as files
+you then have to read. The CLI below stays the primary path: it is what these
+instructions are written against, and it needs no host support at all.
+
 Below, `cinegram` means whichever path you found: a single static binary with
 no dependencies of its own. The delivery table in step 5 marks what an
 individual output format additionally needs — Chrome/Chromium on `PATH` or

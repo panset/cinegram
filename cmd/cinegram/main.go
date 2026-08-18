@@ -13,6 +13,7 @@
 //	cinegram narrate <file.dgm>   # the animation as a written walkthrough
 //	cinegram lint    <file.dgm>   # diagnostics only
 //	cinegram assets  -o dir/      # the embed kit, for a site of your own
+//	cinegram mcp                  # the same tools, over MCP on stdio
 package main
 
 import (
@@ -53,6 +54,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	switch cmd {
 	case "compile":
 		return cmdCompile(rest, stdin, stdout, stderr)
+	case "mcp":
+		// The real stdin, not a copy: the protocol is a conversation, and the
+		// server reads the next request only after answering the last one.
+		return cmdMCP(rest, stdin, stdout)
 	case "mermaid":
 		return cmdMermaid(rest, stdout, stderr)
 	case "preview":
@@ -150,6 +155,12 @@ Usage:
                                                  the "did you mean" ones — then
                                                  report what is left. Composes
                                                  with --strict and --format
+  cinegram mcp                                serve the tools over MCP on stdio,
+                                                 for an agent host that speaks
+                                                 it: lint, narrate, mermaid,
+                                                 frame and sheet, plus the
+                                                 language reference. The CLI
+                                                 stays the primary interface
   cinegram version
   cinegram upgrade [--check]                  replace this binary with the
                                                  latest GitHub release;

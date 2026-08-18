@@ -671,6 +671,7 @@ cinegram record  <file.dgm> -o out.gif      # a GIF, mp4 or webm of one scenario
 cinegram sheet   <file.dgm> -o sheet.png    # a labelled grid, one cell per step
 cinegram narrate <file.dgm> [--format=md|json]   # the animation, written out
 cinegram lint    <file.dgm> [--format=text|json] [--strict] [--fix] # diagnostics only
+cinegram mcp                                # the same tools over MCP, on stdio
 ```
 
 ### Authoring
@@ -897,6 +898,52 @@ the diagnostic would not have suggested out loud.
 Everything else is unchanged: `--fix` composes with `--strict` and
 `--format=json`, the JSON still goes to stdout on its own, and the exit status
 is exactly the one a plain lint of the repaired file would earn.
+
+### The MCP server
+
+```
+cinegram mcp
+```
+
+The same commands, offered down a pipe. `mcp` speaks the Model Context Protocol
+on stdin and stdout, so an agent host that already knows how to launch a server
+gets the tools without a shell:
+
+```json
+{"mcpServers": {"cinegram": {"command": "cinegram", "args": ["mcp"]}}}
+```
+
+Five tools, named after the subcommands they are:
+
+| Tool | Returns |
+| --- | --- |
+| `lint` | the `--format=json` array, fixes included |
+| `narrate` | the walkthrough, `format` `md` or `json` |
+| `mermaid` | the diagram half as plain Mermaid |
+| `frame` | the PNG of one moment, plus the view, scenario and time it shows |
+| `sheet` | the contact-sheet PNG, plus the manifest that maps cells to steps |
+
+Every tool takes `path` **or** `source`, never both: `path` names a file on
+disk, `source` carries the document itself for a draft that has not been saved,
+with an optional `as` filename so that relative `view … from` and storyboard
+paths have somewhere to resolve (default `inline.dgm`). The rule is stated in
+each schema and enforced in the handler, because client support for JSON
+Schema's `oneOf` is uneven and a rule only half of them check is not a rule.
+
+The one resource is `cinegram://reference/language.md`, the complete authoring
+reference — the same file the skill ships, served out of the binary for a model
+that has no skill folder installed.
+
+`frame` and `sheet` need a headless Chrome or Chromium, found on `PATH` or
+named by `$CINEGRAM_CHROME`, exactly as the subcommands do. Their descriptions
+say so, so a model without one can choose `narrate` instead rather than
+discovering it by failing. A diagnostic is never a failed call: `lint` on a
+broken document returns the diagnostics and succeeds, and only a document that
+could not be read at all comes back as an error.
+
+The CLI stays primary — every tool is one subcommand's code path called
+in-process, so the two cannot disagree about what a document means, and nothing
+here is reachable only through MCP.
 
 ### Driving the player
 
