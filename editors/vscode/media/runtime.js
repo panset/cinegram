@@ -436,6 +436,9 @@
     this.present = false;
     this.stopAt = null;
 
+    // Armed by a drag's release, read once by the click-swallower in build().
+    this.swallowNext = false;
+
     // Auto-follow camera state, live wherever following() is. camOverride is
     // user-state like `revealed`, not clock-state: a manual gesture takes the
     // wheel, a double-click hands it back, and a seek changes neither. camKeys
@@ -466,6 +469,68 @@
   function own(player, target, type, fn, opts) {
     target.addEventListener(type, fn, opts);
     player._unbind.push(function () { target.removeEventListener(type, fn, opts); });
+  }
+
+  // drag(el, opts) owns the bookkeeping every pointer gesture repeats: the
+  // primary-button guard, pointer capture (with the try/catch some browsers
+  // need), the down/move/up lifecycle, and cancel.
+  //
+  // opts: {start, move, end, cancel} — each optional, each called with
+  // (ev, state). state is fresh per gesture and carries startX/startY and
+  // dx/dy, the total travel since the press; anything else a gesture needs to
+  // remember between callbacks it writes onto state itself (the stage keeps a
+  // moved flag there, the board its horizontal-intent verdict). start may
+  // return false to decline the gesture, so a declined press stays an
+  // ordinary click for whoever else wants it.
+  //
+  // state.claim(ev) takes the pointer for the gesture: after it, moves and the
+  // release arrive here wherever the pointer wanders. Sites call it the moment
+  // a press stops being a possible click — at start for surfaces whose every
+  // press is a gesture (the map jumps, the lightbox pans), at the intent
+  // threshold for surfaces that are also click targets (the stage's nodes, the
+  // board's tap-for-lightbox). The timing matters: capture retargets the
+  // pointerup and with it the click the release manufactures, so claiming a
+  // press that stays a tap would send its click to this element instead of the
+  // node under the finger.
+  function drag(el, opts) {
+    var state = null;
+    function claim(ev) {
+      try { if (el.setPointerCapture) el.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+    }
+    el.addEventListener('pointerdown', function (ev) {
+      if (ev.button !== 0) return;
+      var st = { startX: ev.clientX, startY: ev.clientY, dx: 0, dy: 0, claim: claim };
+      if (opts.start && opts.start(ev, st) === false) return;
+      state = st;
+    });
+    el.addEventListener('pointermove', function (ev) {
+      if (!state) return;
+      // An unclaimed press whose release happened off the element never
+      // delivers its pointerup here. The button being up says it ended.
+      if (!ev.buttons) {
+        var lost = state;
+        state = null;
+        if (opts.cancel) opts.cancel(ev, lost);
+        return;
+      }
+      state.dx = ev.clientX - state.startX;
+      state.dy = ev.clientY - state.startY;
+      if (opts.move) opts.move(ev, state);
+    });
+    el.addEventListener('pointerup', function (ev) {
+      if (!state) return;
+      var st = state;
+      state = null;
+      st.dx = ev.clientX - st.startX;
+      st.dy = ev.clientY - st.startY;
+      if (opts.end) opts.end(ev, st);
+    });
+    el.addEventListener('pointercancel', function (ev) {
+      if (!state) return;
+      var st = state;
+      state = null;
+      if (opts.cancel) opts.cancel(ev, st);
+    });
   }
 
   // --- preferences ------------------------------------------------------
@@ -616,18 +681,27 @@
     this.stage.appendChild(this.rail);
 
     body.appendChild(this.stage);
-    // Map before stage, and the order is load-bearing: both attach a
-    // capture-phase click-swallower to the stage element, and when the stage
-    // is itself the click's target the DOM runs same-node listeners in
-    // registration order, capture flag notwithstanding. The map's swallower
-    // has to beat the stage's advance-a-step listener, or releasing a map
-    // drag over the stage's padding advances a beat.
+    // Every drag ends in a manufactured click, and that click belongs to the
+    // drag: panning across a node must not drill into it, releasing a map
+    // scrub over the stage must not advance a beat, a swiped-away thumbnail
+    // must not open the lightbox. One capture-phase listener on the root
+    // swallows exactly the next click after a gesture arms it — capture phase
+    // so it runs before any element's own handler, the root so every gesture
+    // surface (stage, map, board) is under it. armSwallow disarms on a zero
+    // timer for the release that produces no click at all: a real drag-end
+    // click is dispatched synchronously out of its pointerup, so it always
+    // beats the timer.
+    this.root.addEventListener('click', function (ev) {
+      if (!self.swallowNext) return;
+      self.swallowNext = false;
+      ev.stopImmediatePropagation();
+      ev.preventDefault();
+    }, true);
     this.bindMapGestures();
     this.bindStageGestures();
     this.bindRailGestures();
 
     // Camera keyframes bake the stage size in, so a resize invalidates them.
-    // Same inline pattern as the window pointer listeners above this.
     own(self, window, 'resize', function () {
       self.camKeys = null;
       self.mapKeys = null;
@@ -1560,28 +1634,26 @@
       self.lightboxZoomAt(ev.clientX, ev.clientY, Math.exp(-ev.deltaY * 0.0015));
     }, { passive: false });
 
-    var panning = false, px = 0, py = 0;
-    this.lbImg.addEventListener('pointerdown', function (ev) {
-      if (ev.button !== 0) return;
-      panning = true;
-      px = ev.clientX; py = ev.clientY;
-      self.lbImg.setPointerCapture(ev.pointerId);
-      self.lbImg.classList.add('is-panning');
-      ev.preventDefault();
-    });
-    this.lbImg.addEventListener('pointermove', function (ev) {
-      if (!panning) return;
-      self.lbX += ev.clientX - px;
-      self.lbY += ev.clientY - py;
-      px = ev.clientX; py = ev.clientY;
-      self.clampLightboxPan();
-      self.applyLightbox();
-    });
-    ['pointerup', 'pointercancel'].forEach(function (type) {
-      self.lbImg.addEventListener(type, function () {
-        panning = false;
-        self.lbImg.classList.remove('is-panning');
-      });
+    var lbDone = function () { self.lbImg.classList.remove('is-panning'); };
+    drag(this.lbImg, {
+      start: function (ev, st) {
+        st.px = ev.clientX;
+        st.py = ev.clientY;
+        self.lbImg.classList.add('is-panning');
+        ev.preventDefault();
+        // Every press on the image is a pan; nothing here is a click target.
+        st.claim(ev);
+      },
+      move: function (ev, st) {
+        self.lbX += ev.clientX - st.px;
+        self.lbY += ev.clientY - st.py;
+        st.px = ev.clientX;
+        st.py = ev.clientY;
+        self.clampLightboxPan();
+        self.applyLightbox();
+      },
+      end: lbDone,
+      cancel: lbDone
     });
 
     // Double-click toggles between fit and the secondary zoom, anchored where
@@ -1709,6 +1781,15 @@
   var ZOOM_MIN = 0.4;
   var ZOOM_MAX = 4;
 
+  // armSwallow marks the next click as the tail of a drag; the capture-phase
+  // listener in build() takes it. The zero timer disarms when the release
+  // produced no click at all — outside the window, or on nothing clickable.
+  Player.prototype.armSwallow = function () {
+    var self = this;
+    this.swallowNext = true;
+    setTimeout(function () { self.swallowNext = false; }, 0);
+  };
+
   Player.prototype.bindStageGestures = function () {
     var self = this;
 
@@ -1734,65 +1815,33 @@
       self.resetZoom();
     });
 
-    var dragging = false, moved = false, lastX = 0, lastY = 0;
-
-    this.stage.addEventListener('pointerdown', function (ev) {
-      if (ev.button !== 0) return;
-      dragging = true;
-      moved = false;
-      lastX = ev.clientX;
-      lastY = ev.clientY;
+    // The pan. A few pixels of slop, so a click on a node is not read as a pan
+    // and the node still activates; the moment the slop is crossed the whole
+    // accumulated travel is applied at once, so the diagram does not start a
+    // few pixels behind the hand.
+    drag(this.stage, {
+      move: function (ev, st) {
+        if (!st.moved) {
+          if (Math.abs(st.dx) + Math.abs(st.dy) < 4) return;
+          st.moved = true;
+          st.ax = 0;
+          st.ay = 0;
+          // Now it is a pan, not a click on its way to a node.
+          st.claim(ev);
+        }
+        if (self.following()) self.camOverride = true;
+        self.panX += st.dx - st.ax;
+        self.panY += st.dy - st.ay;
+        st.ax = st.dx;
+        st.ay = st.dy;
+        self.applyTransform();
+      },
+      end: function (ev, st) {
+        // The click this release manufactures belonged to the pan: swallowed,
+        // so panning across a node does not also drill into it.
+        if (st.moved) self.armSwallow();
+      }
     });
-
-    own(self, window, 'pointermove', function (ev) {
-      if (!dragging) return;
-      var dx = ev.clientX - lastX, dy = ev.clientY - lastY;
-      // A few pixels of slop, so a click on a node is not read as a pan and
-      // the node still activates.
-      if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
-      moved = true;
-      if (self.following()) self.camOverride = true;
-      lastX = ev.clientX;
-      lastY = ev.clientY;
-      self.panX += dx;
-      self.panY += dy;
-      self.applyTransform();
-    });
-
-    own(self, window, 'pointerup', function () {
-      if (moved) self.stage.classList.remove('is-panning');
-      dragging = false;
-      // The flag has to clear even when no click follows. A pan released off
-      // the stage — over the page around it, or outside the window — dispatches
-      // its click somewhere else or nowhere, so the capture listener below never
-      // runs, and a `moved` left set makes it swallow the *next* real click
-      // instead. The rail is a stage descendant, so that next click is usually
-      // a tool press, silently ignored.
-      //
-      // A timeout rather than clearing here, because the drag-ending click is
-      // dispatched synchronously out of this same pointerup: it arrives while
-      // `moved` is still true and is still swallowed, and a timer can only fire
-      // after the whole event has finished. Zero delay is enough — a task
-      // cannot interleave with an event's own dispatch.
-      if (moved) setTimeout(function () { moved = false; }, 0);
-    });
-
-    // No click at all follows a cancelled pointer — the browser took the
-    // gesture over for a scroll or a system gesture — so there is nothing to
-    // swallow and nothing to wait for.
-    own(self, window, 'pointercancel', function () {
-      dragging = false;
-      moved = false;
-    });
-
-    this.stage.addEventListener('click', function (ev) {
-      // Swallow the click that ends a drag, so panning across a node does not
-      // also drill into it. stopImmediatePropagation, not stopPropagation:
-      // when the drag ends on the stage element itself, the advance listener
-      // below is on the *same* node, and stopPropagation would not stop it —
-      // a pan across a reel's roomy stage would also advance a step.
-      if (moved) { ev.stopImmediatePropagation(); ev.preventDefault(); moved = false; }
-    }, true);
 
     // Presenting from a lectern means a clicker, and a clicker sends a click;
     // a reel on a phone means a tap, and a tap sends one too. A click on a
@@ -2099,7 +2148,6 @@
 
   Player.prototype.bindMapGestures = function () {
     var self = this;
-    var down = false, swallow = false;
 
     // Centre the stage on the point pressed: the pan that puts a holder-local
     // point at the stage's centre is cameraApply's last two lines, so a view
@@ -2115,56 +2163,34 @@
       self.applyTransform();
     }
 
-    this.map.addEventListener('pointerdown', function (ev) {
-      if (ev.button !== 0) return;
-      // The stage underneath reads a press as the start of a pan and, when the
-      // transport is stepwise, a click as "advance a step". Neither is what a
-      // press on the map means.
-      ev.preventDefault();
-      ev.stopPropagation();
-      down = true;
-      swallow = false;
-      // Capture keeps a drag that wanders off the little box scrubbing anyway,
-      // and hands the release back here wherever it happens.
-      if (self.map.setPointerCapture) {
-        try { self.map.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+    // A press is already a jump — centreOn from the first pointerdown — and a
+    // drag scrubs; both live here, not in the helper.
+    drag(this.map, {
+      start: function (ev, st) {
+        // The stage underneath reads a press as the start of a pan and, when
+        // the transport is stepwise, a click as "advance a step". Neither is
+        // what a press on the map means — and every press here is already a
+        // jump, so the pointer is claimed at once: a drag that wanders off the
+        // little box keeps scrubbing anyway.
+        ev.preventDefault();
+        ev.stopPropagation();
+        st.claim(ev);
+        // Moving the view by hand takes it from the camera, exactly as a stage
+        // drag does — otherwise the next frame would put it straight back.
+        if (self.following()) self.camOverride = true;
+        centreOn(ev);
+      },
+      move: function (ev) {
+        ev.preventDefault();
+        centreOn(ev);
+      },
+      end: function () {
+        // The click that follows the captured drag lands on whatever is under
+        // the release — usually the stage, where a stepwise transport reads it
+        // as "advance a step". Take that one click back.
+        self.armSwallow();
       }
-      // Moving the view by hand takes it from the camera, exactly as a stage
-      // drag does — otherwise the next frame would put it straight back.
-      if (self.following()) self.camOverride = true;
-      centreOn(ev);
     });
-
-    this.map.addEventListener('pointermove', function (ev) {
-      if (!down) return;
-      ev.preventDefault();
-      centreOn(ev);
-    });
-
-    this.map.addEventListener('pointerup', function (ev) {
-      if (!down) return;
-      down = false;
-      // The click that follows a captured drag lands on whatever is under the
-      // release — usually the stage, where a stepwise transport reads it as
-      // "advance a step". Take that one click back, exactly as the stage takes
-      // back the click that ends a pan. A release outside the stage produces no
-      // such click, so there is nothing to take and the flag stays down.
-      var r = self.stage.getBoundingClientRect();
-      swallow = ev.clientX >= r.left && ev.clientX <= r.right &&
-                ev.clientY >= r.top && ev.clientY <= r.bottom;
-    });
-
-    this.map.addEventListener('pointercancel', function () {
-      down = false;
-      swallow = false;
-    });
-
-    this.stage.addEventListener('click', function (ev) {
-      if (!swallow) return;
-      swallow = false;
-      ev.stopImmediatePropagation();
-      ev.preventDefault();
-    }, true);
 
     this.map.addEventListener('click', function (ev) { ev.stopPropagation(); });
 
@@ -2206,104 +2232,82 @@
   // directions.
   Player.prototype.bindBoardGestures = function () {
     var self = this;
-    var down = false, dragging = false, swallow = false;
-    var startX = 0, startY = 0;
 
     function clearInline() {
-      self.board.style.transition = '';
       self.board.style.transform = '';
       self.board.style.opacity = '';
     }
 
-    this.board.addEventListener('pointerdown', function (ev) {
-      if (ev.button !== 0) return;
-      if (getComputedStyle(self.board).position !== 'absolute') return;
-      down = true;
-      dragging = false;
-      swallow = false;
-      startX = ev.clientX;
-      startY = ev.clientY;
-      // Capture keeps a swipe that leaves the little box mid-flight delivering
-      // its release here, wherever the finger ends up.
-      if (self.board.setPointerCapture) {
-        try { self.board.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
-      }
-    });
+    // settleOn waits for the board's own transform transition to finish, then
+    // settles. Filtered to the board and to transform because the storyboard's
+    // crossfade layers bubble their own transitionends through here, and one
+    // of those must not spend the listener.
+    function settleOn(cls, settle) {
+      var onEnd = function (tev) {
+        if (tev.target !== self.board || tev.propertyName !== 'transform') return;
+        self.board.removeEventListener('transitionend', onEnd);
+        self.board.classList.remove(cls);
+        settle();
+      };
+      self.board.classList.add(cls);
+      self.board.addEventListener('transitionend', onEnd);
+    }
 
-    this.board.addEventListener('pointermove', function (ev) {
-      if (!down) return;
-      var dx = ev.clientX - startX, dy = ev.clientY - startY;
-      if (!dragging) {
-        // Horizontal intent only: a small wobble is a tap on its way to the
-        // lightbox, and a vertical pull means nothing here.
-        if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) return;
-        dragging = true;
-      }
-      ev.preventDefault();
-      self.board.style.transform = 'translateX(' + dx + 'px)';
-      // Fade with distance, so the gesture announces what letting go will do.
-      self.board.style.opacity = String(
-        Math.max(0.25, 1 - Math.abs(dx) / ((self.board.offsetWidth || 120) * 1.2)));
-    });
-
-    this.board.addEventListener('pointerup', function (ev) {
-      if (!down) return;
-      down = false;
-      if (!dragging) return;
-      dragging = false;
-      // The click the release manufactures belonged to the drag, not to the
-      // stack's tap-for-lightbox.
-      swallow = true;
-      var dx = ev.clientX - startX;
-      var w = self.board.offsetWidth || 120;
-      if (Math.abs(dx) > w * 0.5) {
-        // Past the point of no return: fly off in the direction of travel,
-        // then hide. The timeout is the transitionend that never comes if the
-        // element stops painting mid-flight; `settled` keeps whichever fires
-        // second from doing it all again.
-        var settled = false;
-        var settle = function () {
-          if (settled) return;
-          settled = true;
-          self.board.classList.add('is-flung');
+    drag(this.board, {
+      start: function () {
+        // Only while the stylesheet floats it — the phone-present layout,
+        // where it is position:absolute — read from the computed style at
+        // press time rather than from a duplicated breakpoint: as a panel in
+        // the grid it is furniture, and furniture does not fly.
+        if (getComputedStyle(self.board).position !== 'absolute') return false;
+      },
+      move: function (ev, st) {
+        if (!st.dragging) {
+          // Horizontal intent only: a small wobble is a tap on its way to the
+          // lightbox, and a vertical pull means nothing here. Claiming waits
+          // for the verdict — a claimed tap would retarget its click to the
+          // board and the stack's tap-for-lightbox would never hear it.
+          if (Math.abs(st.dx) < 8 || Math.abs(st.dx) < Math.abs(st.dy)) return;
+          st.dragging = true;
+          st.claim(ev);
+        }
+        ev.preventDefault();
+        self.board.style.transform = 'translateX(' + st.dx + 'px)';
+        // Fade with distance, so the gesture announces what letting go will do.
+        self.board.style.opacity = String(
+          Math.max(0.25, 1 - Math.abs(st.dx) / ((self.board.offsetWidth || 120) * 1.2)));
+      },
+      end: function (ev, st) {
+        if (!st.dragging) return;
+        // The click the release manufactures belonged to the drag, not to the
+        // stack's tap-for-lightbox.
+        self.armSwallow();
+        var w = self.board.offsetWidth || 120;
+        if (Math.abs(st.dx) > w * 0.5) {
+          // Past the point of no return: fly off in the direction of travel,
+          // then hide. The stylesheet owns the flight — is-flinging carries
+          // the transition, so duration, easing and the reduced-motion
+          // shortening live where every other motion does. Hiding waits for
+          // the transitionend, which is necessarily after the release's click:
+          // even a 0.01ms transition settles on a later frame, so the click
+          // finds the board still there and the swallower takes it.
+          settleOn('is-flinging', function () {
+            self.board.classList.add('is-flung');
+            clearInline();
+          });
+          self.board.style.transform =
+            'translateX(' + ((st.dx < 0 ? -1 : 1) * (w * 2 + 40)) + 'px)';
+          self.board.style.opacity = '0';
+        } else {
+          // Not far enough: spring back.
+          settleOn('is-springing', function () { /* home again */ });
           clearInline();
-        };
-        // With animation turned off there is no flight to wait for — but
-        // settling here and now would hide the board inside the pointerup that
-        // is still on its way to producing a click, and that click would then
-        // land on the stage and advance a beat. A turn of the event loop is
-        // enough: the click finds the board still there and the swallower
-        // below takes it.
-        if (prefersReducedMotion()) { setTimeout(settle, 0); return; }
-        self.board.style.transition = 'transform 0.18s ease-in, opacity 0.18s ease-in';
-        self.board.style.transform = 'translateX(' + ((dx < 0 ? -1 : 1) * (w * 2 + 40)) + 'px)';
-        self.board.style.opacity = '0';
-        self.board.addEventListener('transitionend', settle);
-        setTimeout(function () {
-          self.board.removeEventListener('transitionend', settle);
-          settle();
-        }, 300);
-      } else {
-        // Not far enough: spring back.
-        self.board.style.transition = 'transform 0.15s ease-out, opacity 0.15s ease-out';
-        self.board.style.transform = '';
-        self.board.style.opacity = '';
-        setTimeout(function () { self.board.style.transition = ''; }, 200);
+        }
+      },
+      cancel: function () {
+        clearInline();
       }
     });
-
-    this.board.addEventListener('pointercancel', function () {
-      down = false;
-      dragging = false;
-      clearInline();
-    });
-
-    this.board.addEventListener('click', function (ev) {
-      if (!swallow) return;
-      swallow = false;
-      ev.stopPropagation();
-      ev.preventDefault();
-    }, true);
   };
 
   // --- auto-follow camera ------------------------------------------------

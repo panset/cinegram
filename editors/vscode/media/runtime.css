@@ -1259,6 +1259,14 @@ body.dgm-standalone {
   overflow: auto;
 }
 
+/* The swipe's exit and its return. The gesture code writes the transform and
+   the opacity inline; these classes own the motion between them, so the
+   durations live where every other transition does — including the
+   reduced-motion shortening, which is what lets the runtime wait for a
+   transitionend instead of second-guessing whether one will come. */
+.dgm-board.is-flinging { transition: transform 0.18s ease-in, opacity 0.18s ease-in; }
+.dgm-board.is-springing { transition: transform 0.15s ease-out, opacity 0.15s ease-out; }
+
 .dgm-board-title {
   font-size: 11px;
   font-weight: 600;
@@ -1974,6 +1982,8 @@ body.dgm-standalone {
   .dgm-rail,
   .dgm-rail-note,
   .dgm-map-fit,
+  .dgm-board.is-flinging,
+  .dgm-board.is-springing,
   .dgm-step,
   .dgm-chip,
   .dgm-caption,
