@@ -1,0 +1,81 @@
+%% One question through an agent's tool loop: think, call a tool, get a call
+%% wrong, retry, answer. The loop is not a metaphor here — the same agent node
+%% is entered four times, and the token and iteration counters say how far in
+%% you are at any moment.
+%% ---
+%% An agent loop is the case a static diagram is worst at. The boxes never
+%% change; what changes is how many times you have been round them and what
+%% the last tool said. So the two things a reader actually wants — the
+%% iteration number and the tokens spent — are `gauge` state rather than
+%% narration, and they stay readable wherever the scrubber is parked.
+%% ---
+%% The failed `orders_db` call is a `status: fail` flow, not a red one. A red
+%% arrow is a colour choice; `status: fail` marks the edge as failed and drops
+%% a ✕ at the destination, which is what makes the retry legible as a retry.
+flowchart LR
+  user([Person])
+  agent[Agent Loop]
+
+  subgraph tools[Tools]
+    search[web_search]
+    db[(orders_db)]
+  end
+
+  answer[Answer]
+
+  user --> agent
+  agent --> search
+  agent --> db
+  agent --> answer
+
+scenario "one question, four turns" { speed: 1.0 }
+
+  step ask "The question arrives" {
+    desc: "\"Why did refunds spike last week?\" is a question no single tool can answer: it needs a number from the database and a reason from outside it. The loop exists because the model cannot know that until it has tried."
+    flow user -> agent { label: "why did refunds spike?", dur: 700ms }
+    set agent { badge: "thinking", state: busy }
+    gauge agent { label: "iteration", value: 1 }
+    gauge agent { label: "tokens", value: "1.1k" }
+  }
+
+  step plan "The model decides what to look up first" {
+    desc: "Nothing leaves the process in this step. The model reads the tool schemas, picks one, and writes the arguments — and every token of that reasoning is billed before a single tool has run."
+    highlight agent { style: busy }
+    note agent "picks web_search\nargs: {q: \"refund spike causes\"}"
+    gauge agent { label: "tokens", value: "1.9k" }
+  }
+
+  step search "The first tool call succeeds" {
+    desc: "The search tool returns prose, and prose is cheap to request and expensive to carry: the result comes back into the context window and stays there for every turn that follows."
+    %% The reply is delayed by exactly the length of the request, so the two
+    %% halves of one round trip read as a round trip rather than as a pair of
+    %% arrows leaving at the same instant.
+    flow agent -> search { label: "web_search(q)", dur: 600ms }
+    flow search -> agent { label: "6 results", dur: 600ms, delay: 600ms, style: response }
+    gauge agent { label: "tokens", value: "4.3k" }
+  }
+
+  step misfire "The second call is malformed" {
+    desc: "The model asked for a column that does not exist. This is the ordinary failure mode of tool use — not a broken tool, an argument the model invented — and the loop's whole job is to survive it."
+    flow agent -> db { label: "query(refund_total)", dur: 700ms, status: fail }
+    note db "no such column: refund_total\ndid you mean refund_amount?"
+    gauge agent { label: "iteration", value: 2 }
+    gauge agent { label: "tokens", value: "5.0k" }
+  }
+
+  step retry "The error goes back in and the call is repaired" {
+    desc: "The error text is not swallowed, it is fed to the model as the tool's reply. That is why the second attempt names the right column: the loop learned inside the same conversation rather than by being restarted."
+    flow agent -> db { label: "query(refund_amount)", dur: 600ms }
+    flow db -> agent { label: "412 rows · +38%", dur: 600ms, delay: 600ms, style: response }
+    gauge agent { label: "iteration", value: 3 }
+    gauge agent { label: "tokens", value: "6.4k" }
+  }
+
+  step answer "With both facts in hand the loop stops" {
+    desc: "The loop ends when the model emits text instead of a tool call. Nothing else stops it — no step budget was reached here, the model simply had enough to answer, which is the only exit condition worth designing for."
+    unset agent
+    flow agent -> answer { label: "+38%, driven by the shipping SKU", dur: 800ms, style: response }
+    %% The final total is written back after the `unset` clears the loop's
+    %% badge, so the counter survives the step that ends the loop.
+    gauge agent { label: "tokens", value: "7.2k", at: 200ms }
+  }

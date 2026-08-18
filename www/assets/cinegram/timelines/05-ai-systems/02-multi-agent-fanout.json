@@ -1,0 +1,364 @@
+{
+  "version": 2,
+  "root": "02-multi-agent-fanout",
+  "views": [
+    {
+      "id": "02-multi-agent-fanout",
+      "title": "fan out, barrier, synthesise",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "TB",
+        "mermaid": "%% An orchestrator splits one research brief across three worker agents, waits\n%% for the slowest of them, and writes the answer itself. Fan-out is the easy\n%% half; the barrier — sitting still while two workers are already done — is\n%% the half that decides how long the whole thing takes.\n%% ---\n%% This example is here for one timing rule: **all actions in a step start\n%% together, and steps run one after another.** The fan-out is therefore not\n%% three steps, it is three `flow` actions inside a single step. Written that\n%% way the reader sees what the system actually does — three requests leaving\n%% at once — instead of a staircase the code never performs. Reach for `seq`\n%% only when one action genuinely causes the next.\n%% ---\n%% The barrier step is the same rule read backwards. Two workers answer early\n%% and are dimmed; the step keeps running because the third has not replied,\n%% and the picture of a mostly-idle system is the honest one.\nflowchart TB\n  brief[Research Brief]\n  orch[Orchestrator]\n  subgraph workers[Worker Agents]\n    w1[Sources Agent]\n    w2[Filings Agent]\n    w3[Risks Agent]\n  end\n  report[Synthesised Answer]\n  brief --\u003e orch\n  orch --\u003e w1\n  orch --\u003e w2\n  orch --\u003e w3\n  orch --\u003e report\n"
+      },
+      "nodes": [
+        {
+          "id": "brief",
+          "label": "Research Brief",
+          "shape": "rect"
+        },
+        {
+          "id": "orch",
+          "label": "Orchestrator",
+          "shape": "rect"
+        },
+        {
+          "id": "w1",
+          "label": "Sources Agent",
+          "shape": "rect",
+          "group": "workers"
+        },
+        {
+          "id": "w2",
+          "label": "Filings Agent",
+          "shape": "rect",
+          "group": "workers"
+        },
+        {
+          "id": "w3",
+          "label": "Risks Agent",
+          "shape": "rect",
+          "group": "workers"
+        },
+        {
+          "id": "report",
+          "label": "Synthesised Answer",
+          "shape": "rect"
+        }
+      ],
+      "groups": [
+        {
+          "id": "workers",
+          "label": "Worker Agents",
+          "children": [
+            "w1",
+            "w2",
+            "w3"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "brief",
+          "to": "orch",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "orch",
+          "to": "w1",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "orch",
+          "to": "w2",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "orch",
+          "to": "w3",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "orch",
+          "to": "report",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "fan out, barrier, synthesise",
+          "duration": 4500,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "brief",
+              "name": "One brief, three questions inside it",
+              "desc": "The orchestrator's first job is decomposition: turning a request into sub-tasks that do not need each other's answers. Anything that does need another's answer cannot be fanned out, and belongs in a later round.",
+              "start": 0,
+              "end": 700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 700,
+                  "edge": "e0",
+                  "from": "brief",
+                  "to": "orch",
+                  "label": "assess the acquisition"
+                }
+              ]
+            },
+            {
+              "id": "fanout",
+              "name": "All three workers start at the same instant",
+              "desc": "Three flows in one step, because that is what dispatch is: the requests leave together and no worker waits on another. Splitting them across three steps would draw a staircase the system never climbs.",
+              "start": 700,
+              "end": 1300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 700,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "orch",
+                  "to": "w1",
+                  "label": "find primary sources"
+                },
+                {
+                  "kind": "flow",
+                  "start": 700,
+                  "end": 1300,
+                  "edge": "e2",
+                  "from": "orch",
+                  "to": "w2",
+                  "label": "read the last four filings"
+                },
+                {
+                  "kind": "flow",
+                  "start": 700,
+                  "end": 1300,
+                  "edge": "e3",
+                  "from": "orch",
+                  "to": "w3",
+                  "label": "list the deal risks"
+                }
+              ]
+            },
+            {
+              "id": "barrier",
+              "name": "Two finish early and the orchestrator waits",
+              "desc": "This step is the barrier. The sources and risks agents are done and dimmed, the filings agent is still reading, and the elapsed time of the round is now entirely that one worker's problem.",
+              "start": 1300,
+              "end": 2000,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1300,
+                  "end": 2000,
+                  "edge": "e1",
+                  "from": "w1",
+                  "to": "orch",
+                  "reverse": true,
+                  "label": "11 sources",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1300,
+                  "end": 2000,
+                  "edge": "e3",
+                  "from": "w3",
+                  "to": "orch",
+                  "reverse": true,
+                  "label": "6 risks",
+                  "style": "response"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1300,
+                  "end": 2000,
+                  "target": "w1"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1300,
+                  "end": 2000,
+                  "target": "w3"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1300,
+                  "end": 2000,
+                  "target": "w2",
+                  "style": "busy"
+                }
+              ]
+            },
+            {
+              "id": "straggler",
+              "name": "The slowest worker returns",
+              "desc": "A fan-out costs the maximum of its branches, never the average. Every budget written against the average is wrong the first time one worker hits a long document.",
+              "start": 2000,
+              "end": 2900,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2000,
+                  "end": 2900,
+                  "edge": "e2",
+                  "from": "w2",
+                  "to": "orch",
+                  "reverse": true,
+                  "label": "4 filings summarised",
+                  "style": "response"
+                },
+                {
+                  "kind": "dim",
+                  "start": 2000,
+                  "end": 2900,
+                  "target": "w1"
+                },
+                {
+                  "kind": "dim",
+                  "start": 2000,
+                  "end": 2900,
+                  "target": "w3"
+                }
+              ]
+            },
+            {
+              "id": "synthesise",
+              "name": "The orchestrator reads all three answers together",
+              "desc": "Focus moves to the orchestrator because the work has: the workers are idle and their partial answers now have to be reconciled into one that does not contradict itself. This is the step no worker could have done.",
+              "start": 2900,
+              "end": 3700,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 2900,
+                  "end": 3700,
+                  "target": "orch"
+                },
+                {
+                  "kind": "note",
+                  "start": 2900,
+                  "end": 3700,
+                  "target": "orch",
+                  "text": "3 partial answers\n1 contradiction to resolve"
+                }
+              ]
+            },
+            {
+              "id": "deliver",
+              "name": "One answer leaves, with the disagreement noted",
+              "desc": "The filings disagreed with two of the sources about the closing date, and the answer says so rather than picking a winner. A fan-out that hides its disagreements is just a slower single agent.",
+              "start": 3700,
+              "end": 4500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3700,
+                  "end": 4500,
+                  "edge": "e4",
+                  "from": "orch",
+                  "to": "report",
+                  "label": "one answer, 1 caveat",
+                  "style": "response"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 0,
+              "end": 1300,
+              "target": "orch",
+              "label": "planning",
+              "value": "busy"
+            },
+            {
+              "kind": "set",
+              "start": 700,
+              "end": 1300,
+              "target": "w1",
+              "label": "searching",
+              "value": "busy"
+            },
+            {
+              "kind": "set",
+              "start": 700,
+              "end": 2000,
+              "target": "w2",
+              "label": "reading",
+              "value": "busy"
+            },
+            {
+              "kind": "set",
+              "start": 700,
+              "end": 1300,
+              "target": "w3",
+              "label": "reasoning",
+              "value": "busy"
+            },
+            {
+              "kind": "set",
+              "start": 1300,
+              "end": 2900,
+              "target": "orch",
+              "label": "waiting",
+              "value": "busy"
+            },
+            {
+              "kind": "set",
+              "start": 1300,
+              "end": 4500,
+              "target": "w1",
+              "label": "done",
+              "value": "ok",
+              "color": "#16a34a"
+            },
+            {
+              "kind": "set",
+              "start": 1300,
+              "end": 4500,
+              "target": "w3",
+              "label": "done",
+              "value": "ok",
+              "color": "#16a34a"
+            },
+            {
+              "kind": "set",
+              "start": 2000,
+              "end": 4500,
+              "target": "w2",
+              "label": "done",
+              "value": "ok",
+              "color": "#16a34a"
+            },
+            {
+              "kind": "set",
+              "start": 2900,
+              "end": 3700,
+              "target": "orch",
+              "label": "synthesising",
+              "value": "busy"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

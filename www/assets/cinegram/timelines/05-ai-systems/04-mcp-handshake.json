@@ -1,0 +1,311 @@
+{
+  "version": 2,
+  "root": "04-mcp-handshake",
+  "views": [
+    {
+      "id": "04-mcp-handshake",
+      "title": "launch, negotiate, call",
+      "diagram": {
+        "type": "sequenceDiagram",
+        "mermaid": "%% The handshake `cinegram mcp` performs. An agent host launches the server on\n%% stdin and stdout, agrees a protocol version with it, asks what it can do,\n%% and only then calls a tool — here `sheet`, which comes back as a picture of\n%% a whole scenario.\n%% ---\n%% Every message below is one the server in this repository actually sends or\n%% answers: five tools, one resource, and a `tools/call` that returns an image\n%% rather than text. The version pinned in the badge is the protocol revision\n%% the server negotiates.\n%% ---\n%% The flows carry no `label`. A sequence diagram draws its own message text,\n%% so a label would print a second copy on top of it — and where the same pair\n%% exchanges several messages in the same direction, `msg:` picks which arrow a\n%% flow travels rather than leaving the compiler to guess.\nsequenceDiagram\n  participant A as Agent\n  participant C as MCP Client\n  participant S as cinegram mcp\n\n  A-\u003e\u003eC: I have a .dgm to check\n  C-\u003e\u003eS: initialize\n  S--\u003e\u003eC: result: protocolVersion, capabilities\n  C-\u003e\u003eS: notifications/initialized\n  C-\u003e\u003eS: tools/list\n  S--\u003e\u003eC: 5 tools, 1 resource\n  A-\u003e\u003eC: show me the whole scenario\n  C-\u003e\u003eS: tools/call sheet {path}\n  S--\u003e\u003eC: image/png + cell manifest\n  C--\u003e\u003eA: contact sheet\n\n"
+      },
+      "nodes": [
+        {
+          "id": "A",
+          "label": "Agent",
+          "shape": "actor"
+        },
+        {
+          "id": "C",
+          "label": "MCP Client",
+          "shape": "actor"
+        },
+        {
+          "id": "S",
+          "label": "cinegram mcp",
+          "shape": "actor"
+        }
+      ],
+      "groups": [],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "A",
+          "to": "C",
+          "label": "I have a .dgm to check",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "C",
+          "to": "S",
+          "label": "initialize",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "S",
+          "to": "C",
+          "label": "result: protocolVersion, capabilities",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "C",
+          "to": "S",
+          "label": "notifications/initialized",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "C",
+          "to": "S",
+          "label": "tools/list",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "S",
+          "to": "C",
+          "label": "5 tools, 1 resource",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e6",
+          "from": "A",
+          "to": "C",
+          "label": "show me the whole scenario",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e7",
+          "from": "C",
+          "to": "S",
+          "label": "tools/call sheet {path}",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e8",
+          "from": "S",
+          "to": "C",
+          "label": "image/png + cell manifest",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e9",
+          "from": "C",
+          "to": "A",
+          "label": "contact sheet",
+          "style": "dotted",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "launch, negotiate, call",
+          "duration": 6100,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "spawn",
+              "name": "The host starts the server as a subprocess",
+              "desc": "There is no port and no daemon. The client launches `cinegram mcp` and speaks JSON-RPC down its stdin and stdout, which is why the server needs no configuration beyond the command that starts it.",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "A",
+                  "to": "C"
+                },
+                {
+                  "kind": "note",
+                  "start": 0,
+                  "end": 600,
+                  "target": "S",
+                  "text": "stdio transport\nno port, no server to run"
+                }
+              ]
+            },
+            {
+              "id": "initialize",
+              "name": "The client opens with initialize",
+              "desc": "The first message names the protocol version the client would like to speak and what it supports. Nothing else may be sent until this exchange has completed — a tool call before it is a protocol error.",
+              "start": 600,
+              "end": 1300,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 600,
+                  "end": 1300,
+                  "target": "S"
+                },
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "C",
+                  "to": "S"
+                }
+              ]
+            },
+            {
+              "id": "negotiate",
+              "name": "The server answers with the version it will speak",
+              "desc": "The reply pins the revision for the whole session. A client that asked for something newer either accepts what it is offered here or closes the connection; there is no renegotiation later.",
+              "start": 1300,
+              "end": 2000,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1300,
+                  "end": 2000,
+                  "edge": "e2",
+                  "from": "S",
+                  "to": "C",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "ready",
+              "name": "A notification closes the handshake",
+              "desc": "`notifications/initialized` has no reply, because it is not a question. It is the client saying it has finished reading the server's capabilities, and it is the moment the session becomes usable.",
+              "start": 2000,
+              "end": 2500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2000,
+                  "end": 2500,
+                  "edge": "e3",
+                  "from": "C",
+                  "to": "S"
+                }
+              ]
+            },
+            {
+              "id": "discover",
+              "name": "The client asks what the server can do",
+              "desc": "Five tools — lint, narrate, mermaid, frame and sheet — plus one resource, the language reference itself. Discovery is why the host needs no cinegram-specific code: the schemas arrive at runtime.",
+              "start": 2500,
+              "end": 3700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2500,
+                  "end": 3100,
+                  "edge": "e4",
+                  "from": "C",
+                  "to": "S"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3100,
+                  "end": 3700,
+                  "edge": "e5",
+                  "from": "S",
+                  "to": "C",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "call",
+              "name": "The agent picks a tool and the client calls it",
+              "desc": "The agent chose `sheet` from the schemas it was handed. The call carries `path` — or `source` for a draft that was never saved, never both, a rule the handler enforces rather than trusting the client to.",
+              "start": 3700,
+              "end": 4800,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3700,
+                  "end": 4200,
+                  "edge": "e6",
+                  "from": "A",
+                  "to": "C"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4200,
+                  "end": 4800,
+                  "edge": "e7",
+                  "from": "C",
+                  "to": "S"
+                },
+                {
+                  "kind": "focus",
+                  "start": 3700,
+                  "end": 4800,
+                  "target": "S"
+                }
+              ]
+            },
+            {
+              "id": "image",
+              "name": "The result is a picture, not a paragraph",
+              "desc": "`sheet` renders the scenario in a headless Chrome and answers with a PNG plus the manifest that maps each cell to its step. A model that can see the sheet can check the animation it just wrote in one look.",
+              "start": 4800,
+              "end": 6100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 4800,
+                  "end": 5500,
+                  "edge": "e8",
+                  "from": "S",
+                  "to": "C",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5500,
+                  "end": 6100,
+                  "edge": "e9",
+                  "from": "C",
+                  "to": "A",
+                  "style": "response"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 1300,
+              "end": 6100,
+              "target": "S",
+              "label": "2025-06-18",
+              "value": "ok",
+              "color": "#16a34a"
+            },
+            {
+              "kind": "gauge",
+              "start": 2500,
+              "end": 6100,
+              "target": "S",
+              "label": "tools",
+              "value": "5"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

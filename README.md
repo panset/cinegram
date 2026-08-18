@@ -22,7 +22,10 @@ Or skip the build entirely: every example is playable at
 `01-basics/` is a request path and a pipeline, `02-storytelling/` adds
 failure paths, narration and storyboards, `03-interaction/` is clicking and
 drilling in, `04-diagram-types/` proves the same language over `sequence-`
-and `stateDiagram`. The numeric prefixes are ordering: they show in a page's
+and `stateDiagram`, and `05-ai-systems/` animates what people are building
+with models — an agent's tool loop, a multi-agent fan-out, a RAG pipeline with
+its cache cold, and the MCP handshake `cinegram mcp` performs. The numeric
+prefixes are ordering: they show in a page's
 URL and nowhere a reader looks, since titles come from the diagram itself.
 
 **Try it in the browser.** <https://panset.github.io/cinegram/playground/> is

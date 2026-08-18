@@ -1,0 +1,122 @@
+%% Retrieval-augmented generation, told twice: once with a warm cache, and once
+%% with the cache missing and a live web search standing in for the corpus. The
+%% second telling ends with an answer whose citations do not come from the
+%% documents anyone approved.
+%% ---
+%% Both stories share their opening, so it is written once. The variant replays
+%% the base scenario through the `lookup` step — `until:` is inclusive — and
+%% then diverges, which means a change to how a query is embedded can never end
+%% up describing the cache hit and not the cache miss.
+%% ---
+%% `outcome: fail` on the variant is a claim about the answer, not about the
+%% pipeline: every service did its job, and the result is still worse. That is
+%% the interesting failure in a RAG system, and it is why the fallback path
+%% deserves a scenario of its own rather than a footnote.
+flowchart LR
+  query([User Query])
+  embed[Embedder]
+  retrieve[Vector Search]
+  cache[(Passage Cache)]
+  web[Web Search Fallback]
+  rerank[Cross-Encoder Reranker]
+  assemble[Prompt Assembler]
+  generate[Answer Model]
+  answer[Answer]
+
+  query --> embed
+  embed --> retrieve
+  retrieve --> cache
+  retrieve --> web
+  retrieve --> rerank
+  rerank --> assemble
+  assemble --> generate
+  generate --> answer
+
+scenario "warm cache" { speed: 1.0 }
+
+  step ask "The question becomes a vector" {
+    desc: "Retrieval never sees the words. The embedder turns the question into a point in the same space the corpus was indexed into, and everything downstream is geometry from here on."
+    flow query -> embed { label: "why did checkout get slower?", dur: 700ms }
+    highlight embed { style: busy }
+  }
+
+  step lookup "The retriever checks the cache before the index" {
+    desc: "The same questions get asked over and over, and an embedding is a stable key. Looking in the cache first is the cheapest thing this pipeline can do — and the branch that decides how the rest of it goes."
+    flow embed -> retrieve { label: "1536-d vector", dur: 600ms }
+    %% `delay` holds the lookup back until the vector has actually arrived —
+    %% the two hops are one causal chain, written without a `seq` because
+    %% nothing else in the step needs sequencing.
+    flow retrieve -> cache { label: "fingerprint 8f3c…", dur: 500ms, delay: 600ms }
+  }
+
+  step hit "The cache has the passages already" {
+    desc: "A hit skips the index entirely: these eight passages were retrieved and scored for a near-identical question minutes ago, and nothing in the corpus has changed since."
+    flow cache -> retrieve { label: "8 passages · warm", dur: 600ms, style: response }
+    set cache { badge: "hit", state: ok, color: "#16a34a" }
+    gauge retrieve { label: "passages", value: 8 }
+  }
+
+  step rerank "The reranker throws most of them away" {
+    desc: "Vector search is recall; the cross-encoder is precision. It reads each passage against the actual question and keeps four, because a prompt stuffed with near-misses answers worse than a short one."
+    flow retrieve -> rerank { label: "8 candidates", dur: 600ms }
+    gauge rerank { label: "kept", value: "4 / 8" }
+  }
+
+  step assemble "The prompt is built in order" {
+    desc: "This is the one genuinely sequential beat in the pipeline: the passages have to be in the prompt before the prompt can be sent. A `seq` says so, where the rest of this file lets actions start together."
+    %% The note sits outside the `seq` so it spans the whole step — inside it,
+    %% a stateful action costs the chain 800ms and then ends, and the reader
+    %% would lose the token count before the prompt was sent.
+    note assemble "system + 4 passages + question\n2.8k tokens"
+    seq {
+      flow rerank -> assemble { label: "top 4", dur: 500ms }
+      flow assemble -> generate { label: "one prompt", dur: 500ms }
+    }
+  }
+
+  step generate "The model answers from what it was given" {
+    desc: "Every claim in the answer is traceable to one of the four passages, and each citation names the document it came from. That traceability is the entire reason for the machinery upstream."
+    highlight generate { style: busy }
+    flow generate -> answer { label: "answer + 4 citations", dur: 800ms, style: response }
+  }
+
+%% The cache miss is the same story until the lookup comes back empty.
+scenario "cold cache, web fallback" { variant: "warm cache", until: lookup, outcome: fail }
+
+  step miss "The cache has nothing" {
+    desc: "Not an error — an eviction. The entry was there forty seconds ago and the pipeline now has to earn the passages the expensive way, in front of a user who is already waiting."
+    flow cache -> retrieve { label: "no entry", dur: 600ms, status: fail }
+    note cache "fingerprint 8f3c… not found\nevicted 40s ago"
+    set cache { badge: "miss", state: fail, color: "#dc2626" }
+  }
+
+  step fallback "The index is stale, so the web stands in" {
+    desc: "The corpus was last indexed before the change that caused the slowdown, so vector search returns confident, irrelevant passages. The fallback reaches outside the approved documents — which is a decision, not a retry."
+    flow retrieve -> web { label: "live search", dur: 700ms }
+    flow web -> retrieve { label: "6 pages", dur: 700ms, delay: 700ms, style: response }
+    gauge retrieve { label: "passages", value: 6 }
+  }
+
+  step web-rerank "The reranker keeps three of the six" {
+    desc: "The same reranker, a worse pool. Nothing here can tell that these passages came from a blog rather than the runbook the corpus was built from — the scores look exactly as good."
+    flow retrieve -> rerank { label: "6 candidates", dur: 600ms }
+    gauge rerank { label: "kept", value: "3 / 6" }
+  }
+
+  step web-assemble "The prompt is built from web text" {
+    desc: "The assembler cannot mark provenance it was never told about, so the passages arrive looking like every other passage. This is where an uncomfortable answer becomes an authoritative-sounding one."
+    note assemble "system + 3 web pages + question\n2.1k tokens"
+    seq {
+      flow rerank -> assemble { label: "top 3", dur: 500ms }
+      flow assemble -> generate { label: "one prompt", dur: 500ms }
+    }
+  }
+
+  step web-answer "The answer is plausible and its citations are not ours" {
+    desc: "The user gets an answer with citations, and every one of them points at a page nobody in this company reviewed. Marking the answer rather than hiding the fallback is the only honest ending."
+    %% The delivery itself does not fail — the answer arrives. What fails is
+    %% the claim the pipeline was built to make, so the warning is a note and
+    %% the verdict is the scenario's own `outcome: fail`.
+    flow generate -> answer { label: "answer + 3 web citations", dur: 800ms, style: response }
+    note answer "citations: web only\nnot from the indexed corpus"
+  }

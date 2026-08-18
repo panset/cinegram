@@ -20,3 +20,7 @@ the cascade · a priced order request · a row's journey
 
 the upgrade · tcp connection · leader failure and re-election
 
+## [ai systems](05-ai-systems/index.md)
+
+one question, four turns · fan out, barrier, synthesise · rag pipeline · launch, negotiate, call
+
