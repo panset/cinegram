@@ -435,10 +435,6 @@
     // this.time, so the speed multiplier composes with it for free.
     this.present = false;
     this.stopAt = null;
-    // Whether this player is the browser's fullscreen element, as of the last
-    // fullscreenchange. See build(): it is what tells our own exit apart from
-    // somebody else's.
-    this._hadFull = false;
 
     // Auto-follow camera state, live wherever following() is. camOverride is
     // user-state like `revealed`, not clock-state: a manual gesture takes the
@@ -653,28 +649,29 @@
     // Whichever way it went, the stage is a different size than the camera
     // measured against, and the change is not always accompanied by a resize.
     //
-    // Only ever about *our* fullscreen, which is what _hadFull records. The
-    // event is document-level, so a page holding two players hears every
-    // change either of them makes — and the playground disposes one player and
-    // mounts the next on every keystroke, so a mount can hear the exit of the
-    // player it replaced. Reading only `fullscreenElement !== root` would take
-    // that as "the browser dropped me" and drop presenter mode on the reader
-    // mid-sentence.
+    // Only ever about *our* fullscreen, which is what hadFull records — a
+    // two-event latch read in exactly this closure, which is why it is a local
+    // and not a Player field. The event is document-level, so a page holding
+    // two players hears every change either of them makes — and the playground
+    // disposes one player and mounts the next on every keystroke, so a mount
+    // can hear the exit of the player it replaced. Reading only
+    // `fullscreenElement !== root` would take that as "the browser dropped me"
+    // and drop presenter mode on the reader mid-sentence.
+    var hadFull = false;
     var onFull = function () {
       var mine = fullscreenElement() === self.root;
-      if (self.present && self._hadFull && !mine) {
+      if (self.present && hadFull && !mine) {
         // The browser exits fullscreen on Esc even when onKey meant that Esc
         // for the innermost overlay — the lightbox or the help sheet. Ending
         // the whole presentation because someone closed a storyboard frame is
-        // wrong, so with an overlay open the mode survives on the fill
-        // fallback; Esc pressed again then leaves presenter mode properly.
-        if (self.lightboxIsOpen() || self.helpOpen()) {
-          self.root.classList.add('dgm-present-fill');
-        } else {
+        // wrong, so with an overlay open the mode survives on the fill (the
+        // class is already on — setPresenter never took it off); Esc pressed
+        // again then leaves presenter mode properly.
+        if (!(self.lightboxIsOpen() || self.helpOpen())) {
           self.setPresenter(false);
         }
       }
-      self._hadFull = mine;
+      hadFull = mine;
       self.camKeys = null;
       self.mapKeys = null;
       if (self.svg) {
@@ -684,7 +681,6 @@
       }
     };
     own(self, document, 'fullscreenchange', onFull);
-    own(self, document, 'webkitfullscreenchange', onFull);
 
     // The storyboard sits between the stage and the step list: what the human
     // sees, beside what the system does. It is built once and hidden when the
@@ -3386,7 +3382,6 @@
   // without knowing presenter mode exists.
 
   Player.prototype.setPresenter = function (on) {
-    var self = this;
     this.present = !!on;
     this.root.classList.toggle('dgm-present', this.present);
     this.presentBtn.textContent = this.present ? 'Exit' : 'Present';
@@ -3417,22 +3412,18 @@
     // Presenting into one pane of a split view is not presenting, so the mode
     // asks the browser for the screen. Whether it gets it is not something the
     // caller can promise: this runs on page load for `?present`, with no user
-    // gesture, and inside hosts that refuse element fullscreen outright. The
-    // fallback is `dgm-present-fill`, which pins the player to the window in
-    // CSS — the same box, minus the browser chrome going away.
+    // gesture, and inside hosts that refuse element fullscreen outright. So
+    // `dgm-present-fill` goes on unconditionally rather than as an answer to a
+    // refusal: on the fullscreen element its position: fixed resolves against
+    // the viewport and its z-index is inert in the top layer, so the box is
+    // identical whether the request was granted or not — and there is no async
+    // refusal round-trip left to race an enter/exit/enter against.
     var owned = fullscreenElement() === this.root;
     if (this.present) {
+      this.root.classList.add('dgm-present-fill');
       // Already the fullscreen element: re-requesting it would be a rejected
       // promise and nothing else.
-      if (!owned) {
-        requestFull(this.root, function () {
-          // A refusal arrives a turn or more later, by which time the reader
-          // may have left presenter mode again — and a fill class added then
-          // would pin a windowed player over the whole page with nothing left
-          // to take it off.
-          if (self.present) self.root.classList.add('dgm-present-fill');
-        });
-      }
+      if (!owned) requestFull(this.root);
       // The chrome has gone; reframe against what the stage is now. Entering
       // real fullscreen resizes the window too, and the resize and
       // fullscreenchange handlers in build() re-measure again when it lands.
@@ -4604,37 +4595,22 @@
   // path here is silent: build() asks for fullscreen on load whenever the page
   // opens in presenter mode, with no user gesture behind it, and a browser is
   // entitled to refuse that — as is a VS Code webview and an iframe without
-  // `allowfullscreen`. Refusal is a mode the caller handles (the fill
-  // fallback), never an exception it has to catch.
+  // `allowfullscreen`. Refusal costs nothing to detect anymore: the
+  // `dgm-present-fill` class setPresenter puts on unconditionally draws the
+  // same box either way, so the request is fire-and-forget.
 
   function fullscreenElement() {
     return document.fullscreenElement || document.webkitFullscreenElement || null;
   }
 
-  // requestFull calls onFail when the browser will not, or does not, give the
-  // element the screen. The unprefixed API says so by rejecting its promise;
-  // legacy webkit returns nothing and fires an event instead, so that spelling
-  // is answered with a pair of one-shot listeners that take each other off.
-  function requestFull(node, onFail) {
+  function requestFull(node) {
     var fn = node.requestFullscreen || node.webkitRequestFullscreen;
     // No element fullscreen at all — iOS Safari, most notably.
-    if (!fn) { onFail(); return; }
+    if (!fn) return;
     try {
       var p = fn.call(node);
-      if (p && p.catch) { p.catch(function () { onFail(); }); return; }
-      // Legacy webkit returns undefined and reports refusal — if at all — by
-      // event. A listener pair here leaked (a request the browser ignores
-      // fires neither event, and dispose() cannot reach raw document
-      // listeners) and cross-talked (any element's fullscreenchange reads as
-      // success). One probe answers the only question that matters: after a
-      // beat, is the node the fullscreen element or not. A grant lands within
-      // the gesture's task, so the delay is generous.
-      setTimeout(function () {
-        if (fullscreenElement() !== node) onFail();
-      }, 150);
-    } catch (e) {
-      onFail();
-    }
+      if (p && p.catch) p.catch(function () { /* refused; the fill has it */ });
+    } catch (e) { /* refused; the fill has it */ }
   }
 
   function exitFull() {
