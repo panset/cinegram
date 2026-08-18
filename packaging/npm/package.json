@@ -1,0 +1,33 @@
+{
+  "name": "cinegram",
+  "version": "0.3.0",
+  "description": "Animated, narrated architecture diagrams from Mermaid — the cinegram CLI, fetched on first use.",
+  "license": "MIT",
+  "bin": {
+    "cinegram": "bin/cinegram.js"
+  },
+  "files": [
+    "bin/cinegram.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "diagram",
+    "mermaid",
+    "animation",
+    "architecture",
+    "sequence diagram",
+    "cli"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/panset/cinegram.git",
+    "directory": "packaging/npm"
+  },
+  "homepage": "https://panset.github.io/cinegram/",
+  "bugs": {
+    "url": "https://github.com/panset/cinegram/issues"
+  }
+}

@@ -202,11 +202,111 @@ jobs:
             echo
           done
 
+  # The two package-manager shims are launchers: they carry no binary and
+  # resolve https://github.com/…/releases/download/v$V/<asset> the first time a
+  # user runs them. That is why these two jobs, alone among the channels, also
+  # need channel-github-binaries — published a moment earlier, they would ship
+  # a package whose every invocation 404s. See RELEASING.md.
+  #
+  # Both gate on the release carrying every asset their platform tables can
+  # name. The list below is written out rather than derived, because it *is*
+  # the assertion: it mirrors TARGETS in packaging/npm/bin/cinegram.js and in
+  # packaging/pypi/src/cinegram/__init__.py, and a platform added to either
+  # launcher without a matching build in `qualify` should fail loudly here
+  # rather than 404 on a user's first run.
+  channel-npm:
+    needs: [smoke, channel-github-binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # a job-level block replaces the workflow default, and checkout needs this
+      id-token: write # npm provenance signs against this workflow run
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Gate — the release carries every asset the launcher can name
+        run: |
+          awk '{print $2}' dist/SHA256SUMS > /tmp/released-assets
+          for asset in cinegram-darwin-arm64 cinegram-darwin-x64 \
+                       cinegram-linux-x64 cinegram-linux-arm64 \
+                       cinegram-win32-x64.exe; do
+            if ! grep -Fxq "$asset" /tmp/released-assets; then
+              echo "::error::SHA256SUMS has no entry for $asset — npx cinegram would 404 on that platform"
+              exit 1
+            fi
+          done
+
+      - name: Publish to npm
+        working-directory: packaging/npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::the NPM_TOKEN secret is missing or empty — mint one and store it per RELEASING.md"
+            exit 1
+          fi
+          npm publish --access public --provenance
+
+  channel-pypi:
+    needs: [smoke, channel-github-binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # a job-level block replaces the workflow default, and checkout needs this
+      id-token: write # PyPI trusted publishing — the run itself is the credential
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Gate — the release carries every asset the launcher can name
+        run: |
+          awk '{print $2}' dist/SHA256SUMS > /tmp/released-assets
+          for asset in cinegram-darwin-arm64 cinegram-darwin-x64 \
+                       cinegram-linux-x64 cinegram-linux-arm64 \
+                       cinegram-win32-x64.exe; do
+            if ! grep -Fxq "$asset" /tmp/released-assets; then
+              echo "::error::SHA256SUMS has no entry for $asset — uvx cinegram would 404 on that platform"
+              exit 1
+            fi
+          done
+
+      # A pure-Python launcher, so one sdist and one universal wheel; nothing
+      # here compiles or copies a binary.
+      - name: Build the sdist and wheel
+        working-directory: packaging/pypi
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+
+      # No secret: the repository is registered as a trusted publisher for the
+      # cinegram project on PyPI, and the id-token above is what it trusts.
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packaging/pypi/dist/
+
   # Install from the published release exactly the way skills/cinegram/SKILL.md
-  # tells an agent to, so the one path users actually take is the one tested.
-  # The retry is for /latest/ propagation right after publishing.
+  # tells an agent to, so the one path users actually take is the one tested —
+  # and then the same for each package manager, since a shim that resolves its
+  # download at run time can only be proved by running it. The retries are for
+  # /latest/ propagation and for registry indexing right after publishing.
   verify:
-    needs: channel-github-binaries
+    needs: [channel-github-binaries, channel-npm, channel-pypi]
     runs-on: ubuntu-latest
     steps:
       - name: Install as the skill does
@@ -220,3 +320,35 @@ jobs:
           chmod +x cinegram
           test "$(./cinegram version)" = "cinegram ${GITHUB_REF_NAME#v}"
           ./cinegram upgrade --check
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Both of these download the release binary themselves, so a green run
+      # here is the whole shim path: registry → launcher → GitHub release →
+      # checksum → exec.
+      - name: Run it as `npx cinegram` does
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          for i in $(seq 1 10); do
+            out="$(npx --yes "cinegram@$V" version)" && break
+            echo "cinegram@$V not yet installable from npm (attempt $i)"
+            sleep 15
+          done
+          test "$out" = "cinegram $V"
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run it as `uvx cinegram` does
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          for i in $(seq 1 10); do
+            out="$(uvx "cinegram==$V" version)" && break
+            echo "cinegram==$V not yet installable from PyPI (attempt $i)"
+            sleep 15
+          done
+          test "$out" = "cinegram $V"

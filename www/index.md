@@ -65,6 +65,16 @@ Then `cinegram preview diagram.dgm -o out.html` and open it. Later,
 `cinegram upgrade` replaces the binary in place with the checksum-verified
 latest release.
 
+If you would rather not think about it, a package manager you already have can
+fetch the same binary for you — both of these download the release for your
+platform, check it against the release's `SHA256SUMS`, and cache it under
+`~/.cinegram/bin/`:
+
+```sh
+npx cinegram preview diagram.dgm -o out.html   # Node 18+
+uvx cinegram preview diagram.dgm -o out.html   # uv
+```
+
 There is also a
 [VS Code extension](https://marketplace.visualstudio.com/items?itemName=tejaspanse.cinegram)
 with a live preview beside the editor — it carries the same binary — and the

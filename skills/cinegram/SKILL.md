@@ -23,14 +23,22 @@ Try these in order; use the first that works. Verify with `cinegram version`
 (any subcommand error output means the candidate exists — keep it).
 
 1. `$CINEGRAM_BIN` if set, else `cinegram` on `PATH`.
-2. The copy bundled with the VS Code / Cursor extension:
+2. A package manager the machine already has, which needs no install step of
+   its own: `npx cinegram version` (Node ≥ 18) or `uvx cinegram version` (uv).
+   Both are launchers — they download the release binary for this platform,
+   check it against the release's `SHA256SUMS`, cache it under
+   `~/.cinegram/bin/v<version>/`, and run it. Prefix any command below with
+   `npx cinegram` / `uvx cinegram` the same way. One caveat: the cache entry is
+   version-pinned, so `cinegram upgrade` refuses to run under either — get a
+   newer version with `npx cinegram@latest …` or `uvx cinegram@latest …`.
+3. The copy bundled with the VS Code / Cursor extension:
    ```sh
    ls ~/.vscode/extensions/tejaspanse.cinegram-*/bin/*/cinegram \
       ~/.cursor/extensions/tejaspanse.cinegram-*/bin/*/cinegram 2>/dev/null | tail -1
    ```
-3. A workspace build, if the cinegram repo itself is the workspace:
+4. A workspace build, if the cinegram repo itself is the workspace:
    `bazel-bin/cmd/cinegram/cinegram_/cinegram` (build with `bazel build //cmd/cinegram`).
-4. **Install it** (no package manager needed) from the tested, versioned
+5. **Install it** (no package manager needed) from the tested, versioned
    GitHub release — a single static binary:
 
    ```sh
@@ -57,11 +65,13 @@ Try these in order; use the first that works. Verify with `cinegram version`
 A binary that exists but is stale can update itself: `cinegram upgrade
 --check` reports whether a newer release exists (exit 1 when one does), and
 `cinegram upgrade` replaces the binary in place with the checksum-verified
-latest release. Two exceptions: a workspace Bazel build, which `upgrade`
-refuses — rebuild that with `bazel build //cmd/cinegram` — and a binary that
-answers `unknown command "upgrade"`, which predates 0.2.0: replace that one
-by re-running the install download above over it (the URL always fetches the
-latest release).
+latest release. Three exceptions: a workspace Bazel build, which `upgrade`
+refuses — rebuild that with `bazel build //cmd/cinegram`; a binary reached
+through `npx`/`uvx`, which `upgrade` also refuses, since that cache entry
+belongs to one released version — ask for a newer one (`npx cinegram@latest`,
+`uvx cinegram@latest`); and a binary that answers `unknown command "upgrade"`,
+which predates 0.2.0: replace that one by re-running the install download
+above over it (the URL always fetches the latest release).
 
 If your harness speaks MCP, the same binary is also a server: `cinegram mcp`
 offers `lint`, `narrate`, `mermaid`, `frame` and `sheet` as tools, each taking

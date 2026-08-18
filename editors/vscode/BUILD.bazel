@@ -23,6 +23,8 @@ go_test(
         ":media",
         "//:LICENSE",
         "//cmd/cinegram:version.go",
+        "//packaging:npm/package.json",
+        "//packaging:pypi/pyproject.toml",
         "//pkg/emit/html:browser_assets",
     ],
     deps = ["//internal/repotest"],

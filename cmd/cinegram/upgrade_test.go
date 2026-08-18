@@ -88,6 +88,28 @@ func TestChecksumFor(t *testing.T) {
 	}
 }
 
+// A binary the npm or PyPI shim fetched lives in a cache directory named after
+// the version that was asked for, so replacing it in place would quietly
+// change what `npx cinegram@X` means. The refusal has to come before any
+// network call, which is why this exercises cmdUpgrade rather than upgrader.
+func TestUpgradeRefusesUnderAShim(t *testing.T) {
+	t.Setenv("BUILD_WORKSPACE_DIRECTORY", "")
+	for _, manager := range []string{"npm", "pypi"} {
+		t.Setenv("CINEGRAM_MANAGED_BY", manager)
+		var stdout, stderr strings.Builder
+		err := cmdUpgrade(nil, &stdout, &stderr)
+		if err == nil {
+			t.Fatalf("CINEGRAM_MANAGED_BY=%s: upgrade must refuse", manager)
+		}
+		if !strings.Contains(err.Error(), manager) {
+			t.Errorf("CINEGRAM_MANAGED_BY=%s: the error should name the manager, got %v", manager, err)
+		}
+	}
+	// The unset case needs no assertion here: every other test in this file
+	// runs the same machinery to completion against a fake release server,
+	// which it could not do if the refusal were unconditional.
+}
+
 // releaseServer fakes just enough of GitHub: the /releases/latest redirect,
 // the SHA256SUMS file, and one binary asset.
 func releaseServer(t *testing.T, tag string, assets map[string][]byte) *httptest.Server {
