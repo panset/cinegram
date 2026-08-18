@@ -2052,6 +2052,46 @@
     this.mapClone = clone;
   };
 
+  // --- the stage↔holder mapping, written once --------------------------
+  //
+  // The camera and the minimap describe the same world, so the arithmetic
+  // that relates the stage to the holder lives here and only here: cameraKeys
+  // and mapGeom both build their caches on these, and a change to the framing
+  // convention — a stage border, a different transform-origin — moves both
+  // consumers together instead of desynchronizing them.
+
+  // holderOrigin is the holder's untransformed origin inside the stage: a
+  // holder-local point q draws at origin + pan + q*zoom. The caller passes the
+  // client rects it already measured, so building a cache costs no extra
+  // layout.
+  Player.prototype.holderOrigin = function (stageR, holderR) {
+    return { x: holderR.left - this.panX - stageR.left,
+             y: holderR.top - this.panY - stageR.top };
+  };
+
+  // localRect is an element's holder-local untransformed box. Client rects are
+  // used deliberately: they already compose mermaid's inner transforms and the
+  // SVG's CSS scaling, so dividing our own holder transform back out is the
+  // whole coordinate story.
+  Player.prototype.localRect = function (el, holderR) {
+    var r = el.getBoundingClientRect();
+    if (!r.width && !r.height) return null;
+    var z = this.zoom || 1;
+    return { x: (r.left - holderR.left) / z, y: (r.top - holderR.top) / z,
+             w: r.width / z, h: r.height / z };
+  };
+
+  // centreOnLocal writes the pan that puts a holder-local point at the centre
+  // of the stage, at zoom z. K supplies the frame — holderOrigin `o` and the
+  // stage box W×H — from whichever cache the caller maintains (camKeys,
+  // mapKeys): both record the same layout and are invalidated together. It
+  // writes this.panX/panY and nothing else; the caller owns the style write,
+  // because cameraApply must not re-enter apply().
+  Player.prototype.centreOnLocal = function (cx, cy, z, K) {
+    this.panX = K.W / 2 - K.o.x - z * cx;
+    this.panY = K.H / 2 - K.o.y - z * cy;
+  };
+
   // mapGeom measures the stage, the holder and the diagram once, and returns
   // the mapping between them. `o` and `d` are untransformed — divided back out
   // of the client rects by the current zoom, exactly as cameraKeys does — so
@@ -2072,22 +2112,18 @@
     var holderR = this.holder.getBoundingClientRect();
     var svgR = this.svg.getBoundingClientRect();
     if (!stageR.width || !stageR.height || !svgR.width || !svgR.height) return null;
-    var z = this.zoom || 1;
 
-    // The holder's untransformed origin inside the stage: a holder-local point
-    // q draws at o + pan + q*zoom. That is cameraKeys' mapping, reused rather
-    // than derived a second time.
-    var o = { x: holderR.left - this.panX - stageR.left,
-              y: holderR.top - this.panY - stageR.top };
+    // holderOrigin and localRect are the same functions cameraKeys builds on,
+    // so the map that claims to describe the camera's world is derived from
+    // the camera's own arithmetic rather than derived a second time beside it.
+    var o = this.holderOrigin(stageR, holderR);
 
     // The diagram's own untransformed box, holder-local. The map is a picture
     // of the diagram, not of the empty room around it: a diagram narrower than
     // its stage would otherwise draw as a sliver in a mostly blank box, and the
     // rectangle would not line up with the picture it is drawn over.
-    var d = { x: (svgR.left - holderR.left) / z,
-              y: (svgR.top - holderR.top) / z,
-              w: svgR.width / z,
-              h: svgR.height / z };
+    var d = this.localRect(this.svg, holderR);
+    if (!d) return null;
 
     // One scale factor for the whole map: fit the diagram's box into the cap,
     // which keeps a tall diagram from claiming the height of the stage.
@@ -2149,17 +2185,16 @@
   Player.prototype.bindMapGestures = function () {
     var self = this;
 
-    // Centre the stage on the point pressed: the pan that puts a holder-local
-    // point at the stage's centre is cameraApply's last two lines, so a view
-    // moved by hand and one moved by the camera stay in one coordinate system.
+    // Centre the stage on the point pressed: centreOnLocal is the same pan
+    // the camera writes, so a view moved by hand and one moved by the camera
+    // stay in one coordinate system.
     function centreOn(ev) {
       var g = self.mapGeom();
       if (!g) return;
       var r = self.map.getBoundingClientRect();
       var qx = g.d.x + (ev.clientX - r.left) / g.s;
       var qy = g.d.y + (ev.clientY - r.top) / g.s;
-      self.panX = g.W / 2 - g.o.x - qx * self.zoom;
-      self.panY = g.H / 2 - g.o.y - qy * self.zoom;
+      self.centreOnLocal(qx, qy, self.zoom, g);
       self.applyTransform();
     }
 
@@ -2344,20 +2379,13 @@
     var holderR = this.holder.getBoundingClientRect();
     if (!stageR.width || !stageR.height) return null;
 
-    // The holder's untransformed layout offset inside the stage: its origin
-    // corner sits at o + pan under any current transform.
-    var o = { x: holderR.left - this.panX - stageR.left,
-              y: holderR.top - this.panY - stageR.top };
+    var o = this.holderOrigin(stageR, holderR);
     var W = stageR.width, H = stageR.height;
     var fit = { cx: W / 2 - o.x, cy: H / 2 - o.y, z: 1 };
 
     var self = this;
-    var zoom = this.zoom;
     function localRect(el) {
-      var r = el.getBoundingClientRect();
-      if (!r.width && !r.height) return null;
-      return { x: (r.left - holderR.left) / zoom, y: (r.top - holderR.top) / zoom,
-               w: r.width / zoom, h: r.height / zoom };
+      return self.localRect(el, holderR);
     }
     function anchor(id) {
       return (self.anchors && self.anchors[id]) || self.elementFor(id);
@@ -2466,15 +2494,19 @@
     }
 
     var z = pose.z;
-    var panX = K.W / 2 - K.o.x - z * pose.cx;
-    var panY = K.H / 2 - K.o.y - z * pose.cy;
+    var oldX = this.panX, oldY = this.panY;
+    this.centreOnLocal(pose.cx, pose.cy, z, K);
     if (Math.abs(z - this.zoom) < 1e-4 &&
-        Math.abs(panX - this.panX) < 1e-4 &&
-        Math.abs(panY - this.panY) < 1e-4) return;
+        Math.abs(this.panX - oldX) < 1e-4 &&
+        Math.abs(this.panY - oldY) < 1e-4) {
+      // Close enough to be the same pose: put the exact values back, so a
+      // glide that has settled stops writing rather than creeping by epsilons.
+      this.panX = oldX;
+      this.panY = oldY;
+      return;
+    }
 
     this.zoom = z;
-    this.panX = panX;
-    this.panY = panY;
     this.setTransform();
     this._camMoved = true;
   };
