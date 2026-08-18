@@ -2,9 +2,10 @@
  * Page layout for the playground. Nothing here restyles the player.
  *
  * runtime.css already publishes the --dgm-* colour tokens on :root and swaps
- * them on html[data-theme], which the player's own theme toggle stamps. Keying
- * this page off the same tokens means the two halves cannot disagree: flipping
- * the player's theme repaints the editor with it. The few colours the page
+ * them on html[data-theme], which the page's theme control stamps — the one in
+ * the header, wired by runtime.js. Keying this page off the same tokens means
+ * the two halves cannot disagree: one press repaints the editor and every
+ * player under it together, remount or no remount. The few colours the page
  * needs beyond that set are declared the same way — a light value on bare
  * :root, an override under [data-theme='dark'] and under prefers-color-scheme
  * for the untouched default — so the page never has an undefined colour.

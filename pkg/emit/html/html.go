@@ -33,6 +33,46 @@ var runtimeCSS string
 // of one name is a site that is half skinned with nothing failing to say so.
 const Skin = "mainframe"
 
+// ThemeBootScript is the inline <head> script that puts the reader's theme on
+// the root element before the first paint.
+//
+// It cannot come from runtime.js, which loads at the end of the body: a page
+// opened from disk with dark chosen would paint a white document first and
+// then flip. Three surfaces need the same three lines — this page, the listings
+// pkg/sitegen writes, the playground's hand-written index — so they come from
+// here, and the playground's copy is pinned against this string by a test.
+//
+// Nothing stored *removes* the attribute rather than picking a side, and that
+// is the state a page nobody has pressed the control on is in: runtime.css
+// resolves an unstamped page through prefers-color-scheme, so following the
+// system costs no script and no flash. Anything else in the key — a value from
+// another page on the origin, or an older build's third state — reads the same
+// way, which is also how runtime.js reads it. localStorage throws outright in
+// some private modes, which is a page that cannot remember a preference, not a
+// page that fails to render.
+func ThemeBootScript() string {
+	return `<script>
+(function () {
+  try {
+    var t = localStorage.getItem('dgm.theme');
+    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    else document.documentElement.removeAttribute('data-theme');
+  } catch (e) { /* a browser that will not remember still renders */ }
+})();
+</script>
+`
+}
+
+// ThemeToggleHTML is the page's theme control as markup, for a page that wants
+// it present and styled before any script has run. runtime.js finds it by its
+// data-dgm-theme-toggle marker on load and wires the light/dark flip onto it;
+// chrome built in script asks Cinegram.themeToggle() for the same button
+// instead. The glyph is left to the runtime, which owns the icon set.
+func ThemeToggleHTML() string {
+	return `<button type="button" class="dgm-page-theme" data-dgm-theme-toggle aria-live="polite" aria-label="Theme"></button>
+`
+}
+
 // Options controls page generation.
 type Options struct {
 	// Title appears in the browser tab and page header.
@@ -97,6 +137,10 @@ func Render(t *ir.Timeline, opts Options) ([]byte, error) {
 		b.WriteString(runtimeCSS)
 		b.WriteString("\n</style>\n")
 	}
+	// After the stylesheet, because it decides which half of that sheet's
+	// tokens the first paint resolves through, and before anything the page
+	// draws — the whole point of it is to beat the first frame.
+	b.WriteString(ThemeBootScript())
 	b.Write(opts.HeadExtra)
 	// dgm-standalone is what tells the stylesheet it owns the document: the page
 	// fills the window and paints its own background. The same sheet is loaded
@@ -111,6 +155,11 @@ func Render(t *ir.Timeline, opts Options) ([]byte, error) {
 		b.WriteString("<div class=\"dgm-site-main\">\n")
 	} else {
 		b.WriteString("</head>\n<body class=\"dgm-standalone\">\n")
+		// The theme control, but only on the page that has no other chrome: a
+		// site generator puts one in the header it is already drawing, and two
+		// controls for one page-wide state is a page that can disagree with
+		// itself. Outside #cinegram, which the player empties on every render.
+		b.WriteString(ThemeToggleHTML())
 	}
 	b.Write(opts.Header)
 	b.WriteString("<div id=\"cinegram\"></div>\n")

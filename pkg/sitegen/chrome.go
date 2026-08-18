@@ -71,6 +71,9 @@ func renderPage(out map[string][]byte, root *Group, d *Doc, cfg Config) error {
 		fmt.Fprintf(&header, "<a href=\"%s\">%s</a>\n",
 			stdhtml.EscapeString(resolve(l.URL, n)), stdhtml.EscapeString(l.Name))
 	}
+	// Last in the row, and the page's only theme control: Render emits none of
+	// its own once it is handed a Nav, precisely so this one is it.
+	header.WriteString(html.ThemeToggleHTML())
 	header.WriteString("</div>\n</header>\n")
 
 	var footer strings.Builder
@@ -125,6 +128,11 @@ func renderIndex(out map[string][]byte, root, cur *Group, cfg Config) error {
 	fmt.Fprintf(&b, "<title>%s</title>\n", stdhtml.EscapeString(title))
 	fmt.Fprintf(&b, "<link rel=\"stylesheet\" href=\"%sassets/runtime.css\">\n", up(n))
 	fmt.Fprintf(&b, "<link rel=\"stylesheet\" href=\"%sassets/site.css\">\n", up(n))
+	// A listing builds its own head rather than going through html.Render, so it
+	// has to ask for the pre-paint stamp itself — after the stylesheets, whose
+	// tokens it decides between, and before anything paints. A page with a
+	// diagram on it gets the same three lines from Render.
+	b.WriteString(html.ThemeBootScript())
 	b.WriteString("</head>\n<body class=\"dgm-standalone dgm-sited\">\n")
 	b.WriteString(sidebar(root, outPath, cfg, n))
 	b.WriteString("<div class=\"dgm-site-main\">\n<header class=\"dgm-site-top\">\n")
@@ -134,6 +142,9 @@ func renderIndex(out map[string][]byte, root, cur *Group, cfg Config) error {
 		fmt.Fprintf(&b, "<a href=\"%s\">%s</a>\n",
 			stdhtml.EscapeString(resolve(l.URL, n)), stdhtml.EscapeString(l.Name))
 	}
+	// A listing is a page of this site like any other, and dark or light is a
+	// property of the site rather than of the pages with a diagram on them.
+	b.WriteString(html.ThemeToggleHTML())
 	b.WriteString("</div>\n</header>\n<main class=\"dgm-site-list\">\n")
 
 	fmt.Fprintf(&b, "<h1>%s</h1>\n", stdhtml.EscapeString(title))
@@ -161,7 +172,14 @@ func renderIndex(out map[string][]byte, root, cur *Group, cfg Config) error {
 		}
 		b.WriteString("</li>\n")
 	}
-	b.WriteString("</ul>\n</main>\n</div>\n</body>\n</html>\n")
+	b.WriteString("</ul>\n</main>\n</div>\n")
+	// The only script a listing carries, and the only reason it carries one:
+	// the theme control above is wired by the runtime, which is the single
+	// implementation every cinegram surface shares. mermaid stays out of it —
+	// there is no diagram on this page — and the runtime is already in the
+	// reader's cache from the last page that had one.
+	fmt.Fprintf(&b, "<script src=\"%sassets/runtime.js\"></script>\n", up(n))
+	b.WriteString("</body>\n</html>\n")
 
 	out[outPath] = []byte(b.String())
 	return nil

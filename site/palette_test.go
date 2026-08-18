@@ -189,6 +189,40 @@ func TestPlaygroundWearsTheSkin(t *testing.T) {
 	}
 }
 
+// The playground is hand-written in the same way, and the theme control on it
+// is the second thing that has to be copied rather than generated. Both halves
+// are pinned verbatim against the helpers every other cinegram surface emits:
+// the pre-paint boot script, whose job is to beat the first frame, and the
+// button's markup, which runtime.js finds by its marker and wires on load.
+//
+// Drift here is silent in the worst way. A stale copy of the boot script still
+// runs, so the page still works — it just reads a key nothing writes any more,
+// or writes an attribute nothing reads, and the workbench stops following the
+// theme with every test green.
+func TestThePlaygroundCarriesTheThemeControl(t *testing.T) {
+	root := repotest.Root(t, filepath.Join("web", "playground", "index.html"))
+	raw, err := os.ReadFile(filepath.Join(root, "web", "playground", "index.html"))
+	if err != nil {
+		t.Fatalf("reading the playground page: %v", err)
+	}
+	page := string(raw)
+
+	if want := strings.TrimSpace(html.ThemeToggleHTML()); !strings.Contains(page, want) {
+		t.Errorf("web/playground/index.html does not carry the theme control as\n\t%s\n"+
+			"pkg/emit/html emits it; the page is a static file, so a control that drifts "+
+			"from the runtime's marker is a button nothing wires", want)
+	}
+	if want := strings.TrimSpace(html.ThemeBootScript()); !strings.Contains(page, want) {
+		t.Errorf("web/playground/index.html does not carry html.ThemeBootScript() verbatim; " +
+			"it reads the same dgm.theme key every other surface does, and a copy that has " +
+			"drifted from it either flashes the wrong palette or ignores the choice entirely")
+	}
+	// And the runtime is what turns the markup into a control.
+	if !strings.Contains(page, `src="runtime.js"`) {
+		t.Error("the playground no longer loads runtime.js, so nothing upgrades its theme control")
+	}
+}
+
 // The site wears the skin by asking for it: `--cinegram-skin` on :root, which
 // cinegram-embed.js reads and turns into `data-dgm-skin` on <html>. Three
 // things have to line up for a diagram on these pages to look like the page

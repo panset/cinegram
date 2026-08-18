@@ -96,7 +96,7 @@ suggestion rather than a silent no-op.
 | `badge`, `state` | `set` | Pill text, and a standing `dgm-state-<name>` class. |
 | `label`, `value` | `gauge` | What the reading is called and what it currently says. Both required. |
 | `desc` | step | Prose narration for the step. Shown in the caption; `\n` works. |
-| `speed` | scenario | Initial playback rate, e.g. `1.5`. The player starts here; the speed button cycles from it. |
+| `speed` | scenario | Initial playback rate, e.g. `1.5`. The player starts here; the reader can change it in the settings sheet. |
 | `loop` | scenario | Restart at the end. |
 | `autoplay` | scenario | Start playing once the diagram has rendered. Defaults to **false** — a page opens at rest — and is skipped when the system asks for reduced motion. |
 | `poster` | scenario | The moment the page rests at before anyone presses play, e.g. `1600ms`. Defaults to the start. A shared link's `t=` wins over it. |

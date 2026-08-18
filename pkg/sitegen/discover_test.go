@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/tejaspanse/cinegram/pkg/emit/html"
 )
 
 // mem builds an fs.FS over an in-memory tree of sources.
@@ -326,5 +328,52 @@ func TestAFolderEntryStopsListingAfterSix(t *testing.T) {
 	}
 	if strings.Contains(index, `href="deep/g.html"`) {
 		t.Error("root index spells out a folder past the cap")
+	}
+}
+
+// TestEveryPageAndListingCarriesOneThemeControl pins the site half of the
+// theme's placement.
+//
+// Dark and light is a property of the site, not of the pages that happen to
+// have a diagram on them, so a reader who chose dark on a demo and then clicked
+// up to the folder it lives in must not be handed a white listing with no way
+// back. Listings are built here rather than by html.Render, which is exactly
+// how they would come to be forgotten — hence one test over both kinds of page.
+//
+// Exactly one of each, too: two controls for one page-wide state is a page that
+// can disagree with itself, and a listing with no boot script is a listing that
+// flashes the wrong palette before its stylesheet is overridden.
+func TestEveryPageAndListingCarriesOneThemeControl(t *testing.T) {
+	out, _, err := Build(mem(map[string]string{
+		"plain.dgm":      plainExample,
+		"deep/other.dgm": plainExample,
+	}), Config{Title: "Demo", Playground: "playground/"})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	for _, name := range []string{"index.html", "plain.html", "deep/index.html", "deep/other.html"} {
+		page, ok := out[name]
+		if !ok {
+			t.Fatalf("Build wrote no %s", name)
+		}
+		got := string(page)
+		if n := strings.Count(got, strings.TrimSpace(html.ThemeToggleHTML())); n != 1 {
+			t.Errorf("%s carries %d theme controls, want exactly 1", name, n)
+		}
+		if n := strings.Count(got, html.ThemeBootScript()); n != 1 {
+			t.Errorf("%s carries %d theme boot scripts, want exactly 1 — without it the page "+
+				"paints the default palette first and then corrects itself", name, n)
+		}
+	}
+
+	// A listing has no diagram and so loads no player, but the control on it is
+	// the same one, wired by the same file. Without the runtime the button is
+	// there, styled, and does nothing at all.
+	if index := string(out["index.html"]); !strings.Contains(index, `src="assets/runtime.js"`) {
+		t.Error("a folder listing does not load runtime.js; its theme control is markup nobody wires")
+	}
+	if deep := string(out["deep/index.html"]); !strings.Contains(deep, `src="../assets/runtime.js"`) {
+		t.Error("a nested listing does not reach runtime.js via ../, so its theme control is dead")
 	}
 }

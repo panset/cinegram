@@ -2,7 +2,7 @@
 <!-- data-dgm-skin opts this page into runtime.css's mainframe palette, the same
      way `cinegram preview` and `cinegram site` pages do. The workbench repaints
      with it for free: playground.css draws itself from the --dgm-* tokens the
-     skin overrides, and the theme toggle in the player already flips both. -->
+     skin overrides, and the page's theme control below flips both at once. -->
 <html lang="en" data-dgm-skin="mainframe">
 <head>
 <meta charset="utf-8">
@@ -26,6 +26,24 @@
 -->
 <link rel="stylesheet" href="runtime.css">
 <link rel="stylesheet" href="playground.css">
+
+<!--
+  The pre-paint theme stamp, and the theme control in the header below, are
+  hand-written copies of what pkg/emit/html emits for every other cinegram
+  surface — this page is a static file, like the data-dgm-skin attribute above.
+  site/palette_test.go pins both against html.ThemeBootScript() and
+  html.ThemeToggleHTML(), because a workbench whose toggle quietly stopped
+  matching the runtime is a workbench that stops working with nothing failing.
+-->
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('dgm.theme');
+    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    else document.documentElement.removeAttribute('data-theme');
+  } catch (e) { /* a browser that will not remember still renders */ }
+})();
+</script>
 </head>
 <body class="pg">
 
@@ -38,6 +56,7 @@
     <button type="button" id="pg-share" class="pg-btn">Share link</button>
     <button type="button" id="pg-download" class="pg-btn">Download HTML</button>
     <a class="pg-btn pg-btn-ghost" href="https://github.com/panset/cinegram" target="_blank" rel="noopener">GitHub</a>
+    <button type="button" class="dgm-page-theme" data-dgm-theme-toggle aria-live="polite" aria-label="Theme"></button>
   </div>
 </header>
 

@@ -355,7 +355,7 @@ body.dgm-standalone {
    diagram, not while showing one; they carry .dgm-authoring so this rule names
    them rather than guessing from the shape of their other classes. Exit,
    Restart — taking a demo from the top is presenting, not building — the
-   scenario picker, zoom reset, theme and help stay.
+   scenario picker and help stay.
 
    The set is the same now that most of it lives in the tool rail instead of the
    bar: the classes moved with the buttons, so this rule thins the rail rather
@@ -369,6 +369,27 @@ body.dgm-standalone {
    advance a beat at a time. Both rules are right on their own; this states
    which wins where they meet. */
 .dgm-inline.dgm-present .dgm-controls > .dgm-authoring { display: none; }
+
+/* dgm-nofoot is the mirror image of dgm-authoring, and the pair is why both are
+   classes rather than lists of buttons: authoring names what a presentation
+   takes away, nofoot names what it has to put back. It is on exactly one
+   control, Restart, and it says why that control exists — Home does the same
+   thing, so does clicking step 1, and so does dragging the scrub to zero, which
+   is what a reader actually reaches for. The two modes below are the two that
+   hide `.dgm-foot`: with no scrub on screen there is no other way back to the
+   start without a keyboard, and a presenter at a lectern has a pointer.
+
+   (0,2,0) against the (0,1,0) default, so it wins wherever it applies whatever
+   the order. It cannot collide with the authoring rule above at the same
+   weight: Restart is deliberately not authoring, so no element carries both.
+
+   The reel arm looks redundant and is not quite: `.dgm-reel .dgm-rail` hides
+   the whole column further down, so nothing shows there today. The class
+   states the reason rather than the mode, and a reel is a mode with no scrub;
+   should the reel ever grow a rail, the button that belongs in it is this one. */
+.dgm-nofoot { display: none; }
+.dgm-present .dgm-nofoot,
+.dgm-reel .dgm-nofoot { display: block; }
 
 /* No floor. This once had one, to make the stage big after the chrome went
    away; the shell now hands it everything the caption leaves, and a 60vh
@@ -561,7 +582,7 @@ body.dgm-standalone {
   outline-offset: 3px;
 }
 
-/* --- keyboard help ------------------------------------------------------- */
+/* --- the settings and shortcuts sheet ------------------------------------ */
 
 .dgm-help {
   position: fixed;
@@ -595,6 +616,34 @@ body.dgm-standalone {
   color: var(--dgm-muted);
   margin-bottom: 10px;
   line-height: 1.5;
+}
+
+/* The sheet holds two kinds of thing now, so each half is named: a title alone
+   cannot say that the menu above the list is a setting and the list below it is
+   documentation. Quiet and small — these are signposts between sections, not
+   headings competing with the sheet's own. */
+.dgm-help-section {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dgm-muted);
+  /* No top margin: everything that can stand above this carries its own bottom
+     one, so the spacing is owned in one direction throughout the panel. */
+  margin: 0 0 8px;
+}
+
+/* A <label> wrapping its control, which is why this is a flex row rather than a
+   grid like the shortcut list: the name goes left, the control right, and the
+   whole row is the click target that focuses it. */
+.dgm-help-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 14px;
+  font-size: 13px;
+  cursor: pointer;
 }
 
 .dgm-help-list {
@@ -809,13 +858,13 @@ body.dgm-standalone {
      the picture also swallows the clicks meant for it: a node with a
      `click … view` binding near the right edge — examples/03-interaction has
      several — would simply not be reachable. So the strip is reserved rather
-     than shared: 56px of rail, 10px of inset and 10px of breath, which is
+     than shared: 42px of rail, 10px of inset and 10px of breath, which is
      enough that a diagram scaled to fit never lands underneath it.
 
      Only at fit. Zooming or panning can still put a node under the rail, and
      that is the reader's own doing, undone by the same gesture or a
      double-click; the rail's translucency is there to admit it. */
-  padding-right: 76px;
+  padding-right: 62px;
   overflow: hidden;
   min-height: 320px;
   align-self: stretch;
@@ -876,6 +925,12 @@ body.dgm-standalone {
  * reason: the map is only on screen while something has zoomed past fit, it is
  * the instrument the reader is using at that moment, and it is the smaller
  * claim on that corner.
+ *
+ * It carries the fit control too, which used to be a rail button. The map is
+ * shown exactly while the stage holds less than the whole diagram, which is
+ * exactly when fitting means anything, so putting the button inside the box
+ * costs it no visibility rules of its own — .is-off below takes it away with
+ * everything else.
  */
 
 .dgm-map {
@@ -914,12 +969,62 @@ body.dgm-standalone {
   pointer-events: none;
 }
 
+/* Fit, in the map's bottom-right corner: the corner furthest from the diagram's
+   own top-left, and the one the view rectangle is least often parked in.
+   Opaque rather than translucent, because it sits on a picture rather than on
+   the page's background and a wash over a thumbnail is unreadable — the box
+   itself is small enough that a solid 22px square is not much of a claim.
+
+   Deliberately not a .dgm-btn: the rail's button rules are forbidden a
+   `display` (see the note in the rail section) and are sized for a 42px
+   column, neither of which suits a control living inside a 220px thumbnail.
+   The colours are the same tokens all the same, so the two read as one set. */
+.dgm-map-fit {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  appearance: none;
+  border: 1px solid var(--dgm-border);
+  border-radius: 6px;
+  background: var(--dgm-panel);
+  color: var(--dgm-fg);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.dgm-map-fit:hover,
+.dgm-map-fit:focus-visible {
+  border-color: var(--dgm-accent);
+  color: var(--dgm-accent);
+}
+
+/* 14px inside a 22px box. The glyph is drawn at 16 by icon(), which sets the
+   attributes rather than the style, so a rule here overrides them. */
+.dgm-map-fit svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
 /* --- the tool rail -------------------------------------------------------
  *
  * Everything the bar used to carry except Play and Present, in one column over
- * the stage's right edge: Restart, speed, Cine, Copy link, reset zoom, theme,
- * help. See buildRail in runtime.js for what each of them is and why the
- * classes stayed with them.
+ * the stage's right edge: Restart, Cine, Copy link, help. See buildRail in
+ * runtime.js for what each of them is and why the classes stayed with them.
+ * Restart is the one that is usually not there — it carries dgm-nofoot, and
+ * stands only in the modes with no scrub — so the column is three at rest.
+ *
+ * Three things were here and are not. Fit moved into the minimap, which appears
+ * at exactly the moment fitting means anything. Theme is the page's, not one
+ * diagram's, so its control is page chrome. Speed moved into the settings
+ * sheet, which is what let this column stop being sized around a word.
  *
  * Vertically centred rather than pinned to a corner, because both corners are
  * taken — the minimap top-right, the presenter storyboard top-left.
@@ -933,18 +1038,17 @@ body.dgm-standalone {
  * control nobody knows exists. It goes solid on hover or when something inside
  * it takes focus, which is exactly when the diagram behind it stops mattering.
  *
- * The width is stated rather than derived, and that is the point: the speed
- * button's label is its own state, so the column would otherwise be one width
- * at "1x" and another at "0.25x" — every target moving under a cursor
- * mid-interaction, which is the exact resize .dgm-rail-note goes out of its way
- * to avoid. So it is sized once, for the widest thing it will ever hold: 56px
- * is 42px of button inside 6px of padding and a 1px border on each side, and
- * 42px is "0.25x" — 33px of it in the mainframe skin's monospace, which is the
- * widest of the two faces — inside 2px of side padding and its own border. The
- * buttons stretch into that; the column never measures its contents. Shrinking
- * the type instead was the other way out, and it does not reach: at 10px the
- * same label is 30px, which still does not fit a 32px button with any padding
- * worth the name.
+ * 42px wide, stated rather than derived because there is nothing left in here
+ * worth measuring: every button is one 16px glyph in the same 32px square this
+ * sheet draws every icon target in. 32 of button, 4 of padding each side and a
+ * 1px border each side is the 42.
+ *
+ * It was 56, and the whole of the extra 14 was the speed button: its label was
+ * its own value, so the column had to be wide enough for "0.25x" or every
+ * target in it would move under the cursor the moment the rate changed — the
+ * exact resize .dgm-rail-note still goes out of its way to avoid. Speed is a
+ * menu in the settings sheet now, so the column is as wide as a glyph and no
+ * wider.
  */
 .dgm-rail {
   position: absolute;
@@ -952,9 +1056,15 @@ body.dgm-standalone {
   top: 50%;
   transform: translateY(-50%);
   z-index: 8;
-  width: 56px;
-  padding: 6px;
+  width: 42px;
+  padding: 4px;
   box-sizing: border-box;
+  /* The buttons stack down the column and stretch across it. align-items is
+     left out: stretch is already the default, and a rail button that did not
+     fill the width would be a target that moves with its label. */
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   border: 1px solid var(--dgm-border);
   border-radius: 10px;
   /* Opaque by default, so a browser with no backdrop-filter still gets a
@@ -982,55 +1092,37 @@ body.dgm-standalone {
   border-color: var(--dgm-accent);
 }
 
-/* The column and the collapsible group inside it stack the same way; only the
-   rail's own box — where it sits, how wide, what it is drawn as — differs, and
-   that stays in its rule above. align-items is left out: stretch is already the
-   default, and a rail button that did not fill the width would be a target that
-   moves with its label. */
-.dgm-rail,
-.dgm-rail-items {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
 /* Nothing at (0,2,0) or above may state a `display` on an element that might
    carry dgm-authoring. `.dgm-present .dgm-authoring { display: none }` is
    (0,2,0) and stands earlier in this sheet, so a `display` here — on
-   `.dgm-rail .dgm-btn`, which matches the speed and Copy link buttons — would
-   quietly put them back in the middle of a presentation. The box is sized by
+   `.dgm-rail .dgm-btn`, which matches the Copy link button — would quietly
+   put it back in the middle of a presentation. The box is sized by
    padding instead: a 16px glyph inside 7px of padding and a 1px border is 32px
    tall, with no flex container needed to centre it. The width comes from the
    column, which the buttons stretch to fill.
 
-   `.dgm-rail-more` does state one, further down, and is allowed to: the toggle
-   is never an authoring control, and its rules are (0,1,0), so a presenter rule
-   would outrank them anyway if it ever grew one. */
+   `.dgm-nofoot` states one at (0,2,0) and is allowed to, for the stronger
+   version of the same reason: no element carries both classes, and the whole
+   point of that one is to be shown by the mode this rule's neighbour hides
+   things in. */
 .dgm-rail .dgm-btn {
   position: relative;
   min-width: 32px;
   height: 32px;
-  /* 7px down each side of a 16px glyph is the 32px height; across, the width
-     comes from the column, and the padding only has to keep the widest label
-     off the border. */
+  /* 7px down each side of a 16px glyph is the 32px height; across, the column
+     supplies exactly the 32 the min-width asks for, and icon() centres the
+     glyph in it. */
   padding: 7px 2px;
   box-sizing: border-box;
   border-radius: 8px;
   /* Transparent at rest, so the panel behind them is the panel the reader sees:
      the base .dgm-btn paints var(--dgm-panel), which is the rail's own
-     background *and* the stage's, so seven opaque buttons turned the blur into
-     a wash nobody could tell from the ground, and left :hover's background
+     background *and* the stage's, so a column of opaque buttons turned the blur
+     into a wash nobody could tell from the ground, and left :hover's background
      swap with nothing to swap. The panel treatment comes back on hover and on
      focus, where it is what says which target the press will land on. */
   background: transparent;
   border-color: transparent;
-  /* The two buttons whose label is text — speed and theme — sit on the same
-     16px line the glyphs are drawn on, so a column of pictures and a column of
-     words are one column. */
-  line-height: 16px;
-  font-size: 11px;
-  font-weight: 600;
-  text-align: center;
 }
 
 .dgm-rail .dgm-btn:hover,
@@ -1077,10 +1169,6 @@ body.dgm-standalone {
 
 .dgm-rail-note.is-on { opacity: 1; }
 
-/* The collapse toggle is hidden at every width but the narrow one below, so it
-   never stands beside the tools it exists to stand in for. */
-.dgm-rail-more { display: none; }
-
 /* Hosts that show no chrome show no rail either, and each for the reason it
    hides the bar: a diagram inline in a document is a reader's, not an author's;
    an embed's page has its own furniture — and every recording photographs
@@ -1092,22 +1180,79 @@ body.dgm-standalone {
 .dgm-embed .dgm-rail,
 .dgm-reel .dgm-rail { display: none; }
 
-/* Narrow screens: seven targets stacked over a phone-sized diagram is most of
-   the diagram. The column folds behind the "more" toggle, which puts it back —
-   the runtime toggles is-open and keeps aria-expanded with it. */
-@media (max-width: 520px) {
-  .dgm-rail-more { display: block; }
-  .dgm-rail-items { display: none; }
-  .dgm-rail.is-open .dgm-rail-items { display: flex; }
+/* There is no narrow-screen collapse. There was one, at 520px, because five
+   targets stacked over a phone-sized diagram is most of the diagram; three
+   42px squares is 62px of a 400px screen, which the stage reserves as padding
+   at every width rather than covering the picture at one of them. The column
+   that needed hiding is the column that no longer exists. */
 
-  /* And the reserved strip goes back to ordinary padding. What stands here is
-     one toggle, and 76px of a phone's width is a worse trade than the
-     little the toggle covers — a diagram fitted into what is left would be
-     small enough that the overlap is the cheaper of the two. Later in the
-     sheet than .dgm-stage and at the same specificity, which is what makes it
-     win. */
-  .dgm-stage { padding-right: 20px; }
+/* --- the page's theme control --------------------------------------------
+ *
+ * Dark and light belong to the page, not to a diagram on it, so this button is
+ * page chrome: it sits outside #cinegram — which the player empties on every
+ * render — and writes nothing but `data-theme` on the root element, which every
+ * player is watching. Three surfaces put it somewhere of their own: the emitted
+ * page fixes it to the corner (below), a `cinegram site` page drops it in the
+ * header's action row, the playground in its own toolbar. So the button is
+ * drawn here and placed there.
+ *
+ * Sized and coloured like a rail button, because it is the same kind of thing
+ * even though it is not in the rail — a 16px glyph inside 7px of padding and a
+ * 1px border, on the same tokens. It carries no .dgm-btn class: that one is
+ * inside the player's own cascade, where presenter mode and inline mode reach
+ * in and hide things, and none of that applies to a control on the page.
+ */
+.dgm-page-theme {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 7px;
+  box-sizing: border-box;
+  border: 1px solid var(--dgm-border);
+  border-radius: 8px;
+  background: var(--dgm-panel);
+  color: var(--dgm-fg);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
+
+.dgm-page-theme:hover {
+  border-color: var(--dgm-accent);
+  color: var(--dgm-accent);
+}
+
+.dgm-page-theme:focus-visible {
+  outline: 2px solid var(--dgm-accent);
+  outline-offset: 2px;
+}
+
+.dgm-page-theme svg { display: block; }
+
+/* Only the page cinegram emits whole gets the control pinned to the window:
+   scoped to .dgm-standalone, so a document that merely loads this stylesheet
+   keeps its own layout and its own idea of where a button goes — the same
+   arrangement the rest of the page rules are under.
+   The z-index clears the rail (8) and the minimap (9), which are the stage's
+   own instruments and would otherwise cover a corner of it, and stays under the
+   help sheet (20) and the lightbox (30): while one of those is open the page
+   behind it is not the thing being operated. */
+.dgm-standalone > .dgm-page-theme {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 12;
+}
+
+/* And the bar gives back the width the fixed control covers. The bar's right
+   end is where Play and Present sit, and the page is centred in at most 1400px
+   — so on any window narrower than that plus two gutters the control lands on
+   top of Present. A sited page is exempt because its control is in the site
+   header instead, in the flow, taking its own room. */
+.dgm-standalone:not(.dgm-sited) .dgm-bar { padding-right: 44px; }
 
 /* --- storyboard ----------------------------------------------------------
  *
@@ -1845,6 +1990,7 @@ body.dgm-standalone {
   .dgm-select,
   .dgm-rail,
   .dgm-rail-note,
+  .dgm-map-fit,
   .dgm-step,
   .dgm-chip,
   .dgm-caption,

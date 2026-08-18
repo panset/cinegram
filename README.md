@@ -127,7 +127,7 @@ suggestion rather than a silent no-op.
 | `badge`, `state` | `set` | Pill text, and a standing `dgm-state-<name>` class. |
 | `label`, `value` | `gauge` | What the reading is called and what it currently says. Both required. |
 | `desc` | step | Prose narration for the step. Shown in the caption; `\n` works. |
-| `speed` | scenario | Initial playback rate, e.g. `1.5`. The player starts here; the speed button cycles from it. |
+| `speed` | scenario | Initial playback rate, e.g. `1.5`. The player starts here; the reader can change it in the settings sheet. |
 | `loop` | scenario | Restart at the end. |
 | `autoplay` | scenario | Start playing once the diagram has rendered. Defaults to **false** — a page opens at rest — and is skipped when the system asks for reduced motion. |
 | `poster` | scenario | The moment the page rests at before anyone presses play, e.g. `1600ms`. Defaults to the start. A shared link's `t=` wins over it. |
@@ -547,7 +547,7 @@ panel stays — a demo is exactly when someone wants to point at what the user
 sees. Escape leaves.
 
 Nothing about the timeline changes: the stop is a moment in the same
-milliseconds the clock already runs in, so the speed button, deep links and
+milliseconds the clock already runs in, so the playback speed, deep links and
 `CINEGRAM_PLAYER.seek()` all keep working.
 
 ## Reels
@@ -838,27 +838,43 @@ Press `?` in the page for this list.
 | `1`–`9` | Jump to step *n* |
 | Click stage | In presenter mode, advance one step |
 | `Esc` | Leave presenter mode, back out of a drilled-in view, or close the help |
-| `?` | Show or hide the shortcut list |
+| `?` | Show or hide the settings and shortcuts sheet |
 
 Scroll to zoom the stage — anchored on the cursor, so the thing you are
-pointing at stays put — drag to pan, and a double-click, or **Reset zoom** on
-the tool rail, puts the framing back. Notes,
-badges and gauges are positioned from live element rects, so they stay glued to
-their nodes at any zoom. Zoom resets when you change view, since a framing that
-suited one diagram means nothing over the next.
+pointing at stays put — drag to pan, and a double-click puts the framing back.
+Past fit a minimap appears in the stage's corner: the whole diagram with a
+rectangle around the part you are looking at. Click or drag it to move the
+view, and double-click it — or press the **Fit** button in its corner — to put
+the whole diagram back. The map and that button are on screen only while
+something is zoomed, because that is the only time either has anything to say.
+Notes, badges and gauges are positioned from live element rects, so they stay
+glued to their nodes at any zoom. Zoom resets when you change view, since a
+framing that suited one diagram means nothing over the next.
 
 Every clickable element is reachable by `Tab` and activates with `Enter` or
 `Space`; the step list is real buttons, not clickable rows.
 
-Theme and speed persist in `localStorage`. The theme follows your system until
-you press the button, and then stops — an explicit choice is exactly the thing
-that should not be overridden later. The remembered speed is scoped the other
-way: it is one key for every diagram on the origin, so a scenario that declares
-its own `speed` keeps it — an author's pacing should not be overridden by a
-0.25x you picked on some other diagram last week. The remembered rate applies
-to scenarios that leave `speed` unset. The speed button cycles
-`0.25 → 0.5 → 1 → 1.5 → 2` and its label always shows the rate actually in
-effect.
+Theme and speed persist in `localStorage`. The theme control is page chrome
+rather than a diagram tool — top right on a page `cinegram preview` writes, in
+the header of a `cinegram site` page, beside the other buttons in the playground
+— because dark and light describe the page, and every player on it follows the
+`data-theme` the control writes. It is a **light ⇄ dark** flip. Until you press
+it a page has no theme of its own and simply shows whichever your OS is set to,
+following it live through `prefers-color-scheme` with no script in the way; the
+first press picks a side and keeps it, on that page and every other cinegram
+page in that browser. Inside VS Code there is no control at all: the editor's
+theme is the answer, and the preview follows it live.
+
+Speed is a setting rather than a tool, so it lives in the sheet `?` and the
+rail's last button open — settings above, shortcuts below. The menu offers
+`0.25 → 0.5 → 1 → 1.5 → 2`, and a scenario that declares a rate of its own that
+is not on that list shows it there too, for as long as it is the rate in effect.
+
+The remembered speed is scoped the other way from the theme: it is one key for
+every diagram on the origin, so a scenario that declares its own `speed` keeps
+it — an author's pacing should not be overridden by a 0.25x you picked on some
+other diagram last week. The remembered rate applies to scenarios that leave
+`speed` unset.
 
 With `prefers-reduced-motion: reduce`, nothing autoplays, the decorative
 animation stops, and the help says so — stepping through with the arrow keys is
