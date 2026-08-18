@@ -95,14 +95,19 @@ Read `references/language.md` first. The rules that most often trip authors:
 ### 3. Lint until clean — this loop is mandatory
 
 ```sh
-cinegram lint out.dgm --format=json
+cinegram lint out.dgm --format=json --strict
 ```
 
-Emits `[{"file","line","col","severity","message","hint"}]` on stdout; exit
-code 0 with warnings, 1 with errors. Fix **every** diagnostic — the hints
-usually name the fix (e.g. a misspelled node id suggests the right one).
-Warnings matter too: they describe animations that compile but won't do what
-was meant. Re-run until the output is `[]`.
+Emits `[{"file","line","col","severity","message","hint"}]` on stdout; with
+`--strict` the exit code is 0 only when that output is `[]`, so warnings stop
+the loop exactly as errors do. Fix **every** diagnostic — the hints usually
+name the fix (e.g. a misspelled node id suggests the right one). Warnings
+matter too: they describe animations that compile but won't do what was meant.
+Re-run until the output is `[]`.
+
+(Without `--strict` the exit code is 0 with warnings and 1 with errors, and the
+JSON is identical — an older binary that rejects the flag still lints, you just
+have to read the array rather than the status.)
 
 ### 4. Show the user the result
 

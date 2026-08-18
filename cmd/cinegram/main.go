@@ -131,13 +131,16 @@ Usage:
                                                  the animation as a walkthrough
   cinegram lint    <file.dgm> [--format=text|json]
                                                  report diagnostics only
+                              [--strict]         exit 1 on warnings too, for a
+                                                 CI job or an agent loop that
+                                                 should stop at the first one
   cinegram version
   cinegram upgrade [--check]                  replace this binary with the
                                                  latest GitHub release;
                                                  --check only reports, exiting
                                                  1 when one is available
 
-Warnings never fail a build; errors do.
+Warnings never fail a build unless you ask (lint --strict); errors always do.
 `)
 }
 
@@ -159,24 +162,40 @@ func report(bag *diag.Bag, stderr io.Writer) error {
 // reportAll prints the diagnostics of every file in a bundle. Each bag is
 // labelled with its own filename, so a problem in a drilled-into diagram is
 // attributable to the file that actually contains it.
+//
+// Warnings never fail here: only a caller that asked for --strict gets that,
+// through reportStrict.
 func reportAll(bags []*diag.Bag, stderr io.Writer) error {
-	errs := 0
+	return reportStrict(bags, stderr, false)
+}
+
+// reportStrict is reportAll with the --strict rule folded in: when strict is
+// set, warnings fail the run too. Errors still dominate — the message a build
+// already prints for them does not change shape because --strict was passed —
+// and what is written to stderr is identical either way, since strict alters
+// only which exit status the same diagnostics earn.
+func reportStrict(bags []*diag.Bag, stderr io.Writer, strict bool) error {
+	errs, warns := 0, 0
 	for _, bag := range bags {
 		if bag.Len() > 0 {
 			fmt.Fprintln(stderr, bag)
 		}
-		errs += countErrors(bag)
+		errs += countSeverity(bag, diag.SeverityError)
+		warns += countSeverity(bag, diag.SeverityWarning)
 	}
 	if errs > 0 {
 		return fmt.Errorf("%s", plural(errs, "error"))
 	}
+	if strict && warns > 0 {
+		return fmt.Errorf("%s (--strict)", plural(warns, "warning"))
+	}
 	return nil
 }
 
-func countErrors(bag *diag.Bag) int {
+func countSeverity(bag *diag.Bag, want diag.Severity) int {
 	n := 0
 	for _, d := range bag.All() {
-		if d.Severity == diag.SeverityError {
+		if d.Severity == want {
 			n++
 		}
 	}
@@ -461,8 +480,10 @@ func rootHasNoScenarios(t *ir.Timeline) bool {
 
 func cmdLint(args []string, stdout, stderr io.Writer) error {
 	var format string
+	var strict bool
 	input, _, err := parseArgsWith("lint", args, func(fs *flag.FlagSet) {
 		fs.StringVar(&format, "format", "text", "text or json")
+		fs.BoolVar(&strict, "strict", false, "fail on warnings too, not only errors")
 	})
 	if err != nil {
 		return err
@@ -478,12 +499,12 @@ func cmdLint(args []string, stdout, stderr io.Writer) error {
 	compile.CompileBundle(bundle)
 
 	if format == "json" {
-		return lintJSON(bundle.Bags(), stdout)
+		return lintJSON(bundle.Bags(), stdout, strict)
 	}
 	if format != "text" {
 		return fmt.Errorf("unknown --format %q: use text or json", format)
 	}
-	if err := reportAll(bundle.Bags(), stderr); err != nil {
+	if err := reportStrict(bundle.Bags(), stderr, strict); err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "%s: ok\n", input)
@@ -492,9 +513,11 @@ func cmdLint(args []string, stdout, stderr io.Writer) error {
 
 // lintJSON writes every diagnostic in the bundle as one array on stdout.
 //
-// Exit-code semantics are unchanged — warnings 0, errors 1 — so a caller can
-// branch on the status and read the detail, rather than having to choose.
-func lintJSON(bags []*diag.Bag, stdout io.Writer) error {
+// Exit-code semantics are unchanged by default — warnings 0, errors 1 — so a
+// caller can branch on the status and read the detail, rather than having to
+// choose. --strict moves only the status: a warning then exits 1 as well, and
+// the payload is byte-for-byte the same document either way.
+func lintJSON(bags []*diag.Bag, stdout io.Writer, strict bool) error {
 	out, errs := envelope.Collect(bags)
 
 	encoded, err := json.MarshalIndent(out, "", "  ")
@@ -506,6 +529,20 @@ func lintJSON(bags []*diag.Bag, stdout io.Writer) error {
 	}
 	if errs > 0 {
 		return fmt.Errorf("%s", plural(errs, "error"))
+	}
+	// Warnings are counted off the wire shape rather than the bags, so the
+	// status can only ever disagree with what was printed if the two walk
+	// different data — they do not.
+	if strict {
+		warns := 0
+		for _, d := range out {
+			if d.Severity == diag.SeverityWarning.String() {
+				warns++
+			}
+		}
+		if warns > 0 {
+			return fmt.Errorf("%s (--strict)", plural(warns, "warning"))
+		}
 	}
 	return nil
 }

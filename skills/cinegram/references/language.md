@@ -256,10 +256,12 @@ interact {
 
 ## The lint loop
 
-`cinegram lint file.dgm --format=json` →
-`[{"file","line","col","severity","message","hint"}]`; warnings exit 0,
-errors exit 1. Fix everything — hints usually name the fix (misspelled ids
-get a did-you-mean; a missing edge suggests what to add or reroute).
+`cinegram lint file.dgm --format=json --strict` →
+`[{"file","line","col","severity","message","hint"}]`; with `--strict` exit 0
+only when that is `[]`. Without it, warnings exit 0 and errors exit 1, and the
+JSON is the same either way. Fix everything — hints usually name the fix
+(misspelled ids get a did-you-mean; a missing edge suggests what to add or
+reroute).
 
 ## Pitfalls (all verified against the parser)
 

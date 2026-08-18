@@ -269,7 +269,7 @@ func TestLintJSONExitCodes(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var out bytes.Buffer
-			err := lintJSON(tc.bags, &out)
+			err := lintJSON(tc.bags, &out, false)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("error = %v, wantErr %v", err, tc.wantErr)
 			}
@@ -286,4 +286,121 @@ func TestLintJSONExitCodes(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestLintStrictExitCodes pins the only thing --strict is allowed to move: the
+// exit status. The JSON payload is the same document either way — a script that
+// already reads it does not have to be re-taught when strictness is turned on —
+// and an error still claims the failure on its own terms, so the message a
+// build already prints does not change shape because --strict was passed.
+func TestLintStrictExitCodes(t *testing.T) {
+	warned := diag.NewBag("warn.dgm")
+	warned.WarnHintf(source.Pos{Line: 3, Col: 5}, "a hint", "a warning")
+
+	failed := diag.NewBag("bad.dgm")
+	failed.Errorf(source.Pos{Line: 1, Col: 1}, "an error")
+
+	tests := []struct {
+		name      string
+		bags      []*diag.Bag
+		strict    bool
+		wantErr   string // "" means the run must succeed
+		wantLen   int
+		payloadOf string // cases sharing a key must produce identical bytes
+	}{
+		{name: "clean", bags: []*diag.Bag{diag.NewBag("ok.dgm")}, payloadOf: "clean"},
+		{name: "clean strict", bags: []*diag.Bag{diag.NewBag("ok.dgm")}, strict: true, payloadOf: "clean"},
+		{name: "warnings only", bags: []*diag.Bag{warned}, wantLen: 1, payloadOf: "warn"},
+		{name: "warnings only strict", bags: []*diag.Bag{warned}, strict: true, wantErr: "1 warning (--strict)", wantLen: 1, payloadOf: "warn"},
+		{name: "errors", bags: []*diag.Bag{failed}, wantErr: "1 error", wantLen: 1, payloadOf: "error"},
+		{name: "errors strict", bags: []*diag.Bag{failed}, strict: true, wantErr: "1 error", wantLen: 1, payloadOf: "error"},
+	}
+
+	payloads := map[string]string{}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			err := lintJSON(tc.bags, &out, tc.strict)
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Fatalf("error = %v, want success", err)
+			case tc.wantErr != "" && err == nil:
+				t.Fatalf("no error, want %q", tc.wantErr)
+			case tc.wantErr != "" && err.Error() != tc.wantErr:
+				t.Fatalf("error = %q, want %q", err, tc.wantErr)
+			}
+
+			var got []envelope.Diagnostic
+			if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+				t.Fatalf("output is not valid JSON: %v\n%s", err, out.String())
+			}
+			if len(got) != tc.wantLen {
+				t.Fatalf("got %d diagnostics, want %d", len(got), tc.wantLen)
+			}
+
+			if prev, seen := payloads[tc.payloadOf]; seen && prev != out.String() {
+				t.Errorf("--strict changed the payload:\n%s\nwant:\n%s", out.String(), prev)
+			}
+			payloads[tc.payloadOf] = out.String()
+		})
+	}
+}
+
+// TestReportStrict checks that strictness is an exit status and nothing else:
+// the author reads exactly the same diagnostics on stderr either way.
+func TestReportStrict(t *testing.T) {
+	warned := diag.NewBag("warn.dgm")
+	warned.WarnHintf(source.Pos{Line: 3, Col: 5}, "a hint", "a warning")
+
+	mixed := diag.NewBag("mixed.dgm")
+	mixed.Errorf(source.Pos{Line: 1, Col: 1}, "an error")
+	mixed.Warnf(source.Pos{Line: 2, Col: 2}, "a warning")
+
+	tests := []struct {
+		name          string
+		bags          []*diag.Bag
+		wantErr       string // without --strict
+		wantStrictErr string // with it
+	}{
+		{name: "clean", bags: []*diag.Bag{diag.NewBag("ok.dgm")}},
+		{name: "one warning", bags: []*diag.Bag{warned}, wantStrictErr: "1 warning (--strict)"},
+		{name: "two warnings", bags: []*diag.Bag{warned, warned}, wantStrictErr: "2 warnings (--strict)"},
+		// An error already fails the build, and says so in the words it
+		// always used: --strict adds a reason to fail, not a second message.
+		{name: "error wins", bags: []*diag.Bag{mixed}, wantErr: "1 error", wantStrictErr: "1 error"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var lenient, strict bytes.Buffer
+			gotErr := reportStrict(tc.bags, &lenient, false)
+			gotStrictErr := reportStrict(tc.bags, &strict, true)
+
+			if errText(gotErr) != tc.wantErr {
+				t.Errorf("error = %q, want %q", errText(gotErr), tc.wantErr)
+			}
+			if errText(gotStrictErr) != tc.wantStrictErr {
+				t.Errorf("--strict error = %q, want %q", errText(gotStrictErr), tc.wantStrictErr)
+			}
+			if lenient.String() != strict.String() {
+				t.Errorf("--strict changed stderr:\n%s\nwant:\n%s", strict.String(), lenient.String())
+			}
+			// reportAll is the default path six callers still use; it must
+			// stay exactly the lenient one.
+			var viaReportAll bytes.Buffer
+			if got := errText(reportAll(tc.bags, &viaReportAll)); got != tc.wantErr {
+				t.Errorf("reportAll error = %q, want %q", got, tc.wantErr)
+			}
+			if viaReportAll.String() != lenient.String() {
+				t.Errorf("reportAll stderr diverged from reportStrict(..., false)")
+			}
+		})
+	}
+}
+
+func errText(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }

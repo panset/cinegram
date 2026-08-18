@@ -669,7 +669,7 @@ cinegram assets             -o dir/         # the embed kit, for a site of your 
 cinegram frame   <file.dgm> --at 1620ms -o still.png   # one exact moment
 cinegram record  <file.dgm> -o out.gif      # a GIF, mp4 or webm of one scenario
 cinegram narrate <file.dgm> [--format=md|json]   # the animation, written out
-cinegram lint    <file.dgm> [--format=text|json] # diagnostics only
+cinegram lint    <file.dgm> [--format=text|json] [--strict] # diagnostics only
 ```
 
 ### Authoring
@@ -816,9 +816,11 @@ the fields it was built from, so filtering for "every failing flow" does not
 mean parsing the prose back apart.
 
 `lint --format=json` emits
-`[{"file","line","col","severity","message","hint"}]` on stdout. Exit codes are
-unchanged — warnings 0, errors 1 — so a caller can branch on the status *and*
-read the detail instead of choosing between them.
+`[{"file","line","col","severity","message","hint"}]` on stdout. Exit codes stay
+out of the payload — warnings 0, errors 1 — so a caller can branch on the status
+*and* read the detail instead of choosing between them. Adding `--strict` makes
+a warning exit 1 too, leaving the document byte-identical: an agent can then
+loop on the status alone until the array is `[]`.
 
 The page opens at rest — on the scenario's `poster` moment if it names one —
 and plays only when asked: pressing Play, or a scenario that declares
@@ -897,8 +899,8 @@ document compiling perfectly and animating less than its author meant:
 - an empty `%%` comment line, which breaks Mermaid's own comment stripping and
   takes the whole diagram down with it.
 
-Warnings never fail a build; errors do. Diagnostics carry a line, a column, and
-usually a suggestion:
+Warnings never fail a build unless you ask (`lint --strict`); errors always do.
+Diagnostics carry a line, a column, and usually a suggestion:
 
 ```
 errors.dgm:11:15: error: "ingres" is not a node in this diagram
@@ -906,6 +908,11 @@ errors.dgm:11:15: error: "ingres" is not a node in this diagram
 errors.dgm:15:20: error: no edge between "client" and "svc" to animate along
   hint: add `client --> svc` to the diagram, or route the flow through nodes that are connected
 ```
+
+`cinegram lint --strict` moves only the exit status: the same diagnostics are
+printed, and a run with nothing but warnings exits 1 instead of 0. It is for a
+CI job, or an agent looping until its diagram is clean, that wants "animates
+less than it was meant to" to stop the loop the same way a real error does.
 
 ## How it fits together
 
