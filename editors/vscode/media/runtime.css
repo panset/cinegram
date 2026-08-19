@@ -1788,21 +1788,24 @@ body.dgm-standalone {
   filter: drop-shadow(0 0 6px var(--dgm-accent));
 }
 
-/* The band a bound subgraph is clicked on, and the interior it hands back.
+/* The band a bound subgraph is clicked on, and the interior it lends out.
 
    A subgraph's rect is mostly the space around what it contains, so making the
-   whole of it a control takes every click that lands in that space — including
-   the ones meant for the stage, which while the transport is stepwise is the
-   way to the next step. Only the border and the title answer now; hover reads
-   the same hit test, so the box still lights up, from the edge where it
-   listens. See frameHit in runtime.js. */
+   whole of it a control takes every click that lands in that space. That only
+   costs anything while the transport is stepwise — then a click on the stage
+   is the way to the next step, and the interior is where a reader aiming for
+   it lands. So the band is always here to be clicked, and `.dgm-stepwise`
+   decides whether it is the only place: at rest the whole box answers as
+   before, and one beat at a time only its border and its title do. Hover reads
+   the same hit test either way, so the box lights up from wherever it is
+   listening. See frameHit and syncTransport in runtime.js. */
 .dgm-frame-hit {
   fill: none;
   stroke: transparent;
   pointer-events: stroke;
 }
 
-.dgm-framed > rect { pointer-events: none; }
+.dgm-stepwise .dgm-framed > rect { pointer-events: none; }
 
 /* Folded away, a subgraph answers to nothing. `pointer-events` is inherited,
    so only the band, which sets its own, has to be told again. */

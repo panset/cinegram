@@ -1878,6 +1878,16 @@
     return this.present || this.reel || !!this.scenario().stepwise;
   };
 
+  // syncTransport says on the root which transport is running, so the
+  // stylesheet can follow it. One rule reads it — a bound subgraph's interior,
+  // which stops taking clicks exactly while a click on the stage means "next
+  // step" — but the answer moves with presenter mode, with a reel and with the
+  // scenario, so this is the single writer and syncChrome calls it for the
+  // rest.
+  Player.prototype.syncTransport = function () {
+    this.root.classList.toggle('dgm-stepwise', this.stepwise());
+  };
+
   // setFollow flips the Cine toggle. Turning it on hands the framing to the
   // camera afresh; turning it off gives the whole diagram back, because being
   // left stranded at the last step's zoom with the camera gone is exactly the
@@ -3127,8 +3137,11 @@
       // around the things inside it. Bound whole, it takes every click that
       // lands in that space — and while the transport is stepwise a click on
       // the stage is how a reader gets to the next step, so on a phone that is
-      // most of them. A cluster therefore answers on the parts that are the
-      // subgraph itself: its title, and the border band frameHit adds.
+      // most of them. So while the stage is a "next" button a cluster answers
+      // only on the parts that are the subgraph itself: its title, and the
+      // border band frameHit adds. The rest of the time nothing is competing
+      // for the click and the whole box goes on taking it — see .dgm-stepwise
+      // in runtime.css, and syncTransport, which decides which it is.
       var framed = target === self.clusters[b.source];
       target.setAttribute('class', baseClass(target) + ' dgm-clickable' + (framed ? ' dgm-framed' : ''));
       if (framed) frameHit(target);
@@ -3164,7 +3177,7 @@
   var FRAME_BAND = 22;
 
   // frameHit gives a bound subgraph a border to be clicked on, so that its
-  // interior can go back to being background.
+  // interior can go back to being background while something else wants it.
   //
   // The band is inset by half its own width, which puts its outer edge exactly
   // on the border and leaves the element's bounds — what the chips and the
@@ -3539,6 +3552,8 @@
   Player.prototype.setPresenter = function (on) {
     this.present = !!on;
     this.root.classList.toggle('dgm-present', this.present);
+    // Entering pauses, so no frame is coming to carry this for us.
+    this.syncTransport();
     this.presentBtn.textContent = this.present ? 'Exit' : 'Present';
     this.presentBtn.classList.toggle('is-on', this.present);
     this.presentBtn.title = this.present
@@ -3835,6 +3850,7 @@
 
   Player.prototype.syncChrome = function () {
     var sc = this.scenario();
+    this.syncTransport();
     this.scrub.value = String(Math.round(this.time));
     this.clock.textContent = fmt(this.time) + ' / ' + fmt(sc.duration);
 

@@ -247,10 +247,10 @@ interact {
   `view <alias>`, `reveal <id>[, <id>…]`, `step <effective-step-id>`,
   `url "https://…"` (only `url` takes a quoted target; only `reveal` takes
   several).
-- **A bound subgraph answers on its border and its title, not its middle** —
-  the space around what it contains belongs to the diagram, most of all while
-  presenting, where a click on the stage advances a step. Its corner chip is a
-  target either way.
+- **While the transport is stepwise** (presenter mode, a reel, `stepwise:`) **a
+  bound subgraph answers on its border and its title, not its middle** — a
+  click in the space around what it contains is how a reader advances a step.
+  At rest the whole box is clickable. Its corner chip works either way.
 - **Being a reveal target is what makes an element start hidden** — there is
   no separate declaration; a revealed subgraph brings its contents. Reveal is
   interaction state (persists until the viewer leaves the view);
