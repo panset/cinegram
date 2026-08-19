@@ -3123,7 +3123,15 @@
         problems.push('clickable "' + b.source + '" not found in the rendered SVG');
         return;
       }
-      target.setAttribute('class', baseClass(target) + ' dgm-clickable');
+      // A subgraph is a container, not a control: its rect is mostly the space
+      // around the things inside it. Bound whole, it takes every click that
+      // lands in that space — and while the transport is stepwise a click on
+      // the stage is how a reader gets to the next step, so on a phone that is
+      // most of them. A cluster therefore answers on the parts that are the
+      // subgraph itself: its title, and the border band frameHit adds.
+      var framed = target === self.clusters[b.source];
+      target.setAttribute('class', baseClass(target) + ' dgm-clickable' + (framed ? ' dgm-framed' : ''));
+      if (framed) frameHit(target);
       if (b.label) tooltip(target, b.label);
 
       // Reachable by keyboard, and announced as the control it behaves like.
@@ -3150,6 +3158,50 @@
     this.applyHidden();
     this.warn(problems);
   };
+
+  // FRAME_BAND is how much of a bound subgraph's border is clickable, in
+  // rendered pixels — a thumb's worth, either side of the line.
+  var FRAME_BAND = 22;
+
+  // frameHit gives a bound subgraph a border to be clicked on, so that its
+  // interior can go back to being background.
+  //
+  // The band is inset by half its own width, which puts its outer edge exactly
+  // on the border and leaves the element's bounds — what the chips and the
+  // camera measure — where they were. Its width is read back through the
+  // rendered scale so it is the same thickness under the thumb whatever the
+  // diagram was fitted to, and clamped so that a subgraph with no interior
+  // worth protecting stays clickable all over: a box that small is a
+  // deliberate target already.
+  //
+  // It is a polyline because the state rules paint every rect, circle, polygon
+  // and path inside a styled element, and this is a hit area rather than a
+  // part of the drawing. Like the handlers, it goes into an SVG that render()
+  // replaces wholesale, so it never needs removing.
+  function frameHit(cluster) {
+    var rect = cluster.querySelector(':scope > rect');
+    if (!rect) return;
+    var x = parseFloat(rect.getAttribute('x')) || 0;
+    var y = parseFloat(rect.getAttribute('y')) || 0;
+    var w = parseFloat(rect.getAttribute('width')) || 0;
+    var h = parseFloat(rect.getAttribute('height')) || 0;
+    if (!(w > 0 && h > 0)) return;
+
+    // A stage that measured zero — laid out hidden — gives no scale to read,
+    // and the clamp then makes the whole box clickable, exactly as before.
+    var scale = rect.getBoundingClientRect().width / w;
+    var band = Math.min(scale > 0 ? FRAME_BAND / scale : Infinity, Math.min(w, h) / 2);
+    var i = band / 2;
+    var x0 = x + i, y0 = y + i, x1 = x + w - i, y1 = y + h - i;
+
+    var hit = document.createElementNS(SVG_NS, 'polyline');
+    hit.setAttribute('class', 'dgm-frame-hit');
+    hit.setAttribute('stroke-width', band);
+    hit.setAttribute('points', [
+      x0 + ',' + y0, x1 + ',' + y0, x1 + ',' + y1, x0 + ',' + y1, x0 + ',' + y0
+    ].join(' '));
+    cluster.appendChild(hit);
+  }
 
   // describeBinding is the fallback accessible name for a clickable element
   // that the author gave no label.

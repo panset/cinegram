@@ -611,6 +611,12 @@ interact {
 Bindings take `label` (a hover tooltip) and `style`. Nodes and subgraphs are
 both clickable, and each element may carry one binding.
 
+**A bound subgraph is clicked on its border or its title, not its middle.** A
+subgraph's box is mostly the space around the things inside it, and clicking
+there means the diagram, not the box — most of all while presenting, where a
+click on the stage is how you get to the next step. The chip in its corner is a
+target for the binding wherever a border is awkward to hit.
+
 **Sub-diagrams are ordinary `.dgm` files.** `pod-a.dgm` previews and lints on
 its own; `from` paths resolve relative to the file that declares them. `preview`
 follows every reference and bundles the whole set into one self-contained page,
