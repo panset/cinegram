@@ -121,6 +121,7 @@ func parseBlock(s *scanner) ([]ast.Action, ast.Attrs) {
 			key := s.next()
 			s.next() // ':'
 			if v, ok := parseValue(s); ok {
+				v.KeyAt = key.at
 				attrs.Set(key.text, v)
 			}
 			s.accept(",")
@@ -272,6 +273,7 @@ func parseAttrBlock(s *scanner) ast.Attrs {
 			continue
 		}
 		if v, ok := parseValue(s); ok {
+			v.KeyAt = key.at
 			attrs.Set(key.text, v)
 		}
 		s.accept(",")
@@ -284,7 +286,7 @@ func parseValue(s *scanner) (ast.Value, bool) {
 	switch t.kind {
 	case tokString, tokIdent, tokValue:
 		s.next()
-		return ast.Value{Raw: t.text, At: t.at}, true
+		return ast.Value{Raw: t.text, At: t.at, Quoted: t.kind == tokString}, true
 	default:
 		s.bag.Errorf(t.at, "expected a value but found %s", describe(t))
 		s.skipToLineEnd()

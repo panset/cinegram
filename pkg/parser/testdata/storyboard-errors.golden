@@ -34,12 +34,14 @@ diagnostics:
     hint: give it an `img`, a `caption`, or both
   12:23: warning: unknown frame attribute "image"
     hint: did you mean img?
+    fix: 12:16 "image" -> "img"
   13:23: error: expected `{` after frame "missing_braces" but found end of line
     hint: give the frame an image, a caption, or both
   14:3: error: expected `frame` but found "notaframe"
     hint: every entry starts with `frame`
   24:11: error: no storyboard frame named "okk"
     hint: did you mean ok?
+    fix: 24:11 "okk" -> "ok"
   28:11: error: no storyboard frame named "wildly_different_name"
     hint: known frames: also_ok, nothing, ok, typo
   32:11: error: no storyboard frame named "a"

@@ -25,6 +25,10 @@ www/assets/cinegram/*
 # developer's tool, and no part of the build.
 .venv/
 
+# Byte-code the interpreter leaves beside the PyPI launcher in packaging/pypi
+# whenever it is run from the source tree.
+__pycache__/
+
 .DS_Store
 dist/
 # Tool droppings: the Playwright MCP server's session logs and its npm cache.

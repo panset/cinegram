@@ -203,7 +203,7 @@ func runRecord(opt recordOptions, stderr io.Writer) error {
 		return fmt.Errorf("scenario %q has no duration to record", scenarioID)
 	}
 
-	base, stop, err := servePage(opt.input, stderr)
+	base, stop, err := servePage(opt.input, os.ReadFile, stderr)
 	if err != nil {
 		return err
 	}
@@ -228,11 +228,15 @@ func runRecord(opt recordOptions, stderr io.Writer) error {
 	fmt.Fprintf(stderr, "recording %s (%s, %dms) as %d frames at %dfps%s\n",
 		opt.input, scenarioID, duration, len(times), opt.fps, note)
 
-	paths, err := captureFrames(chrome, base, viewID, scenarioID, dir, times, opt,
-		progressReporter(opt, stderr), stderr)
-	if err != nil {
+	// `?embed` strips the page furniture, so the recording is the diagram and
+	// its narration rather than a screenshot of a toolbar; `?reel` replaces the
+	// layout wholesale.
+	shots := frameShots(dir, times)
+	if err := captureFrames(chrome, base, viewID, scenarioID, recordQuery(opt), shots,
+		opt.width, opt.height, progressReporter(opt, stderr), stderr); err != nil {
 		return err
 	}
+	paths := shotPaths(shots)
 	if opt.progress {
 		fmt.Fprintln(stderr, progressPrefix+" encode")
 	}
@@ -299,12 +303,11 @@ func frameTimes(duration, fps int) []int {
 // finished and how many there are in total. It counts completions rather than
 // indices because the pool finishes frames out of order, and a progress bar
 // that went backwards would be worse than none.
-func captureFrames(chrome, base, viewID, scenarioID, dir string, times []int, opt recordOptions, report func(done, total int), stderr io.Writer) ([]string, error) {
-	paths := make([]string, len(times))
-	for i := range times {
-		paths[i] = framePath(dir, i+1)
-	}
-
+//
+// It takes the moments and their destinations as `shots` and the page mode as a
+// literal query string rather than a recordOptions, because a contact sheet
+// shoots the same way at a different schedule: one frame per step, into ?embed.
+func captureFrames(chrome, base, viewID, scenarioID, query string, shots []shot, width, height int, report func(done, total int), stderr io.Writer) error {
 	var (
 		mu       sync.Mutex
 		firstErr error
@@ -317,7 +320,7 @@ func captureFrames(chrome, base, viewID, scenarioID, dir string, times []int, op
 		defer wg.Done()
 		for {
 			mu.Lock()
-			if firstErr != nil || next >= len(times) {
+			if firstErr != nil || next >= len(shots) {
 				mu.Unlock()
 				return
 			}
@@ -325,13 +328,13 @@ func captureFrames(chrome, base, viewID, scenarioID, dir string, times []int, op
 			next++
 			mu.Unlock()
 
-			// `?embed` strips the page furniture, so the recording is the
-			// diagram and its narration rather than a screenshot of a toolbar.
-			url := frameURL(base, viewID, scenarioID, times[i], recordQuery(opt))
+			// Every frame is a fully-specified deep link that lands paused, so
+			// the work parallelises with nothing shared but the server.
+			url := frameURL(base, viewID, scenarioID, shots[i].at, query)
 
 			var err error
 			for attempt := 1; attempt <= captureAttempts; attempt++ {
-				if err = shoot(chrome, url, paths[i], opt.width, opt.height); err == nil {
+				if err = shoot(chrome, url, shots[i].path, width, height); err == nil {
 					break
 				}
 				if attempt < captureAttempts {
@@ -340,7 +343,7 @@ func captureFrames(chrome, base, viewID, scenarioID, dir string, times []int, op
 					// hung. Under the mutex: several workers share this writer.
 					mu.Lock()
 					fmt.Fprintf(stderr, "frame %d (%dms) failed, retrying (attempt %d of %d): %v\n",
-						i+1, times[i], attempt+1, captureAttempts, err)
+						i+1, shots[i].at, attempt+1, captureAttempts, err)
 					mu.Unlock()
 				}
 			}
@@ -348,7 +351,7 @@ func captureFrames(chrome, base, viewID, scenarioID, dir string, times []int, op
 				mu.Lock()
 				if firstErr == nil {
 					firstErr = fmt.Errorf("frame %d (%dms), after %d attempts: %w",
-						i+1, times[i], captureAttempts, err)
+						i+1, shots[i].at, captureAttempts, err)
 				}
 				mu.Unlock()
 				return
@@ -357,15 +360,15 @@ func captureFrames(chrome, base, viewID, scenarioID, dir string, times []int, op
 			mu.Lock()
 			done++
 			if report != nil {
-				report(done, len(times))
+				report(done, len(shots))
 			}
 			mu.Unlock()
 		}
 	}
 
 	n := captureWorkers()
-	if n > len(times) {
-		n = len(times)
+	if n > len(shots) {
+		n = len(shots)
 	}
 	wg.Add(n)
 	for i := 0; i < n; i++ {
@@ -373,10 +376,26 @@ func captureFrames(chrome, base, viewID, scenarioID, dir string, times []int, op
 	}
 	wg.Wait()
 
-	if firstErr != nil {
-		return nil, firstErr
+	return firstErr
+}
+
+// frameShots pairs each moment with the file it lands in, numbered from one so
+// the lexical order of the names is the order of the sequence.
+func frameShots(dir string, times []int) []shot {
+	out := make([]shot, len(times))
+	for i, at := range times {
+		out[i] = shot{at: at, path: framePath(dir, i+1)}
 	}
-	return paths, nil
+	return out
+}
+
+// shotPaths is the destinations in order, which is what the encoders consume.
+func shotPaths(shots []shot) []string {
+	out := make([]string, len(shots))
+	for i, s := range shots {
+		out[i] = s.path
+	}
+	return out
 }
 
 // --- video ------------------------------------------------------------------

@@ -412,37 +412,20 @@ body.dgm-standalone {
 .dgm-present .dgm-caption-desc { font-size: 1.45rem; line-height: 1.45; }
 
 /* Presenting into one pane of a split view is not presenting, so Present asks
-   the browser for the screen. Three selectors saying the same thing, written
-   as three rules rather than one list: an unknown pseudo-class invalidates the
-   whole selector list it appears in, so grouping them would drop the fallback
-   in any browser missing either prefix. Fullscreen's own backdrop is black, so
-   the surface has to paint itself; the page's max-width and centring go, and
-   the shell rules then divide the screen exactly as they divide a window. */
-.dgm:fullscreen {
-  background: var(--dgm-bg);
-  height: 100%;
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-.dgm:-webkit-full-screen {
-  background: var(--dgm-bg);
-  height: 100%;
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-/* The fallback, for the hosts that refuse the request — a webview, an iframe
-   without allowfullscreen, a mode entered with no user gesture behind it. Same
-   box, pinned by hand, minus the browser chrome going away. The z-index only
-   has to beat the host's page: the help sheet (20) and the lightbox (30) are
-   children of the root, so they stack inside it either way. */
+   the browser for the screen — and puts this class on unconditionally, granted
+   or refused. On the element that *is* the fullscreen element, position: fixed
+   resolves against the viewport and z-index is inert in the top layer, so the
+   box is identical either way; on a host that refused — a webview, an iframe
+   without allowfullscreen, a mode entered with no user gesture behind it — the
+   same rule pins the player to the window by hand, minus the browser chrome
+   going away. One plain class rule on purpose: a pseudo-class spelling here
+   (`:fullscreen`, `:-webkit-full-screen`) invalidates the whole selector list
+   in any browser missing it, which is why this used to be three identical
+   rules. Fullscreen's own backdrop is black, so the surface paints itself; the
+   page's max-width and centring go, and the shell rules then divide the screen
+   exactly as they divide a window. The z-index only has to beat the host's
+   page: the help sheet (20) and the lightbox (30) are children of the root, so
+   they stack inside it either way. */
 .dgm.dgm-present-fill {
   background: var(--dgm-bg);
   height: 100%;
@@ -788,12 +771,6 @@ body.dgm-standalone {
   }
 
   .dgm-present .dgm-board-img { -webkit-user-drag: none; }
-
-  /* Swiped away. Inline display is '' while the scenario has scenes, so a
-     class rule is enough — and it lives inside this media block deliberately:
-     widening the window past the phone breakpoint restores the side panel
-     without waiting for the next syncBoard. */
-  .dgm-board.is-flung { display: none; }
 
   /* The title and the caption are panel furniture; at thumbnail size they
      would crowd out the picture they describe. */
@@ -1275,6 +1252,14 @@ body.dgm-standalone {
   max-height: 100%;
   overflow: auto;
 }
+
+/* The swipe's exit and its return. The gesture code writes the transform and
+   the opacity inline; these classes own the motion between them, so the
+   durations live where every other transition does — including the
+   reduced-motion shortening, which is what lets the runtime wait for a
+   transitionend instead of second-guessing whether one will come. */
+.dgm-board.is-flinging { transition: transform 0.18s ease-in, opacity 0.18s ease-in; }
+.dgm-board.is-springing { transition: transform 0.15s ease-out, opacity 0.15s ease-out; }
 
 .dgm-board-title {
   font-size: 11px;
@@ -1991,6 +1976,8 @@ body.dgm-standalone {
   .dgm-rail,
   .dgm-rail-note,
   .dgm-map-fit,
+  .dgm-board.is-flinging,
+  .dgm-board.is-springing,
   .dgm-step,
   .dgm-chip,
   .dgm-caption,

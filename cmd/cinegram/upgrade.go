@@ -51,6 +51,18 @@ func cmdUpgrade(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("this binary is a Bazel build output; rebuild it with `bazel build //cmd/cinegram` instead of upgrading in place")
 	}
 
+	// The npm and PyPI shims (packaging/) cache one binary per released
+	// version and set this when they spawn it. Overwriting that file would
+	// make `npx cinegram@0.3.0` run something other than 0.3.0 ever after, so
+	// the newer version has to be asked for the same way the old one was.
+	if manager := os.Getenv("CINEGRAM_MANAGED_BY"); manager != "" {
+		how := map[string]string{"npm": "`npx cinegram@latest …`", "pypi": "`uvx cinegram@latest …`"}[manager]
+		if how == "" {
+			how = "the same package manager"
+		}
+		return fmt.Errorf("this binary was fetched by the %s package into a version-pinned cache; upgrading in place would overwrite that pin — ask %s for the newer version instead", manager, how)
+	}
+
 	u := &upgrader{
 		base:    releaseBase,
 		client:  &http.Client{Timeout: 5 * time.Minute},

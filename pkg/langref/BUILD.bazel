@@ -1,0 +1,27 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "langref",
+    srcs = ["langref.go"],
+    embedsrcs = ["assets/language.md"],
+    importpath = "github.com/tejaspanse/cinegram/pkg/langref",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "langref_test",
+    srcs = ["langref_test.go"],
+    # The canonical reference, so the freshness test has something to compare
+    # the embedded copy against. The copy itself needs no data entry: it is
+    # compiled into the library under test.
+    data = ["//skills:language_reference"],
+    embed = [":langref"],
+    deps = ["//internal/repotest"],
+)
+
+# The fix for what the freshness test reports. Aliased here so that the command
+# the failure message prints lives beside the check that prints it.
+alias(
+    name = "sync",
+    actual = "//pkg/langref/sync",
+)

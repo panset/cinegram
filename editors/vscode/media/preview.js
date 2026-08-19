@@ -173,6 +173,8 @@
 
   // --- carrying state across a re-render --------------------------------------
 
+  // present/follow are intentionally absent: the inline Markdown preview hides
+  // both buttons, so those states are unreachable here.
   function snapshot(player) {
     try {
       return {

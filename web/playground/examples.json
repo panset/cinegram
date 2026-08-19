@@ -79,6 +79,30 @@
     "files": ["04-diagram-types/03-raft-election.dgm"]
   },
   {
+    "id": "agent-tool-loop",
+    "title": "Agent tool loop",
+    "entry": "05-ai-systems/01-agent-tool-loop.dgm",
+    "files": ["05-ai-systems/01-agent-tool-loop.dgm"]
+  },
+  {
+    "id": "multi-agent-fanout",
+    "title": "Multi-agent fan-out",
+    "entry": "05-ai-systems/02-multi-agent-fanout.dgm",
+    "files": ["05-ai-systems/02-multi-agent-fanout.dgm"]
+  },
+  {
+    "id": "rag-pipeline",
+    "title": "RAG pipeline (cache hit and miss)",
+    "entry": "05-ai-systems/03-rag-pipeline.dgm",
+    "files": ["05-ai-systems/03-rag-pipeline.dgm"]
+  },
+  {
+    "id": "mcp-handshake",
+    "title": "MCP handshake (sequence)",
+    "entry": "05-ai-systems/04-mcp-handshake.dgm",
+    "files": ["05-ai-systems/04-mcp-handshake.dgm"]
+  },
+  {
     "id": "pod-a",
     "title": "Inside Pod A",
     "entry": "pod-a.dgm",

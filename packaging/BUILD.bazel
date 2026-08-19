@@ -1,0 +1,15 @@
+# The npm and PyPI shims. Nothing here is built: both packages are plain
+# JavaScript and Python, published by release.yml straight from these
+# directories, and no Go source lives under packaging/ so the tree stays out of
+# the Go build graph entirely.
+#
+# The two manifests are exported for one reason — //editors/vscode:assets_test
+# reads them, because their versions have to agree with cmd/cinegram/version.go
+# like every other copy of the version does. See RELEASING.md.
+exports_files(
+    [
+        "npm/package.json",
+        "pypi/pyproject.toml",
+    ],
+    visibility = ["//editors/vscode:__pkg__"],
+)

@@ -464,9 +464,23 @@ type Attrs struct {
 }
 
 // Value is an attribute value together with where it appeared.
+//
+// Quoted and KeyAt exist so that a diagnostic about a value can also say how to
+// repair the source text, which needs more than Raw and At carry on their own:
+// a string token's At is its opening quote while its Raw is the unescaped
+// contents, and a complaint about the *key* of a pair is reported at the value.
 type Value struct {
 	Raw string
 	At  source.Pos
+
+	// Quoted records that the value was written as a string literal, so
+	// anything rewriting the source knows to put the quotes back on.
+	Quoted bool
+
+	// KeyAt is where this pair's key was written. A synthesized attribute — one
+	// the parser sets from a bare operand rather than from `key: value` — leaves
+	// it zero, and nothing then offers to rewrite a key that was never typed.
+	KeyAt source.Pos
 }
 
 // Set records key=v, replacing any previous value for key.

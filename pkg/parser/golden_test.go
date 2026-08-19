@@ -158,6 +158,12 @@ func renderParse(res *Result, bag *diag.Bag) string {
 			if d.Hint != "" {
 				fmt.Fprintf(&b, "    hint: %s\n", d.Hint)
 			}
+			// The fix is rendered beside the hint it mechanises, so that a
+			// change to either the suggestion or the text it would swap shows up
+			// as a fixture diff rather than only in the CLI's behaviour.
+			if d.Fix.Valid() {
+				fmt.Fprintf(&b, "    fix: %s %q -> %q\n", d.Fix.Pos, d.Fix.Old, d.Fix.New)
+			}
 		}
 	}
 

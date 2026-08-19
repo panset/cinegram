@@ -79,6 +79,20 @@ type captureOptions struct {
 	width    int
 	height   int
 	reel     bool
+
+	// read is how the source is fetched, defaulting to os.ReadFile. Injected
+	// for the same reason pkg/loader injects it: a caller holding the source in
+	// memory — an editor host, or the MCP server — has no file to point at.
+	read loader.ReadFileFunc
+}
+
+// readOrFile is the one place the injected reader defaults, so a zero-valued
+// options struct still reads the filesystem.
+func readOrFile(read loader.ReadFileFunc) loader.ReadFileFunc {
+	if read == nil {
+		return os.ReadFile
+	}
+	return read
 }
 
 // runCapture renders one moment, or several evenly spaced ones.
@@ -88,7 +102,8 @@ func runCapture(opt captureOptions, stderr io.Writer) error {
 		return err
 	}
 
-	bundle, err := loader.Load(opt.input, os.ReadFile)
+	read := readOrFile(opt.read)
+	bundle, err := loader.Load(opt.input, read)
 	if err != nil {
 		return err
 	}
@@ -106,7 +121,7 @@ func runCapture(opt captureOptions, stderr io.Writer) error {
 		return err
 	}
 
-	base, stop, err := servePage(opt.input, stderr)
+	base, stop, err := servePage(opt.input, read, stderr)
 	if err != nil {
 		return err
 	}
@@ -141,8 +156,13 @@ func runCapture(opt captureOptions, stderr io.Writer) error {
 // authoring server may already hold the default. Watching is off: the reload
 // script would poll for the length of the capture and its only possible effect
 // is to reload a page mid-screenshot.
-func servePage(input string, stderr io.Writer) (base string, stop func(), err error) {
+//
+// read is how the server fetches the source on every request. It is a parameter
+// rather than always os.ReadFile because the server's own read field is already
+// injectable, and a caller holding the source in memory has no file to serve.
+func servePage(input string, read loader.ReadFileFunc, stderr io.Writer) (base string, stop func(), err error) {
 	srv := newServer(input, false, stderr)
+	srv.read = readOrFile(read)
 	ln, err := srv.listen("127.0.0.1:0")
 	if err != nil {
 		return "", nil, err

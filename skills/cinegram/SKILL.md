@@ -23,14 +23,22 @@ Try these in order; use the first that works. Verify with `cinegram version`
 (any subcommand error output means the candidate exists — keep it).
 
 1. `$CINEGRAM_BIN` if set, else `cinegram` on `PATH`.
-2. The copy bundled with the VS Code / Cursor extension:
+2. A package manager the machine already has, which needs no install step of
+   its own: `npx cinegram version` (Node ≥ 18) or `uvx cinegram version` (uv).
+   Both are launchers — they download the release binary for this platform,
+   check it against the release's `SHA256SUMS`, cache it under
+   `~/.cinegram/bin/v<version>/`, and run it. Prefix any command below with
+   `npx cinegram` / `uvx cinegram` the same way. One caveat: the cache entry is
+   version-pinned, so `cinegram upgrade` refuses to run under either — get a
+   newer version with `npx cinegram@latest …` or `uvx cinegram@latest …`.
+3. The copy bundled with the VS Code / Cursor extension:
    ```sh
    ls ~/.vscode/extensions/tejaspanse.cinegram-*/bin/*/cinegram \
       ~/.cursor/extensions/tejaspanse.cinegram-*/bin/*/cinegram 2>/dev/null | tail -1
    ```
-3. A workspace build, if the cinegram repo itself is the workspace:
+4. A workspace build, if the cinegram repo itself is the workspace:
    `bazel-bin/cmd/cinegram/cinegram_/cinegram` (build with `bazel build //cmd/cinegram`).
-4. **Install it** (no package manager needed) from the tested, versioned
+5. **Install it** (no package manager needed) from the tested, versioned
    GitHub release — a single static binary:
 
    ```sh
@@ -57,11 +65,21 @@ Try these in order; use the first that works. Verify with `cinegram version`
 A binary that exists but is stale can update itself: `cinegram upgrade
 --check` reports whether a newer release exists (exit 1 when one does), and
 `cinegram upgrade` replaces the binary in place with the checksum-verified
-latest release. Two exceptions: a workspace Bazel build, which `upgrade`
-refuses — rebuild that with `bazel build //cmd/cinegram` — and a binary that
-answers `unknown command "upgrade"`, which predates 0.2.0: replace that one
-by re-running the install download above over it (the URL always fetches the
-latest release).
+latest release. Three exceptions: a workspace Bazel build, which `upgrade`
+refuses — rebuild that with `bazel build //cmd/cinegram`; a binary reached
+through `npx`/`uvx`, which `upgrade` also refuses, since that cache entry
+belongs to one released version — ask for a newer one (`npx cinegram@latest`,
+`uvx cinegram@latest`); and a binary that answers `unknown command "upgrade"`,
+which predates 0.2.0: replace that one by re-running the install download
+above over it (the URL always fetches the latest release).
+
+If your harness speaks MCP, the same binary is also a server: `cinegram mcp`
+offers `lint`, `narrate`, `mermaid`, `frame` and `sheet` as tools, each taking
+a `path` or an inline `source`, and serves this language reference as the
+resource `cinegram://reference/language.md`. Use it when the host already has
+it configured — the results come back in the conversation rather than as files
+you then have to read. The CLI below stays the primary path: it is what these
+instructions are written against, and it needs no host support at all.
 
 Below, `cinegram` means whichever path you found: a single static binary with
 no dependencies of its own. The delivery table in step 5 marks what an
@@ -95,14 +113,27 @@ Read `references/language.md` first. The rules that most often trip authors:
 ### 3. Lint until clean — this loop is mandatory
 
 ```sh
-cinegram lint out.dgm --format=json
+cinegram lint out.dgm --fix --format=json --strict
 ```
 
-Emits `[{"file","line","col","severity","message","hint"}]` on stdout; exit
-code 0 with warnings, 1 with errors. Fix **every** diagnostic — the hints
-usually name the fix (e.g. a misspelled node id suggests the right one).
-Warnings matter too: they describe animations that compile but won't do what
-was meant. Re-run until the output is `[]`.
+`--fix` is the first move: it rewrites the file with the corrections the
+"did you mean" diagnostics already carry — a misspelled node, frame, view
+alias, step id, scenario name or attribute key — and reports each edit on
+stderr as `fixed file:line:col: old -> new`. It never guesses: an edit is
+applied only where the parser was confident enough to name the right spelling,
+and only while the text on disk still matches. Then read the array for what is
+left.
+
+The array is `[{"file","line","col","severity","message","hint"}]` on stdout,
+each entry optionally carrying `"fix": {"line","col","old","new"}`; with
+`--strict` the exit code is 0 only when that output is `[]`, so warnings stop
+the loop exactly as errors do. Fix **every** remaining diagnostic by hand — the
+hints usually name the fix. Warnings matter too: they describe animations that
+compile but won't do what was meant. Re-run until the output is `[]`.
+
+(Without `--strict` the exit code is 0 with warnings and 1 with errors, and the
+JSON is identical — an older binary that rejects either flag still lints, you
+just have to read the array rather than the status, and fix by hand.)
 
 ### 4. Show the user the result
 
@@ -126,6 +157,7 @@ reading the `.dgm`.
 | Vertical story clip for LinkedIn/Shorts/Slack (9:16, big captions, auto-follow camera) | `cinegram record out.dgm --reel -o out.mp4` — Chrome + ffmpeg (mp4 preferred at this size; `?reel` on the HTML page is the live version) |
 | One scenario / one sub-view | add `--scenario s1` / `--view <id>` to `record`/`frame` |
 | Still of one moment | `cinegram frame out.dgm --at 1620ms -o still.png` — Chrome |
+| Every step at a glance, for a PR review or an agent to read | `cinegram sheet out.dgm -o sheet.png --manifest sheet.json` — Chrome (one captioned cell per step; `--cols N` to reshape the grid) |
 | Plain Mermaid back out | `cinegram mermaid out.dgm` |
 | Written walkthrough for docs | `cinegram narrate out.dgm -o walkthrough.md` |
 | Timeline as data | `cinegram compile out.dgm -o timeline.json` |
@@ -149,6 +181,18 @@ at a time). Scenarios are addressed as `s0`, `s1`, … in declaration order.
 
 ### 6. Verify visually when it matters
 
-`cinegram frame` captures one exact, deterministic moment. Read the PNG to
-confirm a key beat looks right — e.g. that a `status: fail` ✕ lands where
-intended.
+**Read the sheet first, then use `frame` for close-ups.**
+
+```sh
+cinegram sheet out.dgm -o sheet.png --manifest sheet.json
+```
+
+`sheet` is one PNG with a captioned cell per step — the whole scenario checked
+in a single image read, instead of one screenshot per beat. Each cell is shot a
+millisecond before its step ends, so its flows have landed and the caption
+names the step it belongs to. `--manifest` maps every rectangle back to its
+step id and the moment it shows.
+
+Then `cinegram frame out.dgm --at 1620ms -o still.png` for anything the sheet
+made you suspicious of: it captures that one exact, deterministic moment at
+full size — e.g. that a `status: fail` ✕ lands where intended.

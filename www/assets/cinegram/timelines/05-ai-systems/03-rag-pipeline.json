@@ -1,0 +1,533 @@
+{
+  "version": 2,
+  "root": "03-rag-pipeline",
+  "views": [
+    {
+      "id": "03-rag-pipeline",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% Retrieval-augmented generation, told twice: once with a warm cache, and once\n%% with the cache missing and a live web search standing in for the corpus. The\n%% second telling ends with an answer whose citations do not come from the\n%% documents anyone approved.\n%% ---\n%% Both stories share their opening, so it is written once. The variant replays\n%% the base scenario through the `lookup` step — `until:` is inclusive — and\n%% then diverges, which means a change to how a query is embedded can never end\n%% up describing the cache hit and not the cache miss.\n%% ---\n%% `outcome: fail` on the variant is a claim about the answer, not about the\n%% pipeline: every service did its job, and the result is still worse. That is\n%% the interesting failure in a RAG system, and it is why the fallback path\n%% deserves a scenario of its own rather than a footnote.\nflowchart LR\n  query([User Query])\n  embed[Embedder]\n  retrieve[Vector Search]\n  cache[(Passage Cache)]\n  web[Web Search Fallback]\n  rerank[Cross-Encoder Reranker]\n  assemble[Prompt Assembler]\n  generate[Answer Model]\n  answer[Answer]\n  query --\u003e embed\n  embed --\u003e retrieve\n  retrieve --\u003e cache\n  retrieve --\u003e web\n  retrieve --\u003e rerank\n  rerank --\u003e assemble\n  assemble --\u003e generate\n  generate --\u003e answer\n"
+      },
+      "nodes": [
+        {
+          "id": "query",
+          "label": "User Query",
+          "shape": "stadium"
+        },
+        {
+          "id": "embed",
+          "label": "Embedder",
+          "shape": "rect"
+        },
+        {
+          "id": "retrieve",
+          "label": "Vector Search",
+          "shape": "rect"
+        },
+        {
+          "id": "cache",
+          "label": "Passage Cache",
+          "shape": "cylinder"
+        },
+        {
+          "id": "web",
+          "label": "Web Search Fallback",
+          "shape": "rect"
+        },
+        {
+          "id": "rerank",
+          "label": "Cross-Encoder Reranker",
+          "shape": "rect"
+        },
+        {
+          "id": "assemble",
+          "label": "Prompt Assembler",
+          "shape": "rect"
+        },
+        {
+          "id": "generate",
+          "label": "Answer Model",
+          "shape": "rect"
+        },
+        {
+          "id": "answer",
+          "label": "Answer",
+          "shape": "rect"
+        }
+      ],
+      "groups": [],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "query",
+          "to": "embed",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "embed",
+          "to": "retrieve",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "retrieve",
+          "to": "cache",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "retrieve",
+          "to": "web",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "retrieve",
+          "to": "rerank",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "rerank",
+          "to": "assemble",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e6",
+          "from": "assemble",
+          "to": "generate",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e7",
+          "from": "generate",
+          "to": "answer",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "warm cache",
+          "duration": 4800,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "ask",
+              "name": "The question becomes a vector",
+              "desc": "Retrieval never sees the words. The embedder turns the question into a point in the same space the corpus was indexed into, and everything downstream is geometry from here on.",
+              "start": 0,
+              "end": 700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 700,
+                  "edge": "e0",
+                  "from": "query",
+                  "to": "embed",
+                  "label": "why did checkout get slower?"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 700,
+                  "target": "embed",
+                  "style": "busy"
+                }
+              ]
+            },
+            {
+              "id": "lookup",
+              "name": "The retriever checks the cache before the index",
+              "desc": "The same questions get asked over and over, and an embedding is a stable key. Looking in the cache first is the cheapest thing this pipeline can do — and the branch that decides how the rest of it goes.",
+              "start": 700,
+              "end": 1800,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 700,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "embed",
+                  "to": "retrieve",
+                  "label": "1536-d vector"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1300,
+                  "end": 1800,
+                  "edge": "e2",
+                  "from": "retrieve",
+                  "to": "cache",
+                  "label": "fingerprint 8f3c…"
+                }
+              ]
+            },
+            {
+              "id": "hit",
+              "name": "The cache has the passages already",
+              "desc": "A hit skips the index entirely: these eight passages were retrieved and scored for a near-identical question minutes ago, and nothing in the corpus has changed since.",
+              "start": 1800,
+              "end": 2400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1800,
+                  "end": 2400,
+                  "edge": "e2",
+                  "from": "cache",
+                  "to": "retrieve",
+                  "reverse": true,
+                  "label": "8 passages · warm",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "rerank",
+              "name": "The reranker throws most of them away",
+              "desc": "Vector search is recall; the cross-encoder is precision. It reads each passage against the actual question and keeps four, because a prompt stuffed with near-misses answers worse than a short one.",
+              "start": 2400,
+              "end": 3000,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2400,
+                  "end": 3000,
+                  "edge": "e4",
+                  "from": "retrieve",
+                  "to": "rerank",
+                  "label": "8 candidates"
+                }
+              ]
+            },
+            {
+              "id": "assemble",
+              "name": "The prompt is built in order",
+              "desc": "This is the one genuinely sequential beat in the pipeline: the passages have to be in the prompt before the prompt can be sent. A `seq` says so, where the rest of this file lets actions start together.",
+              "start": 3000,
+              "end": 4000,
+              "tracks": [
+                {
+                  "kind": "note",
+                  "start": 3000,
+                  "end": 4000,
+                  "target": "assemble",
+                  "text": "system + 4 passages + question\n2.8k tokens"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3000,
+                  "end": 3500,
+                  "edge": "e5",
+                  "from": "rerank",
+                  "to": "assemble",
+                  "label": "top 4"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3500,
+                  "end": 4000,
+                  "edge": "e6",
+                  "from": "assemble",
+                  "to": "generate",
+                  "label": "one prompt"
+                }
+              ]
+            },
+            {
+              "id": "generate",
+              "name": "The model answers from what it was given",
+              "desc": "Every claim in the answer is traceable to one of the four passages, and each citation names the document it came from. That traceability is the entire reason for the machinery upstream.",
+              "start": 4000,
+              "end": 4800,
+              "tracks": [
+                {
+                  "kind": "highlight",
+                  "start": 4000,
+                  "end": 4800,
+                  "target": "generate",
+                  "style": "busy"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4000,
+                  "end": 4800,
+                  "edge": "e7",
+                  "from": "generate",
+                  "to": "answer",
+                  "label": "answer + 4 citations",
+                  "style": "response"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 1800,
+              "end": 4800,
+              "target": "cache",
+              "label": "hit",
+              "value": "ok",
+              "color": "#16a34a"
+            },
+            {
+              "kind": "gauge",
+              "start": 1800,
+              "end": 4800,
+              "target": "retrieve",
+              "label": "passages",
+              "value": "8"
+            },
+            {
+              "kind": "gauge",
+              "start": 2400,
+              "end": 4800,
+              "target": "rerank",
+              "label": "kept",
+              "value": "4 / 8"
+            }
+          ]
+        },
+        {
+          "id": "s1",
+          "name": "cold cache, web fallback",
+          "duration": 6200,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "outcome": "fail",
+          "steps": [
+            {
+              "id": "ask",
+              "name": "The question becomes a vector",
+              "desc": "Retrieval never sees the words. The embedder turns the question into a point in the same space the corpus was indexed into, and everything downstream is geometry from here on.",
+              "start": 0,
+              "end": 700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 700,
+                  "edge": "e0",
+                  "from": "query",
+                  "to": "embed",
+                  "label": "why did checkout get slower?"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 700,
+                  "target": "embed",
+                  "style": "busy"
+                }
+              ]
+            },
+            {
+              "id": "lookup",
+              "name": "The retriever checks the cache before the index",
+              "desc": "The same questions get asked over and over, and an embedding is a stable key. Looking in the cache first is the cheapest thing this pipeline can do — and the branch that decides how the rest of it goes.",
+              "start": 700,
+              "end": 1800,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 700,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "embed",
+                  "to": "retrieve",
+                  "label": "1536-d vector"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1300,
+                  "end": 1800,
+                  "edge": "e2",
+                  "from": "retrieve",
+                  "to": "cache",
+                  "label": "fingerprint 8f3c…"
+                }
+              ]
+            },
+            {
+              "id": "miss",
+              "name": "The cache has nothing",
+              "desc": "Not an error — an eviction. The entry was there forty seconds ago and the pipeline now has to earn the passages the expensive way, in front of a user who is already waiting.",
+              "start": 1800,
+              "end": 2400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1800,
+                  "end": 2400,
+                  "edge": "e2",
+                  "from": "cache",
+                  "to": "retrieve",
+                  "reverse": true,
+                  "label": "no entry",
+                  "status": "fail"
+                },
+                {
+                  "kind": "note",
+                  "start": 1800,
+                  "end": 2400,
+                  "target": "cache",
+                  "text": "fingerprint 8f3c… not found\nevicted 40s ago"
+                }
+              ]
+            },
+            {
+              "id": "fallback",
+              "name": "The index is stale, so the web stands in",
+              "desc": "The corpus was last indexed before the change that caused the slowdown, so vector search returns confident, irrelevant passages. The fallback reaches outside the approved documents — which is a decision, not a retry.",
+              "start": 2400,
+              "end": 3800,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2400,
+                  "end": 3100,
+                  "edge": "e3",
+                  "from": "retrieve",
+                  "to": "web",
+                  "label": "live search"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3100,
+                  "end": 3800,
+                  "edge": "e3",
+                  "from": "web",
+                  "to": "retrieve",
+                  "reverse": true,
+                  "label": "6 pages",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "web-rerank",
+              "name": "The reranker keeps three of the six",
+              "desc": "The same reranker, a worse pool. Nothing here can tell that these passages came from a blog rather than the runbook the corpus was built from — the scores look exactly as good.",
+              "start": 3800,
+              "end": 4400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3800,
+                  "end": 4400,
+                  "edge": "e4",
+                  "from": "retrieve",
+                  "to": "rerank",
+                  "label": "6 candidates"
+                }
+              ]
+            },
+            {
+              "id": "web-assemble",
+              "name": "The prompt is built from web text",
+              "desc": "The assembler cannot mark provenance it was never told about, so the passages arrive looking like every other passage. This is where an uncomfortable answer becomes an authoritative-sounding one.",
+              "start": 4400,
+              "end": 5400,
+              "tracks": [
+                {
+                  "kind": "note",
+                  "start": 4400,
+                  "end": 5400,
+                  "target": "assemble",
+                  "text": "system + 3 web pages + question\n2.1k tokens"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4400,
+                  "end": 4900,
+                  "edge": "e5",
+                  "from": "rerank",
+                  "to": "assemble",
+                  "label": "top 3"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4900,
+                  "end": 5400,
+                  "edge": "e6",
+                  "from": "assemble",
+                  "to": "generate",
+                  "label": "one prompt"
+                }
+              ]
+            },
+            {
+              "id": "web-answer",
+              "name": "The answer is plausible and its citations are not ours",
+              "desc": "The user gets an answer with citations, and every one of them points at a page nobody in this company reviewed. Marking the answer rather than hiding the fallback is the only honest ending.",
+              "start": 5400,
+              "end": 6200,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 5400,
+                  "end": 6200,
+                  "edge": "e7",
+                  "from": "generate",
+                  "to": "answer",
+                  "label": "answer + 3 web citations",
+                  "style": "response"
+                },
+                {
+                  "kind": "note",
+                  "start": 5400,
+                  "end": 6200,
+                  "target": "answer",
+                  "text": "citations: web only\nnot from the indexed corpus"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 1800,
+              "end": 6200,
+              "target": "cache",
+              "label": "miss",
+              "value": "fail",
+              "color": "#dc2626"
+            },
+            {
+              "kind": "gauge",
+              "start": 2400,
+              "end": 6200,
+              "target": "retrieve",
+              "label": "passages",
+              "value": "6"
+            },
+            {
+              "kind": "gauge",
+              "start": 3800,
+              "end": 6200,
+              "target": "rerank",
+              "label": "kept",
+              "value": "3 / 6"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

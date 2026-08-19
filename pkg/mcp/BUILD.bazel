@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "mcp",
+    srcs = ["mcp.go"],
+    importpath = "github.com/tejaspanse/cinegram/pkg/mcp",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "mcp_test",
+    srcs = ["mcp_test.go"],
+    embed = [":mcp"],
+)

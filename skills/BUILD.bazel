@@ -1,0 +1,13 @@
+# The authoring skill that ships to users. Nothing here is built — the skill is
+# a folder of Markdown that skills/cinegram/install.sh copies into place — but
+# one file in it is also compiled into the binary.
+#
+# The .dgm language reference. It is canonical here, because this is the copy
+# users get; //pkg/langref embeds a copy so that `cinegram mcp` can serve it to
+# a model with no skill folder installed, and //pkg/langref:langref_test is what
+# keeps the two equal.
+filegroup(
+    name = "language_reference",
+    srcs = ["cinegram/references/language.md"],
+    visibility = ["//pkg/langref:__pkg__"],
+)

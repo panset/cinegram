@@ -1,0 +1,32 @@
+# The PyPI half of the shims. It ships no Python beyond the launcher in
+# src/cinegram/: the compiler is the Go binary on GitHub releases, fetched at
+# first use. See src/cinegram/__init__.py.
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cinegram"
+version = "0.3.0"
+description = "Animated, narrated architecture diagrams from Mermaid — the cinegram CLI, fetched on first use."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "Tejas Panse" }]
+keywords = ["diagram", "mermaid", "animation", "architecture", "cli"]
+classifiers = [
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Graphics :: Presentation",
+  "Topic :: Software Development :: Documentation",
+]
+dependencies = []
+
+[project.scripts]
+cinegram = "cinegram:main"
+
+[project.urls]
+Homepage = "https://panset.github.io/cinegram/"
+Source = "https://github.com/panset/cinegram"
+Issues = "https://github.com/panset/cinegram/issues"

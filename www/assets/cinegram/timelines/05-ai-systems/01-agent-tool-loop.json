@@ -1,0 +1,322 @@
+{
+  "version": 2,
+  "root": "01-agent-tool-loop",
+  "views": [
+    {
+      "id": "01-agent-tool-loop",
+      "title": "one question, four turns",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% One question through an agent's tool loop: think, call a tool, get a call\n%% wrong, retry, answer. The loop is not a metaphor here — the same agent node\n%% is entered four times, and the token and iteration counters say how far in\n%% you are at any moment.\n%% ---\n%% An agent loop is the case a static diagram is worst at. The boxes never\n%% change; what changes is how many times you have been round them and what\n%% the last tool said. So the two things a reader actually wants — the\n%% iteration number and the tokens spent — are `gauge` state rather than\n%% narration, and they stay readable wherever the scrubber is parked.\n%% ---\n%% The failed `orders_db` call is a `status: fail` flow, not a red one. A red\n%% arrow is a colour choice; `status: fail` marks the edge as failed and drops\n%% a ✕ at the destination, which is what makes the retry legible as a retry.\nflowchart LR\n  user([Person])\n  agent[Agent Loop]\n  subgraph tools[Tools]\n    search[web_search]\n    db[(orders_db)]\n  end\n  answer[Answer]\n  user --\u003e agent\n  agent --\u003e search\n  agent --\u003e db\n  agent --\u003e answer\n"
+      },
+      "nodes": [
+        {
+          "id": "user",
+          "label": "Person",
+          "shape": "stadium"
+        },
+        {
+          "id": "agent",
+          "label": "Agent Loop",
+          "shape": "rect"
+        },
+        {
+          "id": "search",
+          "label": "web_search",
+          "shape": "rect",
+          "group": "tools"
+        },
+        {
+          "id": "db",
+          "label": "orders_db",
+          "shape": "cylinder",
+          "group": "tools"
+        },
+        {
+          "id": "answer",
+          "label": "Answer",
+          "shape": "rect"
+        }
+      ],
+      "groups": [
+        {
+          "id": "tools",
+          "label": "Tools",
+          "children": [
+            "search",
+            "db"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "user",
+          "to": "agent",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "agent",
+          "to": "search",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "agent",
+          "to": "db",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "agent",
+          "to": "answer",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "one question, four turns",
+          "duration": 5400,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "ask",
+              "name": "The question arrives",
+              "desc": "\"Why did refunds spike last week?\" is a question no single tool can answer: it needs a number from the database and a reason from outside it. The loop exists because the model cannot know that until it has tried.",
+              "start": 0,
+              "end": 700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 700,
+                  "edge": "e0",
+                  "from": "user",
+                  "to": "agent",
+                  "label": "why did refunds spike?"
+                }
+              ]
+            },
+            {
+              "id": "plan",
+              "name": "The model decides what to look up first",
+              "desc": "Nothing leaves the process in this step. The model reads the tool schemas, picks one, and writes the arguments — and every token of that reasoning is billed before a single tool has run.",
+              "start": 700,
+              "end": 1500,
+              "tracks": [
+                {
+                  "kind": "highlight",
+                  "start": 700,
+                  "end": 1500,
+                  "target": "agent",
+                  "style": "busy"
+                },
+                {
+                  "kind": "note",
+                  "start": 700,
+                  "end": 1500,
+                  "target": "agent",
+                  "text": "picks web_search\nargs: {q: \"refund spike causes\"}"
+                }
+              ]
+            },
+            {
+              "id": "search",
+              "name": "The first tool call succeeds",
+              "desc": "The search tool returns prose, and prose is cheap to request and expensive to carry: the result comes back into the context window and stays there for every turn that follows.",
+              "start": 1500,
+              "end": 2700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1500,
+                  "end": 2100,
+                  "edge": "e1",
+                  "from": "agent",
+                  "to": "search",
+                  "label": "web_search(q)"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2100,
+                  "end": 2700,
+                  "edge": "e1",
+                  "from": "search",
+                  "to": "agent",
+                  "reverse": true,
+                  "label": "6 results",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "misfire",
+              "name": "The second call is malformed",
+              "desc": "The model asked for a column that does not exist. This is the ordinary failure mode of tool use — not a broken tool, an argument the model invented — and the loop's whole job is to survive it.",
+              "start": 2700,
+              "end": 3400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2700,
+                  "end": 3400,
+                  "edge": "e2",
+                  "from": "agent",
+                  "to": "db",
+                  "label": "query(refund_total)",
+                  "status": "fail"
+                },
+                {
+                  "kind": "note",
+                  "start": 2700,
+                  "end": 3400,
+                  "target": "db",
+                  "text": "no such column: refund_total\ndid you mean refund_amount?"
+                }
+              ]
+            },
+            {
+              "id": "retry",
+              "name": "The error goes back in and the call is repaired",
+              "desc": "The error text is not swallowed, it is fed to the model as the tool's reply. That is why the second attempt names the right column: the loop learned inside the same conversation rather than by being restarted.",
+              "start": 3400,
+              "end": 4600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3400,
+                  "end": 4000,
+                  "edge": "e2",
+                  "from": "agent",
+                  "to": "db",
+                  "label": "query(refund_amount)"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4000,
+                  "end": 4600,
+                  "edge": "e2",
+                  "from": "db",
+                  "to": "agent",
+                  "reverse": true,
+                  "label": "412 rows · +38%",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "answer",
+              "name": "With both facts in hand the loop stops",
+              "desc": "The loop ends when the model emits text instead of a tool call. Nothing else stops it — no step budget was reached here, the model simply had enough to answer, which is the only exit condition worth designing for.",
+              "start": 4600,
+              "end": 5400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 4600,
+                  "end": 5400,
+                  "edge": "e3",
+                  "from": "agent",
+                  "to": "answer",
+                  "label": "+38%, driven by the shipping SKU",
+                  "style": "response"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 0,
+              "end": 4600,
+              "target": "agent",
+              "label": "thinking",
+              "value": "busy"
+            },
+            {
+              "kind": "gauge",
+              "start": 0,
+              "end": 2700,
+              "target": "agent",
+              "label": "iteration",
+              "value": "1"
+            },
+            {
+              "kind": "gauge",
+              "start": 0,
+              "end": 700,
+              "target": "agent",
+              "label": "tokens",
+              "value": "1.1k"
+            },
+            {
+              "kind": "gauge",
+              "start": 700,
+              "end": 1500,
+              "target": "agent",
+              "label": "tokens",
+              "value": "1.9k"
+            },
+            {
+              "kind": "gauge",
+              "start": 1500,
+              "end": 2700,
+              "target": "agent",
+              "label": "tokens",
+              "value": "4.3k"
+            },
+            {
+              "kind": "gauge",
+              "start": 2700,
+              "end": 3400,
+              "target": "agent",
+              "label": "iteration",
+              "value": "2"
+            },
+            {
+              "kind": "gauge",
+              "start": 2700,
+              "end": 3400,
+              "target": "agent",
+              "label": "tokens",
+              "value": "5.0k"
+            },
+            {
+              "kind": "gauge",
+              "start": 3400,
+              "end": 4600,
+              "target": "agent",
+              "label": "iteration",
+              "value": "3"
+            },
+            {
+              "kind": "gauge",
+              "start": 3400,
+              "end": 4600,
+              "target": "agent",
+              "label": "tokens",
+              "value": "6.4k"
+            },
+            {
+              "kind": "gauge",
+              "start": 4800,
+              "end": 5400,
+              "target": "agent",
+              "label": "tokens",
+              "value": "7.2k"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

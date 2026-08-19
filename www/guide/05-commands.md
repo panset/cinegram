@@ -12,8 +12,10 @@ cinegram site    <folder>   -o out/         # a browsable site from a folder tre
 cinegram assets             -o dir/         # the embed kit, for a site of your own
 cinegram frame   <file.dgm> --at 1620ms -o still.png   # one exact moment
 cinegram record  <file.dgm> -o out.gif      # a GIF, mp4 or webm of one scenario
+cinegram sheet   <file.dgm> -o sheet.png    # a labelled grid, one cell per step
 cinegram narrate <file.dgm> [--format=md|json]   # the animation, written out
-cinegram lint    <file.dgm> [--format=text|json] # diagnostics only
+cinegram lint    <file.dgm> [--format=text|json] [--strict] [--fix] # diagnostics only
+cinegram mcp                                # the same tools over MCP, on stdio
 ```
 
 ### Authoring
@@ -135,6 +137,43 @@ first".
 | `--scenario`, `--view` | the first / the entry document | Which walkthrough to record. |
 | `--progress` | off | `cinegram-progress capture <i> <n>` per frame and one `cinegram-progress encode`, on stderr, for a host drawing a progress bar. Purely additive: the human-readable lines are unchanged. |
 
+### Contact sheets
+
+A recording is legible to a reader who can watch it. `sheet` is the same
+walkthrough for a reader who cannot — one PNG, one captioned cell per step:
+
+```
+cinegram sheet examples/02-storytelling/01-payment-checkout.dgm -o checkout.png
+cinegram sheet examples/02-storytelling/01-payment-checkout.dgm --scenario "gateway outage" \
+  -o outage.png --manifest outage.json
+```
+
+Each cell is photographed one millisecond before its step ends. Not at the
+start, where its flows have not gone anywhere yet; and not at the end either,
+because "which step is this" resolves to the last step whose start is at or
+before the clock, so the end of a step already belongs to the next one and
+would caption the cell with the wrong name. One millisecond earlier is the last
+instant that is unambiguously this step, with everything it did already done.
+
+The labels cost nothing to draw: the cells are shot in `?embed`, which hides
+the toolbar and the step list but keeps the caption, so every cell is titled by
+the document in the document's own words. Nothing in cinegram renders text into
+an image — the browser was already doing it correctly.
+
+`--manifest` writes the map from pixels back to the document: the grid, the
+cell size, and for every cell its step id, name, description, the moment it
+shows and the rectangle it occupies. That is what makes the sheet addressable —
+spot something wrong in the third cell, read off its step and its `at`, and
+re-shoot exactly that moment with `frame` for a close-up.
+
+| Flag | Default | |
+| --- | --- | --- |
+| `-o` | *required* | Where the PNG goes. |
+| `--manifest` | off | Also write the cell map as JSON. |
+| `--cols` | from the step count | Columns in the grid: as square as the count allows, at most 4 across. |
+| `--width`, `--height` | `900`, `600` | One cell, which is the viewport each still is shot at. |
+| `--scenario`, `--view` | the first / the entry document | Which walkthrough to lay out. |
+
 ### What an agent sees
 
 An animation is legible to something with eyes. A timeline is precise but it is
@@ -160,15 +199,95 @@ the fields it was built from, so filtering for "every failing flow" does not
 mean parsing the prose back apart.
 
 `lint --format=json` emits
-`[{"file","line","col","severity","message","hint"}]` on stdout. Exit codes are
-unchanged — warnings 0, errors 1 — so a caller can branch on the status *and*
-read the detail instead of choosing between them.
+`[{"file","line","col","severity","message","hint"}]` on stdout, each entry
+optionally carrying `"fix": {"line","col","old","new"}` — the same suggestion in
+a form something other than a person can act on. Exit codes stay
+out of the payload — warnings 0, errors 1 — so a caller can branch on the status
+*and* read the detail instead of choosing between them. Adding `--strict` makes
+a warning exit 1 too, leaving the document byte-identical: an agent can then
+loop on the status alone until the array is `[]`.
 
 The page opens at rest — on the scenario's `poster` moment if it names one —
 and plays only when asked: pressing Play, or a scenario that declares
 `autoplay: true` (still skipped when the reader's system asks for reduced
 motion). `window.CINEGRAM_PLAYER` is the same player, so
 `CINEGRAM_PLAYER.seek(2400)` lands on a moment deterministically.
+
+### Fixing what lint finds
+
+```
+cinegram lint out.dgm --fix
+```
+
+The "did you mean" diagnostics — a misspelt node, frame, view alias, step id,
+scenario name or attribute key — carry the correction as a structured edit, not
+only as English. `--fix` applies them and prints one line per edit on stderr:
+
+```
+fixed out.dgm:11:15: ingres -> ing
+applied 1 fix
+```
+
+An edit is verified against the file before it is spliced: the text has to
+still be what the compiler saw, or the fix is skipped and said so. Fixes are
+applied right to left within a line so earlier columns cannot move, and the
+file is re-parsed between rounds — up to five — because one correction can
+uncover the next.
+
+Whether a fix exists at all is decided in the parser, by the same closeness
+bound that decides whether to say "did you mean" in the first place. There is
+no second, looser rule at the command layer, so `--fix` can never apply an edit
+the diagnostic would not have suggested out loud.
+
+Everything else is unchanged: `--fix` composes with `--strict` and
+`--format=json`, the JSON still goes to stdout on its own, and the exit status
+is exactly the one a plain lint of the repaired file would earn.
+
+### The MCP server
+
+```
+cinegram mcp
+```
+
+The same commands, offered down a pipe. `mcp` speaks the Model Context Protocol
+on stdin and stdout, so an agent host that already knows how to launch a server
+gets the tools without a shell:
+
+```json
+{"mcpServers": {"cinegram": {"command": "cinegram", "args": ["mcp"]}}}
+```
+
+Five tools, named after the subcommands they are:
+
+| Tool | Returns |
+| --- | --- |
+| `lint` | the `--format=json` array, fixes included |
+| `narrate` | the walkthrough, `format` `md` or `json` |
+| `mermaid` | the diagram half as plain Mermaid |
+| `frame` | the PNG of one moment, plus the view, scenario and time it shows |
+| `sheet` | the contact-sheet PNG, plus the manifest that maps cells to steps |
+
+Every tool takes `path` **or** `source`, never both: `path` names a file on
+disk, `source` carries the document itself for a draft that has not been saved,
+with an optional `as` filename so that relative `view … from` and storyboard
+paths have somewhere to resolve (default `inline.dgm`). The rule is stated in
+each schema and enforced in the handler, because client support for JSON
+Schema's `oneOf` is uneven and a rule only half of them check is not a rule.
+
+The one resource is `cinegram://reference/language.md`, the complete authoring
+reference — the same file the skill ships, served out of the binary for a model
+that has no skill folder installed.
+
+`frame` and `sheet` need a headless Chrome or Chromium, found on `PATH` or
+named by `$CINEGRAM_CHROME`, exactly as the subcommands do. Their descriptions
+say so, so a model without one can choose `narrate` instead rather than
+discovering it by failing. A diagnostic is never a failed call: `lint` on a
+broken document returns the diagnostics and succeeds, and only a document that
+could not be read at all comes back as an error.
+
+The CLI stays primary — every tool is one subcommand's code path called
+in-process, so the two cannot disagree about what a document means, and nothing
+here is reachable only through MCP.
 
 ### Driving the player
 
@@ -241,8 +360,8 @@ document compiling perfectly and animating less than its author meant:
 - an empty `%%` comment line, which breaks Mermaid's own comment stripping and
   takes the whole diagram down with it.
 
-Warnings never fail a build; errors do. Diagnostics carry a line, a column, and
-usually a suggestion:
+Warnings never fail a build unless you ask (`lint --strict`); errors always do.
+Diagnostics carry a line, a column, and usually a suggestion:
 
 ```
 errors.dgm:11:15: error: "ingres" is not a node in this diagram
@@ -250,3 +369,8 @@ errors.dgm:11:15: error: "ingres" is not a node in this diagram
 errors.dgm:15:20: error: no edge between "client" and "svc" to animate along
   hint: add `client --> svc` to the diagram, or route the flow through nodes that are connected
 ```
+
+`cinegram lint --strict` moves only the exit status: the same diagnostics are
+printed, and a run with nothing but warnings exits 1 instead of 0. It is for a
+CI job, or an agent looping until its diagram is clean, that wants "animates
+less than it was meant to" to stop the loop the same way a real error does.

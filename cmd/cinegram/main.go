@@ -9,9 +9,11 @@
 //	cinegram mermaid <file.dgm>   # the diagram as plain Mermaid
 //	cinegram preview <file.dgm>   # self-contained animated HTML
 //	cinegram record  <file.dgm>   # a GIF, mp4 or webm of one scenario
+//	cinegram sheet   <file.dgm>   # a labelled contact sheet, one cell per step
 //	cinegram narrate <file.dgm>   # the animation as a written walkthrough
 //	cinegram lint    <file.dgm>   # diagnostics only
 //	cinegram assets  -o dir/      # the embed kit, for a site of your own
+//	cinegram mcp                  # the same tools, over MCP on stdio
 package main
 
 import (
@@ -52,6 +54,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	switch cmd {
 	case "compile":
 		return cmdCompile(rest, stdin, stdout, stderr)
+	case "mcp":
+		// The real stdin, not a copy: the protocol is a conversation, and the
+		// server reads the next request only after answering the last one.
+		return cmdMCP(rest, stdin, stdout)
 	case "mermaid":
 		return cmdMermaid(rest, stdout, stderr)
 	case "preview":
@@ -68,6 +74,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return cmdFrame(rest, stdout, stderr)
 	case "record":
 		return cmdRecord(rest, stdout, stderr)
+	case "sheet":
+		return cmdSheet(rest, stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintln(stdout, "cinegram", version)
 		return nil
@@ -127,17 +135,39 @@ Usage:
                               [--progress]       report each captured frame on
                                                  stderr, for a host drawing a
                                                  progress bar
+  cinegram sheet   <file.dgm> -o out.png [--manifest map.json]
+                                                 one labelled contact sheet: a
+                                                 grid with one captioned cell
+                                                 per step, so a whole scenario
+                                                 can be checked in one image
+                              [--cols N]         columns (default: from the
+                                                 step count, at most 4)
+                              [--scenario ID] [--view ID] [--width N] [--height N]
   cinegram narrate <file.dgm> [-o out.md] [--format=md|json]
                                                  the animation as a walkthrough
   cinegram lint    <file.dgm> [--format=text|json]
                                                  report diagnostics only
+                              [--strict]         exit 1 on warnings too, for a
+                                                 CI job or an agent loop that
+                                                 should stop at the first one
+                              [--fix]            rewrite the source with the
+                                                 edits the diagnostics carry —
+                                                 the "did you mean" ones — then
+                                                 report what is left. Composes
+                                                 with --strict and --format
+  cinegram mcp                                serve the tools over MCP on stdio,
+                                                 for an agent host that speaks
+                                                 it: lint, narrate, mermaid,
+                                                 frame and sheet, plus the
+                                                 language reference. The CLI
+                                                 stays the primary interface
   cinegram version
   cinegram upgrade [--check]                  replace this binary with the
                                                  latest GitHub release;
                                                  --check only reports, exiting
                                                  1 when one is available
 
-Warnings never fail a build; errors do.
+Warnings never fail a build unless you ask (lint --strict); errors always do.
 `)
 }
 
@@ -159,24 +189,40 @@ func report(bag *diag.Bag, stderr io.Writer) error {
 // reportAll prints the diagnostics of every file in a bundle. Each bag is
 // labelled with its own filename, so a problem in a drilled-into diagram is
 // attributable to the file that actually contains it.
+//
+// Warnings never fail here: only a caller that asked for --strict gets that,
+// through reportStrict.
 func reportAll(bags []*diag.Bag, stderr io.Writer) error {
-	errs := 0
+	return reportStrict(bags, stderr, false)
+}
+
+// reportStrict is reportAll with the --strict rule folded in: when strict is
+// set, warnings fail the run too. Errors still dominate — the message a build
+// already prints for them does not change shape because --strict was passed —
+// and what is written to stderr is identical either way, since strict alters
+// only which exit status the same diagnostics earn.
+func reportStrict(bags []*diag.Bag, stderr io.Writer, strict bool) error {
+	errs, warns := 0, 0
 	for _, bag := range bags {
 		if bag.Len() > 0 {
 			fmt.Fprintln(stderr, bag)
 		}
-		errs += countErrors(bag)
+		errs += countSeverity(bag, diag.SeverityError)
+		warns += countSeverity(bag, diag.SeverityWarning)
 	}
 	if errs > 0 {
 		return fmt.Errorf("%s", plural(errs, "error"))
 	}
+	if strict && warns > 0 {
+		return fmt.Errorf("%s (--strict)", plural(warns, "warning"))
+	}
 	return nil
 }
 
-func countErrors(bag *diag.Bag) int {
+func countSeverity(bag *diag.Bag, want diag.Severity) int {
 	n := 0
 	for _, d := range bag.All() {
-		if d.Severity == diag.SeverityError {
+		if d.Severity == want {
 			n++
 		}
 	}
@@ -461,8 +507,11 @@ func rootHasNoScenarios(t *ir.Timeline) bool {
 
 func cmdLint(args []string, stdout, stderr io.Writer) error {
 	var format string
+	var strict, fix bool
 	input, _, err := parseArgsWith("lint", args, func(fs *flag.FlagSet) {
 		fs.StringVar(&format, "format", "text", "text or json")
+		fs.BoolVar(&strict, "strict", false, "fail on warnings too, not only errors")
+		fs.BoolVar(&fix, "fix", false, "rewrite the source with the edits the diagnostics carry")
 	})
 	if err != nil {
 		return err
@@ -477,13 +526,19 @@ func cmdLint(args []string, stdout, stderr io.Writer) error {
 	// validation skipped) only surface during the timing pass.
 	compile.CompileBundle(bundle)
 
+	if fix {
+		if bundle, err = runFixes(input, bundle, stderr); err != nil {
+			return err
+		}
+	}
+
 	if format == "json" {
-		return lintJSON(bundle.Bags(), stdout)
+		return lintJSON(bundle.Bags(), stdout, strict)
 	}
 	if format != "text" {
 		return fmt.Errorf("unknown --format %q: use text or json", format)
 	}
-	if err := reportAll(bundle.Bags(), stderr); err != nil {
+	if err := reportStrict(bundle.Bags(), stderr, strict); err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "%s: ok\n", input)
@@ -492,9 +547,11 @@ func cmdLint(args []string, stdout, stderr io.Writer) error {
 
 // lintJSON writes every diagnostic in the bundle as one array on stdout.
 //
-// Exit-code semantics are unchanged — warnings 0, errors 1 — so a caller can
-// branch on the status and read the detail, rather than having to choose.
-func lintJSON(bags []*diag.Bag, stdout io.Writer) error {
+// Exit-code semantics are unchanged by default — warnings 0, errors 1 — so a
+// caller can branch on the status and read the detail, rather than having to
+// choose. --strict moves only the status: a warning then exits 1 as well, and
+// the payload is byte-for-byte the same document either way.
+func lintJSON(bags []*diag.Bag, stdout io.Writer, strict bool) error {
 	out, errs := envelope.Collect(bags)
 
 	encoded, err := json.MarshalIndent(out, "", "  ")
@@ -506,6 +563,20 @@ func lintJSON(bags []*diag.Bag, stdout io.Writer) error {
 	}
 	if errs > 0 {
 		return fmt.Errorf("%s", plural(errs, "error"))
+	}
+	// Warnings are counted off the wire shape rather than the bags, so the
+	// status can only ever disagree with what was printed if the two walk
+	// different data — they do not.
+	if strict {
+		warns := 0
+		for _, d := range out {
+			if d.Severity == diag.SeverityWarning.String() {
+				warns++
+			}
+		}
+		if warns > 0 {
+			return fmt.Errorf("%s (--strict)", plural(warns, "warning"))
+		}
 	}
 	return nil
 }

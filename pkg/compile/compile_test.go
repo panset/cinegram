@@ -832,3 +832,63 @@ scenario "x"
 		t.Errorf("reveal binding = %+v", got[2])
 	}
 }
+
+// TestMicroStepsAreClampedToTheTransportFloor pins the timing rule that keeps
+// presenter mode able to leave every step: advanceStep stops 1ms before a
+// seam, so a step of 1ms or less would trap the press on itself forever. The
+// clamp lives here in the compiler — timing rules do — and it announces
+// itself, so an author who wrote dur: 1ms learns why it plays as 4.
+func TestMicroStepsAreClampedToTheTransportFloor(t *testing.T) {
+	const src = `flowchart LR
+  a[A]
+  b[B]
+  a --> b
+
+scenario "micro"
+  step blink "blink" {
+    dur: 1ms
+    highlight a
+  }
+  step walk "walk" {
+    flow a -> b { dur: 500ms }
+  }
+`
+	res, bag := parser.Parse("inline.dgm", src)
+	if bag.HasErrors() {
+		t.Fatalf("unexpected diagnostics:\n%s", bag)
+	}
+	tl := Compile(res.Document, res.Symbols, bag)
+	if bag.HasErrors() {
+		t.Fatalf("clamped fixture should still compile:\n%s", bag)
+	}
+
+	steps := tl.Views[0].Scenarios[0].Steps
+	if got := steps[0].End - steps[0].Start; got != minStepMillis {
+		t.Errorf("1ms step spans %dms, want the %dms floor", got, minStepMillis)
+	}
+	// The stateful action inside still spans its whole (clamped) step.
+	if tr := steps[0].Tracks[0]; tr.Start != steps[0].Start || tr.End != steps[0].End {
+		t.Errorf("track [%d,%d] does not span the clamped step [%d,%d]",
+			tr.Start, tr.End, steps[0].Start, steps[0].End)
+	}
+	// The next step starts where the clamped one ends: the clock stays whole.
+	if steps[1].Start != steps[0].End {
+		t.Errorf("step after the clamp starts at %d, want %d", steps[1].Start, steps[0].End)
+	}
+
+	// The clamp announces itself as a warning, never an error.
+	var found bool
+	for _, d := range bag.All() {
+		if strings.Contains(d.Msg, "too short for the step transport") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no clamp warning surfaced; diagnostics:\n%s", bag)
+	}
+
+	// An ordinary step is untouched.
+	if got := steps[1].End - steps[1].Start; got != 500 {
+		t.Errorf("ordinary step spans %dms, want 500", got)
+	}
+}

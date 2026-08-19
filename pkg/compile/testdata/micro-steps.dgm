@@ -1,0 +1,23 @@
+%% Steps shorter than the transport's tolerances. advanceStep stops 1ms before
+%% a step's seam, so a span of 1ms or less holds no interior stop point and
+%% the presenter's press would re-select the same step forever; the compiler
+%% clamps such spans to 4ms and says so. This fixture pins the clamp.
+flowchart LR
+  a[Sensor]
+  b[Collector]
+  a --> b
+
+scenario "micro"
+
+  step blink "A one-millisecond step" {
+    dur: 1ms
+    highlight a { style: active }
+  }
+
+  step tick "A three-millisecond wait" {
+    wait 3ms
+  }
+
+  step settle "An ordinary step after the clamped ones" {
+    flow a -> b { dur: 500ms }
+  }

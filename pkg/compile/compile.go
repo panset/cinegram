@@ -24,6 +24,14 @@ const (
 	// defaultHopMillis is how long a single flow hop takes when the source
 	// does not say.
 	defaultHopMillis = 600
+	// minStepMillis is the floor under a step's span. The transport works in
+	// ±1ms tolerances — advanceStep stops 1ms before a step's seam and treats
+	// a step as begun only when it started more than 1ms ago — so a step of
+	// 1ms or less has no interior stop point and the presenter's press would
+	// re-select the same step forever. 4ms sits comfortably above those
+	// tolerances and is invisible at any playback speed. Timing rules live
+	// here, not in the runtime.
+	minStepMillis = 4
 	// defaultStepMillis is the span of a step whose actions are all
 	// stateful (a lone highlight, say) and so carry no duration of their own.
 	defaultStepMillis = 800
@@ -318,6 +326,15 @@ func compileScenario(sc *ast.Scenario, index int, table *symbol.Table, bag *diag
 	for i, st := range sc.Steps {
 		start := cursor + attrMillis(st.Attrs, "delay", 0, bag)
 		span := stepSpan(st, bag)
+		if span < minStepMillis {
+			// A note rather than an error: the clamp is invisible to a viewer,
+			// but an author who wrote dur: 1ms should learn why it plays as 4.
+			bag.WarnHintf(st.StartPos,
+				"give the step a duration of at least 4ms, or drop dur: to use its actions' own span",
+				"step %q spans %dms, too short for the step transport; clamped to %dms",
+				st.EffectiveID(i), span, minStepMillis)
+			span = minStepMillis
+		}
 
 		step := ir.Step{
 			ID:    st.EffectiveID(i),

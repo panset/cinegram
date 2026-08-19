@@ -57,6 +57,7 @@ diagnostics:
     hint: valid directions are LR, RL, TB, TD and BT
   11:15: error: "ingres" is not a node in this diagram
     hint: did you mean ing?
+    fix: 11:15 "ingres" -> "ing"
   15:20: error: no edge between "client" and "svc" to animate along
     hint: add `client --> svc` to the diagram, or route the flow through nodes that are connected
   19:26: error: attribute "dur": "soon" is not a duration
@@ -66,8 +67,10 @@ diagnostics:
     hint: known actions: flow, highlight, note, dim, pulse, focus, show, hide, set, gauge, unset, scene, wait, seq
   27:34: warning: unknown flow attribute "colour"
     hint: did you mean color?
+    fix: 27:26 "colour" -> "color"
   27:45: warning: unknown flow attribute "durr"
     hint: did you mean dur?
+    fix: 27:39 "durr" -> "dur"
   31:27: warning: unknown highlight attribute "ease"
     hint: known here: at, color, delay, dur, label, style
   35:32: error: attribute "ease": "bouncy" is not an easing

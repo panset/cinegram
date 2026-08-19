@@ -92,3 +92,4 @@ Raft leader election in a five-node cluster.
     ```
 
 ← [tcp connection](../04-diagram-types/02-tcp-connection.md)  
+→ [one question, four turns](../05-ai-systems/01-agent-tool-loop.md)
