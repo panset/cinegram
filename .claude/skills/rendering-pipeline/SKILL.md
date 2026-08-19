@@ -81,6 +81,40 @@ Timing lives entirely in `pkg/compile`. Read
 [references/timing-rules.md](references/timing-rules.md) before changing any of
 it; per 4, express the result in milliseconds and IDs.
 
+## Narration
+
+`desc` prose can be spoken. `cinegram voice` records a clip per line into a
+`<file>.voice/` sidecar; `pkg/loader` inlines them and `pkg/ir` carries them on
+`Step.Audio`. Four rules hold it together:
+
+1. **Loading narration is opt-in — `loader.Load(path, read, loader.WithVoice())`
+   — and the default is the load-bearing half.** With it off, compilation stays a
+   pure function of the checked-in sources, so `//site:site_test` and
+   `//pkg/langref:langref_test` regenerate to the same bytes whether or not the
+   person running them has recorded narration locally. It also keeps the clips —
+   which outweigh the diagram, the timeline and the runtime together — out of
+   every page that did not ask. `--with-voice` on `preview`, `compile` and
+   `record` is that switch.
+2. **A clip is keyed by the words it says**, `voice.Key(prose)`, never by the
+   step. So a retelling reusing a sentence reuses its recording, reordering or
+   renaming re-records nothing, and only a genuine rewrite costs a new clip.
+3. **Clips reach `ir` as `data:` URIs**, exactly as storyboard images do and for
+   the same reasons as rule 4 above. `voice.WAVMillis` measures a clip's length
+   from a RIFF header at record time and the manifest carries the number, so
+   nothing downstream ever decodes audio.
+4. **Only `pace: voice` lets a recording move the clock.** A step is as long as
+   its animation needs and a line as long as it takes to say, and the second is
+   routinely an order of magnitude longer — so without it the voice is simply cut
+   off. The stretch is applied *after* the `minStepMillis` clamp (that warning is
+   about the span the author wrote) and *before* layout, so flows keep their own
+   durations and only the step, and whatever spans one, grows.
+
+In `runtime.js`, `window.speechSynthesis` is a **page-global queue**, and several
+players per page is ordinary here — the playground, a folder listing, a Markdown
+preview. So every call into it is guarded by that player's own `voiceOn`, and
+`dispose()` calls `hush()`: pausing is not stopping, and a paused utterance
+belonging to a dead player is still there for the next player's `resume()`.
+
 ## Parsing strategy
 
 The diagram body is **line-oriented** (like Mermaid itself) and read through
