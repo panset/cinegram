@@ -4,6 +4,59 @@ All notable changes to the Cinegram extension are recorded here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-08-19
+
+### Added
+
+- **`npx cinegram` and `uvx cinegram` work with nothing installed.** One npm
+  package and one PyPI package whose launchers download the checksum-verified
+  release binary for your platform on first run and cache it per version.
+- **`cinegram mcp` serves the compiler over stdio MCP**, so any agent harness
+  can lint, narrate, re-emit mermaid, and shoot frames or contact sheets
+  without shelling out per call.
+- **`cinegram sheet` renders a contact-sheet PNG** — one labeled frame per
+  scenario step through the same headless-Chrome pool `record` uses, with a
+  manifest recording the grid geometry and per-cell timings.
+- **`lint --strict` and `lint --fix`.** Warnings can fail the exit code on
+  request, and every did-you-mean diagnostic now carries a machine-applicable
+  fix that `--fix` applies in place.
+- **A light ⇄ dark flip at the top right of every page cinegram owns** —
+  standalone previews, `cinegram site` pages and folder listings, the
+  playground — stamped before first paint so a dark reload never flashes. A
+  fresh visitor follows the system until the first press pins a side.
+- **An AI-systems example tour** (`examples/05-ai-systems/`): an agent tool
+  loop with token and iteration gauges, a multi-agent fan-out with a barrier,
+  a RAG pipeline whose cold-cache variant fails over to web search, and the
+  exact MCP handshake `cinegram mcp` performs.
+
+### Changed
+
+- **The tool rail is three buttons.** Fit folded into the minimap (which
+  appears exactly when fitting means anything; double-click the map also
+  fits), Restart shows only in the modes with no scrubber, speed became a
+  select in the settings-and-shortcuts sheet, and the narrow-screen ⋯
+  collapse is gone.
+- **The VS Code webviews follow the editor's theme, always.** The rail's
+  theme button used to override the editor and win forever; it is gone, and
+  the panel preview now tracks a theme change live the way the Markdown
+  preview always did.
+- **Steps shorter than 2ms are clamped to 4ms by the compiler**, with a lint
+  note — a 1ms step used to trap presenter mode's advance on itself.
+- **The player's gesture, fullscreen and camera plumbing were consolidated**
+  (one drag protocol, one fullscreen owner, one copy of the camera↔minimap
+  geometry, one spelling for the camera-follows and thumbnail-dismissed
+  facts) with measured-identical behavior.
+
+### Fixed
+
+- **A tap on the storyboard thumbnail opens the lightbox on phones again** —
+  pointer capture had been retargeting the tap's click away from the stack.
+- **Two ```` ```dgm ```` blocks in one Markdown preview keep independent
+  minimap thumbnails.** The clone used to borrow arrowhead markers from
+  whichever diagram came first in the document.
+- **A dismissed thumbnail returns when the phone rotates** instead of
+  resurrecting and re-hiding with no gesture.
+
 ## [0.3.0] — 2026-08-17
 
 ### Added

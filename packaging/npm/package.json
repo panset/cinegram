@@ -1,6 +1,6 @@
 {
   "name": "cinegram",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Animated, narrated architecture diagrams from Mermaid — the cinegram CLI, fetched on first use.",
   "license": "MIT",
   "bin": {
