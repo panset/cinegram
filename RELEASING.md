@@ -120,7 +120,7 @@ that does must go through a channel job here.
 | Secret | Used by | Notes |
 | --- | --- | --- |
 | `MARKETPLACE_PAT` | `channel-vscode-marketplace` | Azure DevOps PAT: organization **All accessible organizations**, scope **Marketplace → Manage**. Expires (max ~1 year); created 2026-08-12. On a 401 at release time, mint a new one at dev.azure.com → user settings → Personal access tokens, then `gh secret set MARKETPLACE_PAT -R panset/cinegram`. |
-| `NPM_TOKEN` | `channel-npm` | npm automation token for the `cinegram` package (npmjs.com → Access Tokens → Generate → *Automation*, which bypasses 2FA prompts in CI). Set with `gh secret set NPM_TOKEN -R panset/cinegram`. The job refuses to start without it, the same way the Marketplace job does. |
+| *(none)* | `channel-npm` | npm publishing uses **trusted publishing**, not a token: npmjs.com → package `cinegram` → Settings → Trusted publishing trusts this repository's `release.yml`, and the job's `id-token: write` permission is the whole credential. Tokens are a dead end here — npm is retiring 2FA-bypass tokens (publishing via them ends ~January 2027), and a non-bypass token just fails CI with `EOTP`. |
 | *(none)* | `channel-pypi` | PyPI publishing uses **trusted publishing**, not a token: PyPI is told to trust this repository's `release.yml`, and the job's `id-token: write` permission is the whole credential. Nothing to rotate, nothing to leak. |
 
 The GitHub release itself uses the workflow's own `GITHUB_TOKEN`; npm
@@ -138,8 +138,16 @@ can do. These happen once, before the tag that first publishes the shims:
    which needs the `--access public` the job already passes) or `cinegram-cli`
    on PyPI, and change the `name` in that manifest, its README, this file and
    the `verify` job's invocation together.
-2. **`gh secret set NPM_TOKEN -R panset/cinegram`** with an npm *Automation*
-   token (see the table above).
+2. **Publish to npm once by hand, then register the trusted publisher.**
+   Unlike PyPI, npm has no pending publisher: the package must exist before
+   trust can be configured, and account-level 2FA is mandatory for publishing.
+   So, from `packaging/npm`: `npm login`, then
+   `npm publish --access public --otp=<code>`. Then at npmjs.com → package
+   `cinegram` → Settings → Trusted publishing add GitHub Actions with
+   organization `panset`, repository `cinegram`, workflow `release.yml`,
+   environment blank, allowed action *npm publish*. (Equivalent CLI, npm ≥
+   11.15: `npm trust github cinegram --file release.yml --repo
+   panset/cinegram --allow-publish`.) Done 2026-08-19 for `cinegram@0.4.0`.
 3. **Register the PyPI trusted publisher** at
    https://pypi.org/manage/account/publishing/ before the project exists —
    PyPI calls this a *pending publisher*. Owner `panset`, repository

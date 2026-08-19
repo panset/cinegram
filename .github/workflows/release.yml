@@ -219,14 +219,16 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read # a job-level block replaces the workflow default, and checkout needs this
-      id-token: write # npm provenance signs against this workflow run
+      id-token: write # the whole npm credential: trusted publishing and provenance both sign against this run
     steps:
       - uses: actions/checkout@v4
 
+      # Node 24 for its bundled npm 11 — trusted publishing needs npm >= 11.5.1,
+      # and Node 22 still ships npm 10. No registry-url: that would write an
+      # .npmrc referencing $NODE_AUTH_TOKEN, which OIDC publishing does not set.
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          registry-url: "https://registry.npmjs.org"
+          node-version: "24"
 
       - uses: actions/download-artifact@v4
         with:
@@ -245,16 +247,14 @@ jobs:
             fi
           done
 
+      # No token: npm is configured to trust this repository's release.yml
+      # (npmjs.com -> cinegram -> Settings -> Trusted publishing), and the
+      # job's id-token permission is the whole credential — same shape as the
+      # PyPI channel. --provenance stays explicit; automatic provenance under
+      # OIDC has been flaky across npm versions.
       - name: Publish to npm
         working-directory: packaging/npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "::error::the NPM_TOKEN secret is missing or empty — mint one and store it per RELEASING.md"
-            exit 1
-          fi
-          npm publish --access public --provenance
+        run: npm publish --access public --provenance
 
   channel-pypi:
     needs: [smoke, channel-github-binaries]
