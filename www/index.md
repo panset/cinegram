@@ -45,6 +45,29 @@ timeline and animated in your browser — scrubbable, and readable as text in
 
 </div>
 
+## Let your AI write it
+
+The fastest way in is the authoring skill for Claude Code or Cursor — one
+line, no clone, no build:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/panset/cinegram/main/skills/cinegram/install.sh | sh            # Claude Code
+curl -fsSL https://raw.githubusercontent.com/panset/cinegram/main/skills/cinegram/install.sh | sh -s -- cursor  # Cursor, from the project root
+```
+
+Then start a session and ask for what you want:
+
+- *"Animate this Mermaid diagram with cinegram and give me the HTML: …"*
+- *"Understand the request flow in `src/api/` and create a cinegram of it"*
+- *"Read `.github/workflows/deploy.yml`, draw the pipeline, and animate a deploy"*
+- *"Add a failure path where the payment provider times out"*
+
+The agent writes the `.dgm`, lints it until clean, and previews it as one
+self-contained HTML file you can open, share or commit — fetching the
+`cinegram` binary itself if you have none.
+[`skills/cinegram/`](https://github.com/panset/cinegram/tree/main/skills/cinegram)
+has the details; `cinegram mcp` offers the same tools to any MCP host.
+
 ## Get it
 
 A single static binary with no runtime dependencies — the compiler, the player

@@ -26,12 +26,14 @@ case "$MODE" in
     echo "Installing the cinegram skill for Claude Code:"
     fetch SKILL.md "$DEST/SKILL.md"
     fetch references/language.md "$DEST/references/language.md"
+    SKILL_MD="~/.claude/skills/cinegram/SKILL.md"
     ;;
   cursor)
     echo "Installing the cinegram skill for Cursor into $(pwd):"
     fetch SKILL.md .cursor/skills/cinegram/SKILL.md
     fetch references/language.md .cursor/skills/cinegram/references/language.md
     fetch cinegram.mdc .cursor/rules/cinegram.mdc
+    SKILL_MD=".cursor/skills/cinegram/SKILL.md"
     ;;
   *)
     echo "usage: install.sh [claude|cursor]" >&2
@@ -39,5 +41,19 @@ case "$MODE" in
     ;;
 esac
 
-echo "Done. Start a new session and ask: 'animate this mermaid diagram: ...'"
-echo "(In this same session, ask the agent to read the installed SKILL.md and follow it.)"
+cat <<EOF
+
+Done. Start a new session and try one of these:
+
+  "Animate this Mermaid diagram with cinegram and give me the HTML: <paste your diagram>"
+  "Understand the request flow in src/api/ and create a cinegram of it"
+  "Read .github/workflows/deploy.yml, draw the pipeline, and animate a deploy with cinegram"
+  "Add a failure path to this cinegram where the payment provider times out"
+
+The agent writes the .dgm, lints it, and previews it as one self-contained
+HTML file you can open, share or commit. It fetches the cinegram binary by
+itself if you do not have one.
+
+In this same session the skill is not loaded yet — first say:
+  "Read $SKILL_MD and follow it."
+EOF

@@ -38,6 +38,21 @@ numeric prefixes ordering the tree. Nothing is uploaded; the document lives in t
 URL fragment. Locally that page is `bazel run //web/playground:site --
 --serve`.
 
+**Or let your AI write it.** The fastest way in is the authoring skill for
+Claude Code or Cursor — one line, no clone, no build:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/panset/cinegram/main/skills/cinegram/install.sh | sh            # Claude Code
+curl -fsSL https://raw.githubusercontent.com/panset/cinegram/main/skills/cinegram/install.sh | sh -s -- cursor  # Cursor, from the project root
+```
+
+Then start a session and ask for what you want: *"animate this Mermaid diagram
+with cinegram and give me the HTML"*, or *"understand the request flow in
+`src/api/` and create a cinegram of it"*. The agent writes the `.dgm`, lints it
+until clean, and previews it as one self-contained HTML file — fetching the
+`cinegram` binary itself if you have none. [`skills/cinegram/`](skills/cinegram/)
+has the details and more prompts.
+
 ## The language
 
 A `.dgm` file is a Mermaid diagram followed by one or more `scenario` blocks,
