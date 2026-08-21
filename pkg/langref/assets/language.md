@@ -277,6 +277,10 @@ fix (a missing edge suggests what to add or reroute).
 - `repeat` and `bidi` on flows are reserved and unread — don't emit them.
 - An element declared but never referenced (by an edge, action, or click)
   warns; a `scene` naming a same-named frame does not count as a reference.
+- A `%%` comment before the first animation keyword is part of the diagram
+  half (`cinegram mermaid` prints it); one inside or after a scenario is not.
+- Step ids and diagram ids are separate namespaces — `step auth` may sit
+  beside a node `auth`.
 - Two scenarios with the same name: the picker can't tell them apart (warning).
 
 ## Compact grammar

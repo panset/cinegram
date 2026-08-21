@@ -28,7 +28,9 @@ Try these in order; use the first that works. Verify with `cinegram version`
    Both are launchers — they download the release binary for this platform,
    check it against the release's `SHA256SUMS`, cache it under
    `~/.cinegram/bin/v<version>/`, and run it. Prefix any command below with
-   `npx cinegram` / `uvx cinegram` the same way. One caveat: the cache entry is
+   `npx cinegram` / `uvx cinegram` the same way. After the first run the
+   resolved binary sits at `~/.cinegram/bin/v<version>/cinegram` and can be
+   called directly, which is faster than paying the launcher every command. One caveat: the cache entry is
    version-pinned, so `cinegram upgrade` refuses to run under either — get a
    newer version with `npx cinegram@latest …` or `uvx cinegram@latest …`.
 3. The copy bundled with the VS Code / Cursor extension:
@@ -119,6 +121,19 @@ Read `references/language.md` first. The rules that most often trip authors:
 - Strings live on one line; use `\n` inside them, never wrap the source line.
 - Every step gets a short id and a human title: `step route "Ingress matches" { … }`.
 - Use `desc:` liberally — the narration is half the value of the output.
+- A step id may equal a node id (`step auth` beside a node `auth` is fine) —
+  steps and diagram ids are separate namespaces; only steps within one
+  scenario must be unique.
+- `%%` comments placed before the first `scenario`/`view`/`interact`/
+  `storyboard` keyword belong to the diagram half and come back out of
+  `cinegram mermaid`; keep your own notes inside a scenario or after that
+  first keyword, or the round-trip check below will look like a mismatch.
+- Group with subgraphs freely and target them with `highlight`/`focus` —
+  never with `flow`. A subgraph nothing ever targets warns as unreferenced.
+- A matrix or fan-out (three platforms, N shards, M replicas) is one node
+  carrying a `set … { badge: "3 platforms" }`, not three nodes.
+- Two or three labelled flows in one step is the practical ceiling; drop the
+  labels the diagram already implies, or the text piles up.
 
 ### 3. Lint until clean — this loop is mandatory
 
@@ -192,6 +207,11 @@ at a time). Scenarios are addressed as `s0`, `s1`, … in declaration order.
 ### 6. Verify visually when it matters
 
 **Read the sheet first, then use `frame` for close-ups.**
+
+Both need a headless Chrome or Chromium on `PATH` or named by
+`$CINEGRAM_CHROME` (the table in step 5). And both show the **first** scenario
+unless you pass `--scenario "<name>"` — check every variant you wrote, since
+the failure path is usually the one worth verifying.
 
 ```sh
 cinegram sheet out.dgm -o sheet.png --manifest sheet.json
