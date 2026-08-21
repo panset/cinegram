@@ -1,0 +1,185 @@
+%% One diagram, three scenarios: a token refresh that works, a refresh token
+%% that was already rotated by a concurrent login, and an identity provider
+%% that does not answer. The happy path is the only thing drawn at full
+%% strength; the two edge cases are `variant` scenarios that replay it up to
+%% the exact hop where reality diverges and then tell their own ending. The
+%% shape of the question comes from r/webdev (reddit.com/r/webdev/comments/1u87ptj):
+%% "the happy path is clean but the edge cases are killing the diagram."
+%% ---
+%% Nothing branches on the canvas, so the failure cards stay readable while the
+%% main flow stays the same eleven messages an on-call engineer already knows.
+sequenceDiagram
+  participant App as Mobile App
+  participant GW as API Gateway
+  participant Auth as Auth Service
+  participant IdP as Identity Provider
+  participant Cache as Session Cache
+
+  App->>GW: GET /orders (Bearer at_4)
+  GW--xApp: 401 token_expired
+  App->>Auth: POST /refresh (rt_7)
+  Auth->>Cache: lookup family f_91, token rt_7
+  Cache-->>Auth: rt_7 current, family active
+  Cache--xAuth: rt_7 already rotated (reuse)
+  Auth->>IdP: POST /token (grant_type=refresh_token)
+  IdP-->>Auth: 200 access at_5 + refresh rt_8
+  IdP--xAuth: no response
+  Auth->>Cache: store rt_8, retire rt_7
+  Auth-->>App: 200 new access token
+  Auth--xApp: 401 invalid_grant
+  App->>GW: GET /orders (Bearer at_5)
+  GW-->>App: 200 orders
+
+%% ---
+%% The base story. Every step here is inherited by the two variants below, so
+%% the shared opening is written exactly once and cannot drift.
+scenario "happy path: access token expires, refresh, retry" { speed: 1.0 }
+
+  step call "The app calls the API with a token it believes is still good" {
+    desc: "Nothing in the client knows the access token has aged out. Short-lived access tokens are deliberately cheap to validate and impossible to revoke, so expiry is the only thing standing between a leaked token and a live session."
+    flow App -> GW { dur: 700ms, msg: 1 }
+    set App { badge: "at_4" }
+    gauge App { label: "access token", value: "at_4" }
+    highlight GW { style: active }
+  }
+
+  step expired "The gateway rejects it before the request costs anything" {
+    desc: "The gateway verifies the signature and the exp claim locally — no network hop, no shared state. That is why a 401 here is fast and why the gateway never needs to know anything about refresh tokens."
+    flow GW -> App { dur: 600ms, status: fail, msg: 1 }
+    note GW "exp 14:02:11\nnow 14:02:40"
+  }
+
+  step refresh "The app refreshes instead of bouncing the user to a login screen" {
+    desc: "This is the whole point of the refresh token: a 401 is a routine event, not a session ending. A correct client refreshes once, in one place, and queues every other in-flight request behind it."
+    flow App -> Auth { dur: 700ms, msg: 1 }
+    focus Auth
+    set Auth { badge: "refreshing" }
+  }
+
+  step verify "The session cache confirms rt_7 is the family's current token" {
+    desc: "Refresh tokens are stored as a family: one row per session, holding the token that is current right now and every token already spent. The lookup answers two questions at once — is this token real, and is it still the newest one issued for this session."
+    seq {
+      flow Auth -> Cache { dur: 550ms, msg: 1 }
+      flow Cache -> Auth { dur: 550ms, style: response, msg: 1 }
+    }
+    gauge Cache { label: "rotation", value: "7" }
+    set Cache { badge: "family f_91 active" }
+  }
+
+  step exchange "The auth service swaps the refresh token at the IdP" {
+    desc: "The auth service never mints tokens itself; it is a client of the identity provider like everyone else. That indirection is what makes the next scenario possible — and painful."
+    seq {
+      flow Auth -> IdP { dur: 700ms, msg: 1 }
+      flow IdP -> Auth { dur: 700ms, style: response, msg: 1 }
+    }
+    focus IdP
+  }
+
+  step rotate "The refresh token rotates, then the app gets its new pair" {
+    desc: "rt_7 is retired the moment rt_8 exists. Rotation is what turns a stolen refresh token from a permanent backdoor into a token that stops working the next time the real client refreshes."
+    seq {
+      flow Auth -> Cache { dur: 550ms, msg: 2 }
+      flow Auth -> App { dur: 650ms, style: response, msg: 1 }
+    }
+    gauge Cache { label: "rotation", value: "8" }
+    set App { badge: "at_5" }
+    gauge App { label: "access token", value: "at_5" }
+    unset Auth
+  }
+
+  step retry "The original request is replayed and succeeds" {
+    desc: "The user never saw any of this. Success here means the refresh was invisible: one 401, one refresh, one retry, and the same response the first call was supposed to get."
+    seq {
+      flow App -> GW { dur: 600ms, msg: 2 }
+      flow GW -> App { dur: 600ms, style: response, msg: 2 }
+    }
+    highlight GW { style: active }
+  }
+
+%% ---
+%% Edge case one. It replays the base through `refresh` — `until` is inclusive —
+%% so the reader sees the identical opening and only then watches the cache give
+%% a different answer to the same question.
+scenario "refresh token already rotated (concurrent login / replay)" { variant: "happy path: access token expires, refresh, retry", until: refresh, outcome: fail }
+
+  step race-lookup "The same lookup runs, a fraction of a second too late" {
+    desc: "The tablet the user left signed in refreshed the same session 300ms ago and already spent rt_7. Two devices sharing one token family will race like this whenever both wake up at once, and neither client did anything wrong."
+    flow Auth -> Cache { dur: 550ms, msg: 1 }
+    focus Cache
+  }
+
+  step reuse "The cache reports rt_7 as already spent: reuse detected" {
+    desc: "A refresh token presented after it has been rotated is indistinguishable from a stolen one being replayed. The cache cannot tell a slow phone from an attacker, so the protocol says assume the worst."
+    flow Cache -> Auth { dur: 650ms, status: fail, msg: 2 }
+    note Cache "rt_7 spent 14:02:38\nby device tablet-2"
+    set Cache { badge: "reuse detected", state: fail }
+  }
+
+  step revoke "The entire token family is revoked, not just rt_7" {
+    desc: "Revoking only the replayed token would leave whichever copy is genuinely ahead — possibly the attacker's — still working. Killing the family f_91 collapses the session for every device holding any token in it. \nThat is the trade this design makes on purpose: a rare false positive logs an honest user out, and a real theft ends within one refresh interval."
+    dur: 1.8s
+    set Cache { badge: "family f_91 revoked", state: fail }
+    gauge Cache { label: "rotation", value: "revoked" }
+    note Auth "revoke f_91:\nrt_7, rt_8, all devices"
+    focus Auth
+  }
+
+  step deny "The app is told to start over" {
+    desc: "invalid_grant is the only honest answer left. There is no new access token to hand back and no refresh token worth keeping, so the response has to be terminal rather than retryable."
+    flow Auth -> App { dur: 650ms, status: fail, msg: 2 }
+    set App { badge: "signed out", state: fail }
+    gauge App { label: "access token", value: "revoked" }
+  }
+
+  step relogin "The user re-authenticates, on every device" {
+    desc: "This is the beat worth rehearsing before it happens at 3am: a support ticket saying 'it logged me out on both my phone and my iPad' is the expected output of reuse detection working correctly, not evidence of a bug."
+    dur: 1.6s
+    note App "full re-auth\npassword + second factor"
+    dim GW
+    dim IdP
+  }
+
+%% ---
+%% Edge case two. It replays the base through `verify` — the cache said yes, the
+%% refresh token is fine — and diverges at the one hop this service does not own.
+scenario "identity provider down" { variant: "happy path: access token expires, refresh, retry", until: verify, outcome: fail }
+
+  step idp-call "The token exchange goes out to the IdP" {
+    desc: "Everything so far was local: the gateway's signature check, the cache lookup, the rotation bookkeeping. This is the first hop that leaves the blast radius the team controls."
+    flow Auth -> IdP { dur: 700ms, msg: 1 }
+    focus IdP
+  }
+
+  step timeout "Nothing comes back" {
+    desc: "A 5s client timeout is generous for a token endpoint and ruinous under load: every refreshing client holds a connection open for five seconds before failing, so an IdP brownout turns into an auth service outage a few seconds later."
+    flow IdP -> Auth { dur: 1.1s, status: fail, msg: 2 }
+    note IdP "no response\nconnect timeout 5s"
+    set IdP { badge: "unreachable", state: fail }
+  }
+
+  step fallback "The auth service degrades instead of failing" {
+    desc: "The session in the cache is still valid and was verified a moment ago, so the auth service signs a short-lived access token from those cached claims rather than returning 503. \nThe trade is explicit: five minutes of authorising against claims that can no longer be revoked upstream, in exchange for a service that stays usable through an IdP outage. Refresh rotation is suspended, because rotating without the IdP would desynchronise the family."
+    dur: 2s
+    dim IdP
+    set Auth { badge: "degraded", state: fail }
+    gauge Auth { label: "fallback TTL", value: "5 min" }
+    note Auth "sign from cached session\nno rotation, no new rt"
+  }
+
+  step degraded "The app gets a 200 it cannot tell apart" {
+    desc: "Deliberately the same status code and the same shape. A client that behaves differently on a degraded refresh is a client that will behave differently in an incident, which is precisely when you want it boring."
+    flow Auth -> App { dur: 650ms, style: response, msg: 1 }
+    set App { badge: "at_5 · 5 min" }
+    gauge App { label: "access token", value: "at_5 (degraded)" }
+    note App "200, but no rt_8\nexpires in 5 min"
+  }
+
+  step degraded-retry "The retry succeeds, on borrowed time" {
+    desc: "The user's request goes through, and in five minutes the app refreshes again. If the IdP is still down the same fallback fires; if the fallback budget is exhausted this becomes the 503 with Retry-After that the happy path never has to think about."
+    seq {
+      flow App -> GW { dur: 600ms, msg: 2 }
+      flow GW -> App { dur: 600ms, style: response, msg: 2 }
+    }
+    dim IdP
+    gauge Auth { label: "fallback TTL", value: "4 min" }
+  }

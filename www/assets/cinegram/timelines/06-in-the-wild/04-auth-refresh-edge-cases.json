@@ -1,0 +1,1003 @@
+{
+  "version": 2,
+  "root": "04-auth-refresh-edge-cases",
+  "views": [
+    {
+      "id": "04-auth-refresh-edge-cases",
+      "diagram": {
+        "type": "sequenceDiagram",
+        "mermaid": "%% One diagram, three scenarios: a token refresh that works, a refresh token\n%% that was already rotated by a concurrent login, and an identity provider\n%% that does not answer. The happy path is the only thing drawn at full\n%% strength; the two edge cases are `variant` scenarios that replay it up to\n%% the exact hop where reality diverges and then tell their own ending. The\n%% shape of the question comes from r/webdev (reddit.com/r/webdev/comments/1u87ptj):\n%% \"the happy path is clean but the edge cases are killing the diagram.\"\n%% ---\n%% Nothing branches on the canvas, so the failure cards stay readable while the\n%% main flow stays the same eleven messages an on-call engineer already knows.\nsequenceDiagram\n  participant App as Mobile App\n  participant GW as API Gateway\n  participant Auth as Auth Service\n  participant IdP as Identity Provider\n  participant Cache as Session Cache\n\n  App-\u003e\u003eGW: GET /orders (Bearer at_4)\n  GW--xApp: 401 token_expired\n  App-\u003e\u003eAuth: POST /refresh (rt_7)\n  Auth-\u003e\u003eCache: lookup family f_91, token rt_7\n  Cache--\u003e\u003eAuth: rt_7 current, family active\n  Cache--xAuth: rt_7 already rotated (reuse)\n  Auth-\u003e\u003eIdP: POST /token (grant_type=refresh_token)\n  IdP--\u003e\u003eAuth: 200 access at_5 + refresh rt_8\n  IdP--xAuth: no response\n  Auth-\u003e\u003eCache: store rt_8, retire rt_7\n  Auth--\u003e\u003eApp: 200 new access token\n  Auth--xApp: 401 invalid_grant\n  App-\u003e\u003eGW: GET /orders (Bearer at_5)\n  GW--\u003e\u003eApp: 200 orders\n\n  %% ---\n  %% The base story. Every step here is inherited by the two variants below, so\n  %% the shared opening is written exactly once and cannot drift.\n"
+      },
+      "nodes": [
+        {
+          "id": "App",
+          "label": "Mobile App",
+          "shape": "actor"
+        },
+        {
+          "id": "GW",
+          "label": "API Gateway",
+          "shape": "actor"
+        },
+        {
+          "id": "Auth",
+          "label": "Auth Service",
+          "shape": "actor"
+        },
+        {
+          "id": "IdP",
+          "label": "Identity Provider",
+          "shape": "actor"
+        },
+        {
+          "id": "Cache",
+          "label": "Session Cache",
+          "shape": "actor"
+        }
+      ],
+      "groups": [],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "App",
+          "to": "GW",
+          "label": "GET /orders (Bearer at_4)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "GW",
+          "to": "App",
+          "label": "401 token_expired",
+          "style": "dotted",
+          "head": "cross"
+        },
+        {
+          "id": "e2",
+          "from": "App",
+          "to": "Auth",
+          "label": "POST /refresh (rt_7)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "Auth",
+          "to": "Cache",
+          "label": "lookup family f_91, token rt_7",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "Cache",
+          "to": "Auth",
+          "label": "rt_7 current, family active",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "Cache",
+          "to": "Auth",
+          "label": "rt_7 already rotated (reuse)",
+          "style": "dotted",
+          "head": "cross"
+        },
+        {
+          "id": "e6",
+          "from": "Auth",
+          "to": "IdP",
+          "label": "POST /token (grant_type=refresh_token)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e7",
+          "from": "IdP",
+          "to": "Auth",
+          "label": "200 access at_5 + refresh rt_8",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e8",
+          "from": "IdP",
+          "to": "Auth",
+          "label": "no response",
+          "style": "dotted",
+          "head": "cross"
+        },
+        {
+          "id": "e9",
+          "from": "Auth",
+          "to": "Cache",
+          "label": "store rt_8, retire rt_7",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e10",
+          "from": "Auth",
+          "to": "App",
+          "label": "200 new access token",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e11",
+          "from": "Auth",
+          "to": "App",
+          "label": "401 invalid_grant",
+          "style": "dotted",
+          "head": "cross"
+        },
+        {
+          "id": "e12",
+          "from": "App",
+          "to": "GW",
+          "label": "GET /orders (Bearer at_5)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e13",
+          "from": "GW",
+          "to": "App",
+          "label": "200 orders",
+          "style": "dotted",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "happy path: access token expires, refresh, retry",
+          "duration": 6900,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "call",
+              "name": "The app calls the API with a token it believes is still good",
+              "desc": "Nothing in the client knows the access token has aged out. Short-lived access tokens are deliberately cheap to validate and impossible to revoke, so expiry is the only thing standing between a leaked token and a live session.",
+              "start": 0,
+              "end": 700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 700,
+                  "edge": "e0",
+                  "from": "App",
+                  "to": "GW"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 700,
+                  "target": "GW",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "expired",
+              "name": "The gateway rejects it before the request costs anything",
+              "desc": "The gateway verifies the signature and the exp claim locally — no network hop, no shared state. That is why a 401 here is fast and why the gateway never needs to know anything about refresh tokens.",
+              "start": 700,
+              "end": 1300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 700,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "GW",
+                  "to": "App",
+                  "status": "fail"
+                },
+                {
+                  "kind": "note",
+                  "start": 700,
+                  "end": 1300,
+                  "target": "GW",
+                  "text": "exp 14:02:11\nnow 14:02:40"
+                }
+              ]
+            },
+            {
+              "id": "refresh",
+              "name": "The app refreshes instead of bouncing the user to a login screen",
+              "desc": "This is the whole point of the refresh token: a 401 is a routine event, not a session ending. A correct client refreshes once, in one place, and queues every other in-flight request behind it.",
+              "start": 1300,
+              "end": 2000,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1300,
+                  "end": 2000,
+                  "edge": "e2",
+                  "from": "App",
+                  "to": "Auth"
+                },
+                {
+                  "kind": "focus",
+                  "start": 1300,
+                  "end": 2000,
+                  "target": "Auth"
+                }
+              ]
+            },
+            {
+              "id": "verify",
+              "name": "The session cache confirms rt_7 is the family's current token",
+              "desc": "Refresh tokens are stored as a family: one row per session, holding the token that is current right now and every token already spent. The lookup answers two questions at once — is this token real, and is it still the newest one issued for this session.",
+              "start": 2000,
+              "end": 3100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2000,
+                  "end": 2550,
+                  "edge": "e3",
+                  "from": "Auth",
+                  "to": "Cache"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2550,
+                  "end": 3100,
+                  "edge": "e4",
+                  "from": "Cache",
+                  "to": "Auth",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "exchange",
+              "name": "The auth service swaps the refresh token at the IdP",
+              "desc": "The auth service never mints tokens itself; it is a client of the identity provider like everyone else. That indirection is what makes the next scenario possible — and painful.",
+              "start": 3100,
+              "end": 4500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3100,
+                  "end": 3800,
+                  "edge": "e6",
+                  "from": "Auth",
+                  "to": "IdP"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3800,
+                  "end": 4500,
+                  "edge": "e7",
+                  "from": "IdP",
+                  "to": "Auth",
+                  "style": "response"
+                },
+                {
+                  "kind": "focus",
+                  "start": 3100,
+                  "end": 4500,
+                  "target": "IdP"
+                }
+              ]
+            },
+            {
+              "id": "rotate",
+              "name": "The refresh token rotates, then the app gets its new pair",
+              "desc": "rt_7 is retired the moment rt_8 exists. Rotation is what turns a stolen refresh token from a permanent backdoor into a token that stops working the next time the real client refreshes.",
+              "start": 4500,
+              "end": 5700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 4500,
+                  "end": 5050,
+                  "edge": "e9",
+                  "from": "Auth",
+                  "to": "Cache"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5050,
+                  "end": 5700,
+                  "edge": "e10",
+                  "from": "Auth",
+                  "to": "App",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "retry",
+              "name": "The original request is replayed and succeeds",
+              "desc": "The user never saw any of this. Success here means the refresh was invisible: one 401, one refresh, one retry, and the same response the first call was supposed to get.",
+              "start": 5700,
+              "end": 6900,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 5700,
+                  "end": 6300,
+                  "edge": "e12",
+                  "from": "App",
+                  "to": "GW"
+                },
+                {
+                  "kind": "flow",
+                  "start": 6300,
+                  "end": 6900,
+                  "edge": "e13",
+                  "from": "GW",
+                  "to": "App",
+                  "style": "response"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 5700,
+                  "end": 6900,
+                  "target": "GW",
+                  "style": "active"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 0,
+              "end": 4500,
+              "target": "App",
+              "label": "at_4"
+            },
+            {
+              "kind": "gauge",
+              "start": 0,
+              "end": 4500,
+              "target": "App",
+              "label": "access token",
+              "value": "at_4"
+            },
+            {
+              "kind": "set",
+              "start": 1300,
+              "end": 4500,
+              "target": "Auth",
+              "label": "refreshing"
+            },
+            {
+              "kind": "gauge",
+              "start": 2000,
+              "end": 4500,
+              "target": "Cache",
+              "label": "rotation",
+              "value": "7"
+            },
+            {
+              "kind": "set",
+              "start": 2000,
+              "end": 6900,
+              "target": "Cache",
+              "label": "family f_91 active"
+            },
+            {
+              "kind": "gauge",
+              "start": 4500,
+              "end": 6900,
+              "target": "Cache",
+              "label": "rotation",
+              "value": "8"
+            },
+            {
+              "kind": "set",
+              "start": 4500,
+              "end": 6900,
+              "target": "App",
+              "label": "at_5"
+            },
+            {
+              "kind": "gauge",
+              "start": 4500,
+              "end": 6900,
+              "target": "App",
+              "label": "access token",
+              "value": "at_5"
+            }
+          ]
+        },
+        {
+          "id": "s1",
+          "name": "refresh token already rotated (concurrent login / replay)",
+          "duration": 7250,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "outcome": "fail",
+          "steps": [
+            {
+              "id": "call",
+              "name": "The app calls the API with a token it believes is still good",
+              "desc": "Nothing in the client knows the access token has aged out. Short-lived access tokens are deliberately cheap to validate and impossible to revoke, so expiry is the only thing standing between a leaked token and a live session.",
+              "start": 0,
+              "end": 700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 700,
+                  "edge": "e0",
+                  "from": "App",
+                  "to": "GW"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 700,
+                  "target": "GW",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "expired",
+              "name": "The gateway rejects it before the request costs anything",
+              "desc": "The gateway verifies the signature and the exp claim locally — no network hop, no shared state. That is why a 401 here is fast and why the gateway never needs to know anything about refresh tokens.",
+              "start": 700,
+              "end": 1300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 700,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "GW",
+                  "to": "App",
+                  "status": "fail"
+                },
+                {
+                  "kind": "note",
+                  "start": 700,
+                  "end": 1300,
+                  "target": "GW",
+                  "text": "exp 14:02:11\nnow 14:02:40"
+                }
+              ]
+            },
+            {
+              "id": "refresh",
+              "name": "The app refreshes instead of bouncing the user to a login screen",
+              "desc": "This is the whole point of the refresh token: a 401 is a routine event, not a session ending. A correct client refreshes once, in one place, and queues every other in-flight request behind it.",
+              "start": 1300,
+              "end": 2000,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1300,
+                  "end": 2000,
+                  "edge": "e2",
+                  "from": "App",
+                  "to": "Auth"
+                },
+                {
+                  "kind": "focus",
+                  "start": 1300,
+                  "end": 2000,
+                  "target": "Auth"
+                }
+              ]
+            },
+            {
+              "id": "race-lookup",
+              "name": "The same lookup runs, a fraction of a second too late",
+              "desc": "The tablet the user left signed in refreshed the same session 300ms ago and already spent rt_7. Two devices sharing one token family will race like this whenever both wake up at once, and neither client did anything wrong.",
+              "start": 2000,
+              "end": 2550,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2000,
+                  "end": 2550,
+                  "edge": "e3",
+                  "from": "Auth",
+                  "to": "Cache"
+                },
+                {
+                  "kind": "focus",
+                  "start": 2000,
+                  "end": 2550,
+                  "target": "Cache"
+                }
+              ]
+            },
+            {
+              "id": "reuse",
+              "name": "The cache reports rt_7 as already spent: reuse detected",
+              "desc": "A refresh token presented after it has been rotated is indistinguishable from a stolen one being replayed. The cache cannot tell a slow phone from an attacker, so the protocol says assume the worst.",
+              "start": 2550,
+              "end": 3200,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2550,
+                  "end": 3200,
+                  "edge": "e5",
+                  "from": "Cache",
+                  "to": "Auth",
+                  "status": "fail"
+                },
+                {
+                  "kind": "note",
+                  "start": 2550,
+                  "end": 3200,
+                  "target": "Cache",
+                  "text": "rt_7 spent 14:02:38\nby device tablet-2"
+                }
+              ]
+            },
+            {
+              "id": "revoke",
+              "name": "The entire token family is revoked, not just rt_7",
+              "desc": "Revoking only the replayed token would leave whichever copy is genuinely ahead — possibly the attacker's — still working. Killing the family f_91 collapses the session for every device holding any token in it. \nThat is the trade this design makes on purpose: a rare false positive logs an honest user out, and a real theft ends within one refresh interval.",
+              "start": 3200,
+              "end": 5000,
+              "tracks": [
+                {
+                  "kind": "note",
+                  "start": 3200,
+                  "end": 5000,
+                  "target": "Auth",
+                  "text": "revoke f_91:\nrt_7, rt_8, all devices"
+                },
+                {
+                  "kind": "focus",
+                  "start": 3200,
+                  "end": 5000,
+                  "target": "Auth"
+                }
+              ]
+            },
+            {
+              "id": "deny",
+              "name": "The app is told to start over",
+              "desc": "invalid_grant is the only honest answer left. There is no new access token to hand back and no refresh token worth keeping, so the response has to be terminal rather than retryable.",
+              "start": 5000,
+              "end": 5650,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 5000,
+                  "end": 5650,
+                  "edge": "e11",
+                  "from": "Auth",
+                  "to": "App",
+                  "status": "fail"
+                }
+              ]
+            },
+            {
+              "id": "relogin",
+              "name": "The user re-authenticates, on every device",
+              "desc": "This is the beat worth rehearsing before it happens at 3am: a support ticket saying 'it logged me out on both my phone and my iPad' is the expected output of reuse detection working correctly, not evidence of a bug.",
+              "start": 5650,
+              "end": 7250,
+              "tracks": [
+                {
+                  "kind": "note",
+                  "start": 5650,
+                  "end": 7250,
+                  "target": "App",
+                  "text": "full re-auth\npassword + second factor"
+                },
+                {
+                  "kind": "dim",
+                  "start": 5650,
+                  "end": 7250,
+                  "target": "GW"
+                },
+                {
+                  "kind": "dim",
+                  "start": 5650,
+                  "end": 7250,
+                  "target": "IdP"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 0,
+              "end": 5000,
+              "target": "App",
+              "label": "at_4"
+            },
+            {
+              "kind": "gauge",
+              "start": 0,
+              "end": 5000,
+              "target": "App",
+              "label": "access token",
+              "value": "at_4"
+            },
+            {
+              "kind": "set",
+              "start": 1300,
+              "end": 7250,
+              "target": "Auth",
+              "label": "refreshing"
+            },
+            {
+              "kind": "set",
+              "start": 2550,
+              "end": 3200,
+              "target": "Cache",
+              "label": "reuse detected",
+              "value": "fail"
+            },
+            {
+              "kind": "set",
+              "start": 3200,
+              "end": 7250,
+              "target": "Cache",
+              "label": "family f_91 revoked",
+              "value": "fail"
+            },
+            {
+              "kind": "gauge",
+              "start": 3200,
+              "end": 7250,
+              "target": "Cache",
+              "label": "rotation",
+              "value": "revoked"
+            },
+            {
+              "kind": "set",
+              "start": 5000,
+              "end": 7250,
+              "target": "App",
+              "label": "signed out",
+              "value": "fail"
+            },
+            {
+              "kind": "gauge",
+              "start": 5000,
+              "end": 7250,
+              "target": "App",
+              "label": "access token",
+              "value": "revoked"
+            }
+          ]
+        },
+        {
+          "id": "s2",
+          "name": "identity provider down",
+          "duration": 8750,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "outcome": "fail",
+          "steps": [
+            {
+              "id": "call",
+              "name": "The app calls the API with a token it believes is still good",
+              "desc": "Nothing in the client knows the access token has aged out. Short-lived access tokens are deliberately cheap to validate and impossible to revoke, so expiry is the only thing standing between a leaked token and a live session.",
+              "start": 0,
+              "end": 700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 700,
+                  "edge": "e0",
+                  "from": "App",
+                  "to": "GW"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 700,
+                  "target": "GW",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "expired",
+              "name": "The gateway rejects it before the request costs anything",
+              "desc": "The gateway verifies the signature and the exp claim locally — no network hop, no shared state. That is why a 401 here is fast and why the gateway never needs to know anything about refresh tokens.",
+              "start": 700,
+              "end": 1300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 700,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "GW",
+                  "to": "App",
+                  "status": "fail"
+                },
+                {
+                  "kind": "note",
+                  "start": 700,
+                  "end": 1300,
+                  "target": "GW",
+                  "text": "exp 14:02:11\nnow 14:02:40"
+                }
+              ]
+            },
+            {
+              "id": "refresh",
+              "name": "The app refreshes instead of bouncing the user to a login screen",
+              "desc": "This is the whole point of the refresh token: a 401 is a routine event, not a session ending. A correct client refreshes once, in one place, and queues every other in-flight request behind it.",
+              "start": 1300,
+              "end": 2000,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1300,
+                  "end": 2000,
+                  "edge": "e2",
+                  "from": "App",
+                  "to": "Auth"
+                },
+                {
+                  "kind": "focus",
+                  "start": 1300,
+                  "end": 2000,
+                  "target": "Auth"
+                }
+              ]
+            },
+            {
+              "id": "verify",
+              "name": "The session cache confirms rt_7 is the family's current token",
+              "desc": "Refresh tokens are stored as a family: one row per session, holding the token that is current right now and every token already spent. The lookup answers two questions at once — is this token real, and is it still the newest one issued for this session.",
+              "start": 2000,
+              "end": 3100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2000,
+                  "end": 2550,
+                  "edge": "e3",
+                  "from": "Auth",
+                  "to": "Cache"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2550,
+                  "end": 3100,
+                  "edge": "e4",
+                  "from": "Cache",
+                  "to": "Auth",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "idp-call",
+              "name": "The token exchange goes out to the IdP",
+              "desc": "Everything so far was local: the gateway's signature check, the cache lookup, the rotation bookkeeping. This is the first hop that leaves the blast radius the team controls.",
+              "start": 3100,
+              "end": 3800,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3100,
+                  "end": 3800,
+                  "edge": "e6",
+                  "from": "Auth",
+                  "to": "IdP"
+                },
+                {
+                  "kind": "focus",
+                  "start": 3100,
+                  "end": 3800,
+                  "target": "IdP"
+                }
+              ]
+            },
+            {
+              "id": "timeout",
+              "name": "Nothing comes back",
+              "desc": "A 5s client timeout is generous for a token endpoint and ruinous under load: every refreshing client holds a connection open for five seconds before failing, so an IdP brownout turns into an auth service outage a few seconds later.",
+              "start": 3800,
+              "end": 4900,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3800,
+                  "end": 4900,
+                  "edge": "e8",
+                  "from": "IdP",
+                  "to": "Auth",
+                  "status": "fail"
+                },
+                {
+                  "kind": "note",
+                  "start": 3800,
+                  "end": 4900,
+                  "target": "IdP",
+                  "text": "no response\nconnect timeout 5s"
+                }
+              ]
+            },
+            {
+              "id": "fallback",
+              "name": "The auth service degrades instead of failing",
+              "desc": "The session in the cache is still valid and was verified a moment ago, so the auth service signs a short-lived access token from those cached claims rather than returning 503. \nThe trade is explicit: five minutes of authorising against claims that can no longer be revoked upstream, in exchange for a service that stays usable through an IdP outage. Refresh rotation is suspended, because rotating without the IdP would desynchronise the family.",
+              "start": 4900,
+              "end": 6900,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 4900,
+                  "end": 6900,
+                  "target": "IdP"
+                },
+                {
+                  "kind": "note",
+                  "start": 4900,
+                  "end": 6900,
+                  "target": "Auth",
+                  "text": "sign from cached session\nno rotation, no new rt"
+                }
+              ]
+            },
+            {
+              "id": "degraded",
+              "name": "The app gets a 200 it cannot tell apart",
+              "desc": "Deliberately the same status code and the same shape. A client that behaves differently on a degraded refresh is a client that will behave differently in an incident, which is precisely when you want it boring.",
+              "start": 6900,
+              "end": 7550,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 6900,
+                  "end": 7550,
+                  "edge": "e10",
+                  "from": "Auth",
+                  "to": "App",
+                  "style": "response"
+                },
+                {
+                  "kind": "note",
+                  "start": 6900,
+                  "end": 7550,
+                  "target": "App",
+                  "text": "200, but no rt_8\nexpires in 5 min"
+                }
+              ]
+            },
+            {
+              "id": "degraded-retry",
+              "name": "The retry succeeds, on borrowed time",
+              "desc": "The user's request goes through, and in five minutes the app refreshes again. If the IdP is still down the same fallback fires; if the fallback budget is exhausted this becomes the 503 with Retry-After that the happy path never has to think about.",
+              "start": 7550,
+              "end": 8750,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 7550,
+                  "end": 8150,
+                  "edge": "e12",
+                  "from": "App",
+                  "to": "GW"
+                },
+                {
+                  "kind": "flow",
+                  "start": 8150,
+                  "end": 8750,
+                  "edge": "e13",
+                  "from": "GW",
+                  "to": "App",
+                  "style": "response"
+                },
+                {
+                  "kind": "dim",
+                  "start": 7550,
+                  "end": 8750,
+                  "target": "IdP"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 0,
+              "end": 6900,
+              "target": "App",
+              "label": "at_4"
+            },
+            {
+              "kind": "gauge",
+              "start": 0,
+              "end": 6900,
+              "target": "App",
+              "label": "access token",
+              "value": "at_4"
+            },
+            {
+              "kind": "set",
+              "start": 1300,
+              "end": 4900,
+              "target": "Auth",
+              "label": "refreshing"
+            },
+            {
+              "kind": "gauge",
+              "start": 2000,
+              "end": 8750,
+              "target": "Cache",
+              "label": "rotation",
+              "value": "7"
+            },
+            {
+              "kind": "set",
+              "start": 2000,
+              "end": 8750,
+              "target": "Cache",
+              "label": "family f_91 active"
+            },
+            {
+              "kind": "set",
+              "start": 3800,
+              "end": 8750,
+              "target": "IdP",
+              "label": "unreachable",
+              "value": "fail"
+            },
+            {
+              "kind": "set",
+              "start": 4900,
+              "end": 8750,
+              "target": "Auth",
+              "label": "degraded",
+              "value": "fail"
+            },
+            {
+              "kind": "gauge",
+              "start": 4900,
+              "end": 7550,
+              "target": "Auth",
+              "label": "fallback TTL",
+              "value": "5 min"
+            },
+            {
+              "kind": "set",
+              "start": 6900,
+              "end": 8750,
+              "target": "App",
+              "label": "at_5 · 5 min"
+            },
+            {
+              "kind": "gauge",
+              "start": 6900,
+              "end": 8750,
+              "target": "App",
+              "label": "access token",
+              "value": "at_5 (degraded)"
+            },
+            {
+              "kind": "gauge",
+              "start": 7550,
+              "end": 8750,
+              "target": "Auth",
+              "label": "fallback TTL",
+              "value": "4 min"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -107,5 +107,35 @@
     "title": "Inside Pod A",
     "entry": "pod-a.dgm",
     "files": ["pod-a.dgm"]
+  },
+  {
+    "id": "progressive-reveal",
+    "title": "Progressive reveal, v-click style",
+    "entry": "06-in-the-wild/01-progressive-reveal.dgm",
+    "files": ["06-in-the-wild/01-progressive-reveal.dgm"]
+  },
+  {
+    "id": "stepwise-greyed-out",
+    "title": "Step-by-step, greyed out",
+    "entry": "06-in-the-wild/02-stepwise-greyed-out.dgm",
+    "files": ["06-in-the-wild/02-stepwise-greyed-out.dgm"]
+  },
+  {
+    "id": "poller-sequence",
+    "title": "One polling cycle",
+    "entry": "06-in-the-wild/03-poller-sequence.dgm",
+    "files": ["06-in-the-wild/03-poller-sequence.dgm"]
+  },
+  {
+    "id": "auth-refresh-edge-cases",
+    "title": "Token refresh, three endings",
+    "entry": "06-in-the-wild/04-auth-refresh-edge-cases.dgm",
+    "files": ["06-in-the-wild/04-auth-refresh-edge-cases.dgm"]
+  },
+  {
+    "id": "claude-code-tool-call",
+    "title": "One Claude Code tool call",
+    "entry": "06-in-the-wild/05-claude-code-tool-call.dgm",
+    "files": ["06-in-the-wild/05-claude-code-tool-call.dgm"]
   }
 ]

@@ -1,0 +1,113 @@
+%% What actually happens when Claude Code runs a single tool call, end to end:
+%% one prompt, one round trip through the model, one Bash invocation against
+%% the repo, and the answer that comes back. Drawn for the people in
+%% anthropics/claude-code#14375
+%% (https://github.com/anthropics/claude-code/issues/14375) who use Claude
+%% Code to map out codebases and wanted real diagrams instead of ASCII art.
+%% ---
+%% The thing worth drawing here is that the model never touches your machine.
+%% It emits a `tool_use` block and stops; the harness — the CLI in your
+%% terminal — is what checks permissions, runs the tool, and feeds the output
+%% back as a `tool_result`. The loop repeats until the model replies with
+%% plain text instead of another `tool_use`.
+%% ---
+%% The counters are `gauge` state rather than narration, so scrubbing to any
+%% moment still tells you which turn of the loop you are in. The second
+%% scenario is a `variant`: it replays this one up to the permission check and
+%% then diverges, so the shared opening is written exactly once.
+flowchart LR
+  you[You]
+  cli[Claude Code TUI]
+  api[Anthropic API / model]
+  perm{Permission check}
+  bash[Bash tool]
+  fs[(Repo on disk)]
+
+  you --> cli
+  cli --> api
+  cli --> perm
+  perm --> bash
+  bash --> fs
+  bash --> cli
+
+scenario "one tool call, round trip" { speed: 1.0 }
+
+  step ask "You ask a question about the repo" {
+    desc: "\"Which tests cover the parser?\" is not answerable from the model's weights — it is a fact about files on your disk. Everything that follows exists to get that fact into the conversation."
+    flow you -> cli { label: "which tests cover the parser?", dur: 700ms }
+    gauge cli { label: "turn", value: 1 }
+  }
+
+  step send "The CLI sends the conversation and the tool schemas" {
+    desc: "The request is the whole conversation so far plus a list of the tools available — Bash, Read, Grep and the rest — each with its JSON schema. The model cannot call anything it was not handed a schema for."
+    flow cli -> api { label: "messages + tool schemas", dur: 700ms }
+    set api { badge: "thinking", state: busy }
+  }
+
+  step tool_use "The model answers with a tool call, not prose" {
+    desc: "This is the step people usually picture wrongly. The model does not run anything; it returns a `tool_use` block naming a tool and its arguments, and then it stops and waits. The turn is over until someone feeds it a result."
+    flow api -> cli { label: "tool_use: Bash(rg -n \"parser\" tests/)", dur: 700ms, style: response }
+    set api { badge: "tool_use" }
+    note api "no side effects here —\nthe model only emits JSON"
+  }
+
+  step permission "The harness stops and checks the rule" {
+    desc: "Before anything executes, the CLI matches the concrete command against your allow and deny rules. This gate is local, it is the reason the model's output is a request rather than an instruction, and it is the last point at which nothing has happened yet."
+    flow cli -> perm { label: "Bash(rg -n \"parser\" tests/)", dur: 600ms }
+    highlight perm { style: active }
+  }
+
+  step run "Allowed, so the tool runs against the repo" {
+    desc: "The command executes as your user, in your working directory, with your files — the same shell you would have typed it into. What comes back is ordinary stdout, capped and truncated by the harness rather than by the model."
+    set perm { badge: "allowed", state: ok }
+    flow perm -> bash { label: "execute", dur: 500ms }
+    flow bash -> fs { label: "rg -n \"parser\" tests/", dur: 600ms, delay: 500ms }
+    flow fs -> bash { label: "12 matches", dur: 500ms, delay: 1100ms, style: response }
+  }
+
+  step result "The output goes back as a tool_result" {
+    desc: "The result is appended to the same conversation as a `tool_result` block paired to the call's id, and the whole thing is sent again. That resend is the loop: turn two carries every token of turn one plus the tool's output."
+    flow bash -> cli { label: "tool_result: 12 matches", dur: 600ms, style: response }
+    flow cli -> api { label: "messages + tool_result", dur: 600ms, delay: 600ms }
+    gauge cli { label: "turn", value: 2 }
+    set api { badge: "thinking", state: busy }
+  }
+
+  step answer "Plain text ends the loop" {
+    desc: "The model now has the file list, so it replies with prose and no `tool_use` block — and that absence is the only thing that stops the loop. Had it needed one more grep, the diagram would simply run again from the permission check."
+    unset api
+    flow api -> cli { label: "text: tests/parser_test.go covers it", dur: 700ms, style: response }
+    flow cli -> you { label: "answer + the commands it ran", dur: 600ms, delay: 700ms, style: response }
+  }
+
+%% The interesting failure is not a broken tool, it is a tool that is never
+%% allowed to run. `until: permission` is inclusive, so this scenario replays
+%% the base through the gate and then tells a different ending — and the model
+%% still has to produce an answer, because a denial is just another
+%% `tool_result`.
+scenario "permission denied" { variant: "one tool call, round trip", until: permission, outcome: fail }
+
+  step denied "No rule matches, so nothing executes" {
+    desc: "The command hits the gate and is refused — either by a deny rule or because you declined the prompt. The ✕ is on the tool, not on the model: the Bash tool was never invoked and the repo was never read."
+    set perm { badge: "denied", state: error }
+    flow perm -> bash { label: "blocked", dur: 700ms, status: fail }
+    dim fs
+    note perm "no matching allow rule\nfor Bash(rg …)"
+  }
+
+  step relay "The denial is reported back like any other result" {
+    desc: "The harness does not silently drop the call. It sends a `tool_result` saying the tool was not permitted, which keeps the conversation well-formed — an unanswered `tool_use` would leave the model stuck mid-turn."
+    flow perm -> cli { label: "permission denied", dur: 600ms, style: response }
+    flow cli -> api { label: "tool_result: not permitted", dur: 600ms, delay: 600ms }
+    dim bash, fs
+    gauge cli { label: "turn", value: 2 }
+  }
+
+  step explain "The model answers without the tool" {
+    desc: "Given a denial, the model does what it can: it says what it wanted to run and why, and asks you to allow it or to paste the output. The loop still ends the same way it always does — with plain text and no `tool_use`."
+    unset api
+    unset perm
+    flow api -> cli { label: "text: I need to grep tests/ — allow Bash?", dur: 700ms, style: response }
+    flow cli -> you { label: "what it tried, and why it stopped", dur: 600ms, delay: 700ms, style: response }
+    dim bash, fs
+  }

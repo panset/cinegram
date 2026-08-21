@@ -1,0 +1,436 @@
+{
+  "version": 2,
+  "root": "01-progressive-reveal",
+  "views": [
+    {
+      "id": "01-progressive-reveal",
+      "title": "build it up",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% A `\u003cv-click\u003e`-style build-up of one Mermaid flowchart: seven steps, each\n%% revealing exactly one more piece of the architecture, with the narration a\n%% speaker would say over it. Asked for in slidevjs/slidev#1498\n%% (https://github.com/slidevjs/slidev/issues/1498), where duplicating the\n%% diagram per slide made elements shift and `visibility:hidden` left the\n%% arrows behind.\n%% ---\n%% Property 1 — the layout is computed once. There is a single diagram here,\n%% not one copy per slide. Mermaid lays out the whole graph, and each step\n%% only `hide`s the parts not introduced yet, so nothing ever shifts position\n%% as the build advances.\n%% ---\n%% Property 2 — an arrow appears with the node it points at. `hide` conceals\n%% an element and every edge that touches it, so there are no dangling arrows\n%% pointing into empty space the way `classDef Hidden visibility:hidden`\n%% leaves them.\n%% ---\n%% On a slide: hit Present, and Space, → or a click plays exactly the next\n%% build and stops — the same rhythm as clicking through `\u003cv-click\u003e`s, except\n%% the arrows animate and each build carries its own speaker note.\n%% ---\n%% The pattern: a stateful action with no `dur` spans exactly its own step, so\n%% each step re-`hide`s the whole not-yet-reached set. Read the `hide` lines\n%% top to bottom and you can see the reveal order at a glance.\nflowchart LR\n  browser[Browser]\n  cdn[CDN edge]\n  gw[API Gateway]\n  subgraph svc[Application services]\n    auth[Auth Service]\n    orders[Orders Service]\n  end\n  pg[(Postgres)]\n  queue[[Events Queue]]\n  mailer[Email Worker]\n  browser --\u003e cdn\n  cdn --\u003e gw\n  gw --\u003e auth\n  gw --\u003e orders\n  orders --\u003e pg\n  orders --\u003e queue\n  queue --\u003e mailer\n"
+      },
+      "nodes": [
+        {
+          "id": "browser",
+          "label": "Browser",
+          "shape": "rect"
+        },
+        {
+          "id": "cdn",
+          "label": "CDN edge",
+          "shape": "rect"
+        },
+        {
+          "id": "gw",
+          "label": "API Gateway",
+          "shape": "rect"
+        },
+        {
+          "id": "auth",
+          "label": "Auth Service",
+          "shape": "rect",
+          "group": "svc"
+        },
+        {
+          "id": "orders",
+          "label": "Orders Service",
+          "shape": "rect",
+          "group": "svc"
+        },
+        {
+          "id": "pg",
+          "label": "Postgres",
+          "shape": "cylinder"
+        },
+        {
+          "id": "queue",
+          "label": "Events Queue",
+          "shape": "subroutine"
+        },
+        {
+          "id": "mailer",
+          "label": "Email Worker",
+          "shape": "rect"
+        }
+      ],
+      "groups": [
+        {
+          "id": "svc",
+          "label": "Application services",
+          "children": [
+            "auth",
+            "orders"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "browser",
+          "to": "cdn",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "cdn",
+          "to": "gw",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "gw",
+          "to": "auth",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "gw",
+          "to": "orders",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "orders",
+          "to": "pg",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "orders",
+          "to": "queue",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e6",
+          "from": "queue",
+          "to": "mailer",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "build it up",
+          "duration": 4700,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "edge",
+              "name": "It starts at the browser",
+              "desc": "Everything a user does begins here, and the first hop is not our code at all — it is the CDN. Starting the build at the far left means the audience reads the system in the direction requests actually travel.",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "hide",
+                  "start": 0,
+                  "end": 600,
+                  "target": "gw"
+                },
+                {
+                  "kind": "hide",
+                  "start": 0,
+                  "end": 600,
+                  "target": "svc"
+                },
+                {
+                  "kind": "hide",
+                  "start": 0,
+                  "end": 600,
+                  "target": "auth"
+                },
+                {
+                  "kind": "hide",
+                  "start": 0,
+                  "end": 600,
+                  "target": "orders"
+                },
+                {
+                  "kind": "hide",
+                  "start": 0,
+                  "end": 600,
+                  "target": "pg"
+                },
+                {
+                  "kind": "hide",
+                  "start": 0,
+                  "end": 600,
+                  "target": "queue"
+                },
+                {
+                  "kind": "hide",
+                  "start": 0,
+                  "end": 600,
+                  "target": "mailer"
+                },
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "browser",
+                  "to": "cdn",
+                  "label": "GET /app"
+                }
+              ]
+            },
+            {
+              "id": "gateway",
+              "name": "The gateway is the only door in",
+              "desc": "Static assets stop at the CDN; anything dynamic goes on to a single gateway. Introducing it second sets up the point that no service is reachable from the internet directly.",
+              "start": 600,
+              "end": 1200,
+              "tracks": [
+                {
+                  "kind": "hide",
+                  "start": 600,
+                  "end": 1200,
+                  "target": "svc"
+                },
+                {
+                  "kind": "hide",
+                  "start": 600,
+                  "end": 1200,
+                  "target": "auth"
+                },
+                {
+                  "kind": "hide",
+                  "start": 600,
+                  "end": 1200,
+                  "target": "orders"
+                },
+                {
+                  "kind": "hide",
+                  "start": 600,
+                  "end": 1200,
+                  "target": "pg"
+                },
+                {
+                  "kind": "hide",
+                  "start": 600,
+                  "end": 1200,
+                  "target": "queue"
+                },
+                {
+                  "kind": "hide",
+                  "start": 600,
+                  "end": 1200,
+                  "target": "mailer"
+                },
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1200,
+                  "edge": "e1",
+                  "from": "cdn",
+                  "to": "gw",
+                  "label": "/api/* (cache miss)"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 600,
+                  "end": 1200,
+                  "target": "gw",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "who",
+              "name": "First the gateway asks who you are",
+              "desc": "Auth is not a step inside the orders service, it is a separate call the gateway makes before routing. Revealing it on its own is what makes that ordering land.",
+              "start": 1200,
+              "end": 1800,
+              "tracks": [
+                {
+                  "kind": "hide",
+                  "start": 1200,
+                  "end": 1800,
+                  "target": "orders"
+                },
+                {
+                  "kind": "hide",
+                  "start": 1200,
+                  "end": 1800,
+                  "target": "pg"
+                },
+                {
+                  "kind": "hide",
+                  "start": 1200,
+                  "end": 1800,
+                  "target": "queue"
+                },
+                {
+                  "kind": "hide",
+                  "start": 1200,
+                  "end": 1800,
+                  "target": "mailer"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1200,
+                  "end": 1800,
+                  "edge": "e2",
+                  "from": "gw",
+                  "to": "auth",
+                  "label": "verify bearer token"
+                }
+              ]
+            },
+            {
+              "id": "route",
+              "name": "Then the request reaches the business logic",
+              "desc": "Only now does the orders service appear, and it appears already inside the services box — the frame was measured with both services in it, so nothing on the slide moved when the second one arrived.",
+              "start": 1800,
+              "end": 2400,
+              "tracks": [
+                {
+                  "kind": "hide",
+                  "start": 1800,
+                  "end": 2400,
+                  "target": "pg"
+                },
+                {
+                  "kind": "hide",
+                  "start": 1800,
+                  "end": 2400,
+                  "target": "queue"
+                },
+                {
+                  "kind": "hide",
+                  "start": 1800,
+                  "end": 2400,
+                  "target": "mailer"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1800,
+                  "end": 2400,
+                  "edge": "e3",
+                  "from": "gw",
+                  "to": "orders",
+                  "label": "POST /api/orders"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1800,
+                  "end": 2400,
+                  "target": "orders",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "store",
+              "name": "The order is written down",
+              "desc": "One synchronous write, one source of truth. This is the last thing that happens before the user gets a response — everything revealed after this point is off the request path.",
+              "start": 2400,
+              "end": 3500,
+              "tracks": [
+                {
+                  "kind": "hide",
+                  "start": 2400,
+                  "end": 3500,
+                  "target": "queue"
+                },
+                {
+                  "kind": "hide",
+                  "start": 2400,
+                  "end": 3500,
+                  "target": "mailer"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2400,
+                  "end": 3000,
+                  "edge": "e4",
+                  "from": "orders",
+                  "to": "pg",
+                  "label": "INSERT order 8812"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3000,
+                  "end": 3500,
+                  "edge": "e4",
+                  "from": "pg",
+                  "to": "orders",
+                  "reverse": true,
+                  "label": "committed",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "publish",
+              "name": "The rest of the work is handed off",
+              "desc": "Instead of sending the confirmation email inline, the service publishes an event and returns. The queue arriving late in the build is deliberate: it is the moment the diagram stops being a request path.",
+              "start": 3500,
+              "end": 4100,
+              "tracks": [
+                {
+                  "kind": "hide",
+                  "start": 3500,
+                  "end": 4100,
+                  "target": "mailer"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3500,
+                  "end": 4100,
+                  "edge": "e5",
+                  "from": "orders",
+                  "to": "queue",
+                  "label": "order.created"
+                }
+              ]
+            },
+            {
+              "id": "notify",
+              "name": "And a worker picks it up later",
+              "desc": "The email worker is the only consumer today, and it can be slow, retry, or be down for an hour without the checkout ever noticing. That independence is the whole reason for the last two boxes.",
+              "start": 4100,
+              "end": 4700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 4100,
+                  "end": 4700,
+                  "edge": "e6",
+                  "from": "queue",
+                  "to": "mailer",
+                  "label": "order.created"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 4100,
+                  "end": 4700,
+                  "target": "mailer",
+                  "style": "active"
+                },
+                {
+                  "kind": "note",
+                  "start": 4100,
+                  "end": 4700,
+                  "target": "mailer",
+                  "text": "retries independently\nof the request",
+                  "side": "below"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
