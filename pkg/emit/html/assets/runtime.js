@@ -2467,23 +2467,43 @@
     // In sequence mode a flow uses the message path alone: it already spans
     // the two lifelines, and unioning the top-anchored actor boxes would pin
     // the camera to the top of the page.
+    //
+    // That pin is also why a participant is never framed by its element in
+    // sequence mode while a message is in flight: the element is the actor
+    // box at the top of the page, but what the step is about is that actor's
+    // column at the height of this step's messages — the same place
+    // anchorRect puts a note. So a participant's rect is its column cut to
+    // the flows' vertical span, and a focused participant still shows the
+    // messages it is busy with. Without a flow in the step there is nothing
+    // to cut to, and the box itself is the only honest answer.
     function rectOf(step) {
-      var rect = null, focused = false, i, tr;
+      var rect = null, flows = null, focused = false, i, tr, e;
+      for (i = 0; i < step.tracks.length; i++) {
+        tr = step.tracks[i];
+        if (tr.kind !== 'flow') continue;
+        e = tr.edge && self.edges[tr.edge];
+        if (e && e.path) flows = union(flows, localRect(e.path));
+      }
+      function targetRect(id) {
+        var el = anchor(id);
+        if (!el) return null;
+        var r = localRect(el);
+        if (self.sequence && flows) return { x: r.x, y: flows.y, w: r.w, h: flows.h };
+        return r;
+      }
       for (i = 0; i < step.tracks.length; i++) {
         tr = step.tracks[i];
         if (tr.kind === 'focus' && tr.target) {
           if (!focused) { rect = null; focused = true; }
-          var f = anchor(tr.target);
-          if (f) rect = union(rect, localRect(f));
+          rect = union(rect, targetRect(tr.target));
         }
       }
-      if (focused) return rect;
+      if (focused) return self.sequence ? union(rect, flows) : rect;
+      rect = flows;
       for (i = 0; i < step.tracks.length; i++) {
         tr = step.tracks[i];
         if (tr.kind === 'scene') continue;
         if (tr.kind === 'flow') {
-          var e = tr.edge && self.edges[tr.edge];
-          if (e && e.path) rect = union(rect, localRect(e.path));
           if (!self.sequence) {
             var from = tr.from && anchor(tr.from);
             var to = tr.to && anchor(tr.to);
@@ -2491,8 +2511,7 @@
             if (to) rect = union(rect, localRect(to));
           }
         } else if (tr.target) {
-          var el = anchor(tr.target);
-          if (el) rect = union(rect, localRect(el));
+          rect = union(rect, targetRect(tr.target));
         }
       }
       return rect;
