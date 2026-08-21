@@ -98,6 +98,16 @@ lacks an edge the animation needs, say so and ask — don't silently add one.
 To check you kept it intact: `cinegram mermaid out.dgm` prints the diagram
 half back out; it should match what the user gave you.
 
+**If there is no diagram yet** — the ask is "understand this workflow / request
+path / codebase and create a cinegram" — draw it first, then treat that drawing
+as the user's. Read the code, config or docs the ask points at; write a small
+Mermaid diagram of it (5–9 nodes, real ids, the edges the story will travel —
+`flowchart LR` for a request path or pipeline, `sequenceDiagram` for a
+protocol, `stateDiagram-v2` for a lifecycle); show it and say what you left
+out; only then append the animation. From that point the rule above applies
+unchanged: the diagram half is fixed, and anything the animation turns out to
+need is a change you ask about, not one you slip in.
+
 ### 2. Write the scenario
 
 Read `references/language.md` first. The rules that most often trip authors:

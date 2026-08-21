@@ -25,9 +25,25 @@ Cursor (per project — run from the project root):
 curl -fsSL https://raw.githubusercontent.com/panset/cinegram/main/skills/cinegram/install.sh | sh -s -- cursor
 ```
 
-Then just ask: *"animate this mermaid diagram: …"*. (In the very session
-that installed it, add "read the installed SKILL.md and follow it" — new
-skills are discovered at session start.)
+## Try asking
+
+Start a new session and say what you want in plain words — the agent does the
+rest (writes the `.dgm`, lints it until clean, previews it as one self-contained
+HTML file, fetches the `cinegram` binary if you have none):
+
+- *"Animate this Mermaid diagram with cinegram and give me the HTML: …"* — you
+  have a diagram; it gets a walkthrough.
+- *"Understand the request flow in `src/api/` and create a cinegram of it"* — you
+  have code; the agent draws the Mermaid first, then animates it.
+- *"Read `.github/workflows/deploy.yml`, draw the pipeline, and animate a
+  deploy"* — same, for a workflow.
+- *"Add a failure path where the payment provider times out"* — an existing
+  cinegram gets a `variant` scenario.
+- *"Narrate it"* / *"record it as a GIF"* / *"make a contact sheet"* — the
+  other outputs, once there is a `.dgm`.
+
+In the very session that installed it, add *"read the installed SKILL.md and
+follow it"* — new skills are discovered at session start.
 
 To share the skill with a project's whole team instead, commit `SKILL.md`
 and `references/language.md` under `<project>/.claude/skills/cinegram/`
