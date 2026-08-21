@@ -24,7 +24,9 @@ failure paths, narration and storyboards, `03-interaction/` is clicking and
 drilling in, `04-diagram-types/` proves the same language over `sequence-`
 and `stateDiagram`, and `05-ai-systems/` animates what people are building
 with models — an agent's tool loop, a multi-agent fan-out, a RAG pipeline with
-its cache cold, and the MCP handshake `cinegram mcp` performs. The numeric
+its cache cold, and the MCP handshake `cinegram mcp` performs. `06-in-the-wild/`
+answers questions people actually asked — in Mermaid, Slidev and Claude Code
+issue trackers and on Reddit — each built on the asker's own diagram. The numeric
 prefixes are ordering: they show in a page's
 URL and nowhere a reader looks, since titles come from the diagram itself.
 

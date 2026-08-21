@@ -24,3 +24,7 @@ the upgrade · tcp connection · leader failure and re-election
 
 one question, four turns · fan out, barrier, synthesise · rag pipeline · launch, negotiate, call
 
+## [in the wild](06-in-the-wild/index.md)
+
+build it up · walk the pipeline · one polling cycle · auth refresh edge cases · claude code tool call
+

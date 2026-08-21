@@ -1,0 +1,93 @@
+%% A `<v-click>`-style build-up of one Mermaid flowchart: seven steps, each
+%% revealing exactly one more piece of the architecture, with the narration a
+%% speaker would say over it. Asked for in slidevjs/slidev#1498
+%% (https://github.com/slidevjs/slidev/issues/1498), where duplicating the
+%% diagram per slide made elements shift and `visibility:hidden` left the
+%% arrows behind.
+%% ---
+%% Property 1 — the layout is computed once. There is a single diagram here,
+%% not one copy per slide. Mermaid lays out the whole graph, and each step
+%% only `hide`s the parts not introduced yet, so nothing ever shifts position
+%% as the build advances.
+%% ---
+%% Property 2 — an arrow appears with the node it points at. `hide` conceals
+%% an element and every edge that touches it, so there are no dangling arrows
+%% pointing into empty space the way `classDef Hidden visibility:hidden`
+%% leaves them.
+%% ---
+%% On a slide: hit Present, and Space, → or a click plays exactly the next
+%% build and stops — the same rhythm as clicking through `<v-click>`s, except
+%% the arrows animate and each build carries its own speaker note.
+%% ---
+%% The pattern: a stateful action with no `dur` spans exactly its own step, so
+%% each step re-`hide`s the whole not-yet-reached set. Read the `hide` lines
+%% top to bottom and you can see the reveal order at a glance.
+flowchart LR
+  browser[Browser]
+  cdn[CDN edge]
+  gw[API Gateway]
+
+  subgraph svc[Application services]
+    auth[Auth Service]
+    orders[Orders Service]
+  end
+
+  pg[(Postgres)]
+  queue[[Events Queue]]
+  mailer[Email Worker]
+
+  browser --> cdn
+  cdn --> gw
+  gw --> auth
+  gw --> orders
+  orders --> pg
+  orders --> queue
+  queue --> mailer
+
+scenario "build it up" { speed: 1.0 }
+
+  step edge "It starts at the browser" {
+    desc: "Everything a user does begins here, and the first hop is not our code at all — it is the CDN. Starting the build at the far left means the audience reads the system in the direction requests actually travel."
+    hide gw, svc, auth, orders, pg, queue, mailer
+    flow browser -> cdn { label: "GET /app", dur: 600ms }
+  }
+
+  step gateway "The gateway is the only door in" {
+    desc: "Static assets stop at the CDN; anything dynamic goes on to a single gateway. Introducing it second sets up the point that no service is reachable from the internet directly."
+    hide svc, auth, orders, pg, queue, mailer
+    flow cdn -> gw { label: "/api/* (cache miss)", dur: 600ms }
+    highlight gw { style: active }
+  }
+
+  step who "First the gateway asks who you are" {
+    desc: "Auth is not a step inside the orders service, it is a separate call the gateway makes before routing. Revealing it on its own is what makes that ordering land."
+    hide orders, pg, queue, mailer
+    flow gw -> auth { label: "verify bearer token", dur: 600ms }
+  }
+
+  step route "Then the request reaches the business logic" {
+    desc: "Only now does the orders service appear, and it appears already inside the services box — the frame was measured with both services in it, so nothing on the slide moved when the second one arrived."
+    hide pg, queue, mailer
+    flow gw -> orders { label: "POST /api/orders", dur: 600ms }
+    highlight orders { style: active }
+  }
+
+  step store "The order is written down" {
+    desc: "One synchronous write, one source of truth. This is the last thing that happens before the user gets a response — everything revealed after this point is off the request path."
+    hide queue, mailer
+    flow orders -> pg { label: "INSERT order 8812", dur: 600ms }
+    flow pg -> orders { label: "committed", dur: 500ms, delay: 600ms, style: response }
+  }
+
+  step publish "The rest of the work is handed off" {
+    desc: "Instead of sending the confirmation email inline, the service publishes an event and returns. The queue arriving late in the build is deliberate: it is the moment the diagram stops being a request path."
+    hide mailer
+    flow orders -> queue { label: "order.created", dur: 600ms }
+  }
+
+  step notify "And a worker picks it up later" {
+    desc: "The email worker is the only consumer today, and it can be slow, retry, or be down for an hour without the checkout ever noticing. That independence is the whole reason for the last two boxes."
+    flow queue -> mailer { label: "order.created", dur: 600ms }
+    highlight mailer { style: active }
+    note mailer "retries independently\nof the request" { side: below }
+  }

@@ -94,3 +94,4 @@ The handshake `cinegram mcp` performs. An agent host launches the server on stdi
     ```
 
 ← [rag pipeline](../05-ai-systems/03-rag-pipeline.md)  
+→ [build it up](../06-in-the-wild/01-progressive-reveal.md)

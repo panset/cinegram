@@ -1,0 +1,131 @@
+%% A twenty-message poller-and-webhook sequence diagram, exactly as posted in
+%% mermaidjs/mermaid-live-editor#53
+%% (https://github.com/mermaidjs/mermaid-live-editor/issues/53) — the 2019
+%% "Animated Diagrams" request whose author found larger diagrams "a bit
+%% overwhelming" and built a proof-of-concept to animate this one.
+%% ---
+%% All twenty messages below are exactly as posted — same participants, same
+%% numbering, same order. Nothing under `sequenceDiagram` has been touched.
+%% ---
+%% What follows the diagram is the animation: one scenario that groups those
+%% twenty arrows into nine beats, each with a sentence or two saying what the
+%% poller is actually doing there. The diagram stays whole and static on the
+%% page, and the walkthrough decides what you look at, in what order, at your
+%% pace.
+sequenceDiagram
+participant API
+participant poller
+participant pollerState
+participant handler
+participant Service
+poller->>poller: 1. every 30 mins
+poller->>pollerState: 2. request poller state
+pollerState->>poller: 3. poller state response
+poller->>poller: 4. for each config
+poller->>API: 5. request latest data
+API->>poller: 6. latest data response
+poller->>pollerState: 7. store current state
+poller->>handler: 8. for each change, call an endpoint (like a webhook would)
+handler->>API: 9. request additional data
+API->>handler: 10. additional data response
+handler->>Service: 11. request additional data
+Service->>handler: 12. additional data response
+handler->>Service: 13. create user
+Service->>Service: 14. event changes state
+Service->>handler: 15. an event happened
+handler->>Service: 16. request additional data
+Service->>handler: 17. additional data response
+handler->>API: 18. request additional data
+API->>handler: 19. additional data response
+handler->>API: 20. update state
+
+scenario "one polling cycle" { speed: 1.0 }
+
+  step wake "Wake up and remember where you left off" {
+    desc: "A poller has no one to tell it that something changed, so it asks on a timer — here every thirty minutes. Before it can ask anything useful it loads its own saved state, because 'what is new' only means something relative to what it saw last time."
+    focus poller
+    set poller { badge: "running", state: active }
+    seq {
+      flow poller -> poller { dur: 600ms, msg: 1 }
+      flow poller -> pollerState { dur: 600ms, msg: 1 }
+      flow pollerState -> poller { dur: 600ms, style: response, msg: 1 }
+    }
+  }
+
+  step fetch "For each config, fetch the latest from the API" {
+    desc: "One poller usually watches many things, so it loops over its configured targets and pulls the current data for each. This is the expensive half of the cycle and the reason polling intervals exist at all: every config here is a round trip to somebody else's API."
+    focus poller
+    seq {
+      flow poller -> poller { dur: 600ms, msg: 2 }
+      flow poller -> API { dur: 700ms, msg: 1 }
+      flow API -> poller { dur: 700ms, style: response, msg: 1 }
+    }
+  }
+
+  step store "Diff against the old state and write the new one" {
+    desc: "The poller compares what it just fetched with what it loaded in step one, and the difference is the whole product of the cycle. It writes the fresh snapshot back immediately, so a crash later on cannot make it replay work it has already done."
+    focus pollerState
+    flow poller -> pollerState { dur: 700ms, msg: 2 }
+    gauge poller { label: "changes", value: "3" }
+    set pollerState { badge: "snapshot saved" }
+  }
+
+  step dispatch "Turn each change into a webhook-shaped call" {
+    desc: "Now the poller stops being a poller. For every change it found it calls the handler exactly the way a real webhook would, which means everything downstream is written once and does not care whether the trigger was a push or a poll."
+    focus handler
+    flow poller -> handler { dur: 800ms, msg: 1 }
+    set handler { badge: "handling change" }
+    set poller { badge: "waiting" }
+  }
+
+  step enrich "The handler enriches the change from both systems" {
+    desc: "A change notification is thin — usually an id and a verb. The handler has to fetch the rest before it can act, and it needs it from two places: the API the poller was watching, and the Service that will own the result."
+    focus handler
+    gauge handler { label: "lookups", value: "2" }
+    seq {
+      flow handler -> API { dur: 550ms, msg: 1 }
+      flow API -> handler { dur: 550ms, style: response, msg: 1 }
+      flow handler -> Service { dur: 550ms, msg: 1 }
+      flow Service -> handler { dur: 550ms, style: response, msg: 1 }
+    }
+  }
+
+  step create "Create the user in the Service" {
+    desc: "This is the one write in the whole cycle that changes the outside world. Everything before it was reading; everything after it is reacting to the fact that this happened."
+    focus Service
+    flow handler -> Service { dur: 800ms, msg: 2 }
+    set Service { badge: "creating" }
+  }
+
+  step event "The Service changes state and fans an event back out" {
+    desc: "The write is not the end of it: creating the user moves the Service through its own state machine, and that transition emits an event of its own. The handler that caused it is now also a listener for it — which is exactly where a fan-out like this starts to get hard to follow on a static diagram."
+    focus Service
+    seq {
+      flow Service -> Service { dur: 600ms, msg: 1 }
+      flow Service -> handler { dur: 700ms, msg: 2 }
+    }
+    set Service { badge: "user created" }
+  }
+
+  step reenrich "The handler enriches again, for the new event" {
+    desc: "The event carries no more detail than the first notification did, so the handler goes back to the Service for the current picture. The repetition is not waste — the state it read in step five is stale now, because step six is what changed it."
+    focus handler
+    gauge handler { label: "lookups", value: "3" }
+    seq {
+      flow handler -> Service { dur: 600ms, msg: 3 }
+      flow Service -> handler { dur: 600ms, style: response, msg: 3 }
+    }
+  }
+
+  step update "Write the result back to the API" {
+    desc: "The handler reads the API one last time to avoid clobbering anything that moved while it worked, then writes the new state back. The cycle closes: in thirty minutes the poller will read that state as its baseline and the whole page replays."
+    focus API
+    seq {
+      flow handler -> API { dur: 550ms, msg: 2 }
+      flow API -> handler { dur: 550ms, style: response, msg: 2 }
+      flow handler -> API { dur: 700ms, msg: 3 }
+    }
+    unset handler
+    set poller { badge: "idle" }
+    gauge poller { label: "changes", value: "0" }
+  }

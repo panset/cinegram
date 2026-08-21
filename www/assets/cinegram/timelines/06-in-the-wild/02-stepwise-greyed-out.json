@@ -1,0 +1,464 @@
+{
+  "version": 2,
+  "root": "02-stepwise-greyed-out",
+  "views": [
+    {
+      "id": "02-stepwise-greyed-out",
+      "title": "walk the pipeline",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "TD",
+        "mermaid": "%% Step-by-step presentation of one diagram, greyed out rather than hidden:\n%% the whole pipeline is on screen from the first beat, and the parts the\n%% story has not reached yet are faded back instead of removed. Asked for in\n%% mermaid-js/mermaid#7710 (https://github.com/mermaid-js/mermaid/issues/7710):\n%% advance on click or space, grey out what is still to come, and have a way\n%% to highlight specific elements.\n%% ---\n%% Why fade instead of hide: the audience can see the shape of the whole\n%% pipeline immediately and still knows exactly where you are. `dim` is the\n%% action for that. Because a stateful action with no `dur` lasts exactly one\n%% step, each step simply re-`dim`s whatever is still ahead of it — so the\n%% grey set shrinks by one as you advance.\n%% ---\n%% `highlight` is the other half: it takes any list of ids, so it emphasises\n%% one node, several nodes, or a whole subgraph in a single line. The last\n%% step lights the entire green path at once with one `highlight release`.\n%% ---\n%% Nothing here is removed from the layout, so nothing ever moves, and\n%% scrubbing backwards restores the exact grey/lit state of any earlier step.\n%% ---\n%% To present it: hit Present, then Space, → or a click on the diagram plays\n%% exactly the next step and stops; ← goes back and 1–9 jump to a step.\nflowchart TD\n  push[Push to main]\n  build[Build image]\n  tests{Tests pass?}\n  notify[Notify author]\n  subgraph release[Release path]\n    stage[Deploy to staging]\n    smoke[Smoke checks]\n    prod[Deploy to production]\n  end\n  push --\u003e build\n  build --\u003e tests\n  tests --\u003e|no| notify\n  tests --\u003e|yes| stage\n  stage --\u003e smoke\n  smoke --\u003e prod\n"
+      },
+      "nodes": [
+        {
+          "id": "push",
+          "label": "Push to main",
+          "shape": "rect"
+        },
+        {
+          "id": "build",
+          "label": "Build image",
+          "shape": "rect"
+        },
+        {
+          "id": "tests",
+          "label": "Tests pass?",
+          "shape": "rhombus"
+        },
+        {
+          "id": "notify",
+          "label": "Notify author",
+          "shape": "rect"
+        },
+        {
+          "id": "stage",
+          "label": "Deploy to staging",
+          "shape": "rect",
+          "group": "release"
+        },
+        {
+          "id": "smoke",
+          "label": "Smoke checks",
+          "shape": "rect",
+          "group": "release"
+        },
+        {
+          "id": "prod",
+          "label": "Deploy to production",
+          "shape": "rect",
+          "group": "release"
+        }
+      ],
+      "groups": [
+        {
+          "id": "release",
+          "label": "Release path",
+          "children": [
+            "stage",
+            "smoke",
+            "prod"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "push",
+          "to": "build",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "build",
+          "to": "tests",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "tests",
+          "to": "notify",
+          "label": "no",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "tests",
+          "to": "stage",
+          "label": "yes",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "stage",
+          "to": "smoke",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "smoke",
+          "to": "prod",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "walk the pipeline",
+          "duration": 5000,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "commit",
+              "name": "A commit lands on main",
+              "desc": "Everything downstream is triggered by this one event, so it is the only lit box on screen. The rest of the pipeline is already drawn — greyed, not missing — which tells the audience how much is still to come.",
+              "start": 0,
+              "end": 800,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 800,
+                  "target": "build"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 800,
+                  "target": "tests"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 800,
+                  "target": "notify"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 800,
+                  "target": "release"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 800,
+                  "target": "stage"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 800,
+                  "target": "smoke"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 800,
+                  "target": "prod"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 800,
+                  "target": "push",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "image",
+              "name": "CI builds an image",
+              "desc": "The build is the first thing that can fail, and it fails for boring reasons: a missing dependency, a compile error. Note that it happens once — the same artifact is what every later stage promotes.",
+              "start": 800,
+              "end": 1400,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 800,
+                  "end": 1400,
+                  "target": "tests"
+                },
+                {
+                  "kind": "dim",
+                  "start": 800,
+                  "end": 1400,
+                  "target": "notify"
+                },
+                {
+                  "kind": "dim",
+                  "start": 800,
+                  "end": 1400,
+                  "target": "release"
+                },
+                {
+                  "kind": "dim",
+                  "start": 800,
+                  "end": 1400,
+                  "target": "stage"
+                },
+                {
+                  "kind": "dim",
+                  "start": 800,
+                  "end": 1400,
+                  "target": "smoke"
+                },
+                {
+                  "kind": "dim",
+                  "start": 800,
+                  "end": 1400,
+                  "target": "prod"
+                },
+                {
+                  "kind": "flow",
+                  "start": 800,
+                  "end": 1400,
+                  "edge": "e0",
+                  "from": "push",
+                  "to": "build",
+                  "label": "webhook: sha 4f2c9a1"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 800,
+                  "end": 1400,
+                  "target": "build",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "verify",
+              "name": "The test suite runs against that image",
+              "desc": "This is the gate, and it is the only place the pipeline branches. Until it answers, both the notify box and the whole release path stay grey — the diagram is honestly showing that neither outcome has been chosen yet.",
+              "start": 1400,
+              "end": 2100,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 1400,
+                  "end": 2100,
+                  "target": "notify"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1400,
+                  "end": 2100,
+                  "target": "release"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1400,
+                  "end": 2100,
+                  "target": "stage"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1400,
+                  "end": 2100,
+                  "target": "smoke"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1400,
+                  "end": 2100,
+                  "target": "prod"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1400,
+                  "end": 2100,
+                  "edge": "e1",
+                  "from": "build",
+                  "to": "tests",
+                  "label": "412 tests"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1400,
+                  "end": 2100,
+                  "target": "tests",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "verdict",
+              "name": "Green, so the no-branch is retired",
+              "desc": "The suite passes and the pipeline takes the yes edge. The notify box stays grey for the rest of the run: dimming the road not taken is more useful than deleting it, because the audience can still ask what would have happened.",
+              "start": 2100,
+              "end": 2800,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 2100,
+                  "end": 2800,
+                  "target": "notify"
+                },
+                {
+                  "kind": "dim",
+                  "start": 2100,
+                  "end": 2800,
+                  "target": "smoke"
+                },
+                {
+                  "kind": "dim",
+                  "start": 2100,
+                  "end": 2800,
+                  "target": "prod"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2100,
+                  "end": 2800,
+                  "edge": "e3",
+                  "from": "tests",
+                  "to": "stage",
+                  "label": "yes · 0 failures"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 2100,
+                  "end": 2800,
+                  "target": "stage",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "probe",
+              "name": "Staging gets a real request",
+              "desc": "Smoke checks are not the test suite again — they hit the deployed service over the network, which is the first time configuration, secrets and DNS are exercised at all.",
+              "start": 2800,
+              "end": 3500,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 2800,
+                  "end": 3500,
+                  "target": "notify"
+                },
+                {
+                  "kind": "dim",
+                  "start": 2800,
+                  "end": 3500,
+                  "target": "prod"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2800,
+                  "end": 3500,
+                  "edge": "e4",
+                  "from": "stage",
+                  "to": "smoke",
+                  "label": "GET /healthz + 3 journeys"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 2800,
+                  "end": 3500,
+                  "target": "smoke",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "ship",
+              "name": "Production takes the same artifact",
+              "desc": "Nothing is rebuilt here; the image that passed the tests and the smoke checks is the image that ships. That is the property the whole pipeline exists to guarantee.",
+              "start": 3500,
+              "end": 4200,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 3500,
+                  "end": 4200,
+                  "target": "notify"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3500,
+                  "end": 4200,
+                  "edge": "e5",
+                  "from": "smoke",
+                  "to": "prod",
+                  "label": "promote app:4f2c9a1"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 3500,
+                  "end": 4200,
+                  "target": "prod",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "whole",
+              "name": "The green path, all at once",
+              "desc": "One highlight naming a whole subgraph lights the three release stages together. Use it to close a walkthrough: the audience has seen the steps individually and now sees the shape they make.",
+              "start": 4200,
+              "end": 5000,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 4200,
+                  "end": 5000,
+                  "target": "notify"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 4200,
+                  "end": 5000,
+                  "target": "release"
+                },
+                {
+                  "kind": "note",
+                  "start": 4200,
+                  "end": 5000,
+                  "target": "release",
+                  "text": "one artifact, three gates",
+                  "side": "right"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "gauge",
+              "start": 800,
+              "end": 5000,
+              "target": "build",
+              "label": "artifact",
+              "value": "app:4f2c9a1"
+            },
+            {
+              "kind": "gauge",
+              "start": 2100,
+              "end": 5000,
+              "target": "tests",
+              "label": "result",
+              "value": "412 / 412"
+            },
+            {
+              "kind": "gauge",
+              "start": 3500,
+              "end": 5000,
+              "target": "prod",
+              "label": "live",
+              "value": "app:4f2c9a1"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,601 @@
+{
+  "version": 2,
+  "root": "03-poller-sequence",
+  "views": [
+    {
+      "id": "03-poller-sequence",
+      "title": "one polling cycle",
+      "diagram": {
+        "type": "sequenceDiagram",
+        "mermaid": "%% A twenty-message poller-and-webhook sequence diagram, exactly as posted in\n%% mermaidjs/mermaid-live-editor#53\n%% (https://github.com/mermaidjs/mermaid-live-editor/issues/53) — the 2019\n%% \"Animated Diagrams\" request whose author found larger diagrams \"a bit\n%% overwhelming\" and built a proof-of-concept to animate this one.\n%% ---\n%% All twenty messages below are exactly as posted — same participants, same\n%% numbering, same order. Nothing under `sequenceDiagram` has been touched.\n%% ---\n%% What follows the diagram is the animation: one scenario that groups those\n%% twenty arrows into nine beats, each with a sentence or two saying what the\n%% poller is actually doing there. The diagram stays whole and static on the\n%% page, and the walkthrough decides what you look at, in what order, at your\n%% pace.\nsequenceDiagram\n  participant API\n  participant poller\n  participant pollerState\n  participant handler\n  participant Service\n  poller-\u003e\u003epoller: 1. every 30 mins\n  poller-\u003e\u003epollerState: 2. request poller state\n  pollerState-\u003e\u003epoller: 3. poller state response\n  poller-\u003e\u003epoller: 4. for each config\n  poller-\u003e\u003eAPI: 5. request latest data\n  API-\u003e\u003epoller: 6. latest data response\n  poller-\u003e\u003epollerState: 7. store current state\n  poller-\u003e\u003ehandler: 8. for each change, call an endpoint (like a webhook would)\n  handler-\u003e\u003eAPI: 9. request additional data\n  API-\u003e\u003ehandler: 10. additional data response\n  handler-\u003e\u003eService: 11. request additional data\n  Service-\u003e\u003ehandler: 12. additional data response\n  handler-\u003e\u003eService: 13. create user\n  Service-\u003e\u003eService: 14. event changes state\n  Service-\u003e\u003ehandler: 15. an event happened\n  handler-\u003e\u003eService: 16. request additional data\n  Service-\u003e\u003ehandler: 17. additional data response\n  handler-\u003e\u003eAPI: 18. request additional data\n  API-\u003e\u003ehandler: 19. additional data response\n  handler-\u003e\u003eAPI: 20. update state\n\n"
+      },
+      "nodes": [
+        {
+          "id": "API",
+          "label": "API",
+          "shape": "actor"
+        },
+        {
+          "id": "poller",
+          "label": "poller",
+          "shape": "actor"
+        },
+        {
+          "id": "pollerState",
+          "label": "pollerState",
+          "shape": "actor"
+        },
+        {
+          "id": "handler",
+          "label": "handler",
+          "shape": "actor"
+        },
+        {
+          "id": "Service",
+          "label": "Service",
+          "shape": "actor"
+        }
+      ],
+      "groups": [],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "poller",
+          "to": "poller",
+          "label": "1. every 30 mins",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "poller",
+          "to": "pollerState",
+          "label": "2. request poller state",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "pollerState",
+          "to": "poller",
+          "label": "3. poller state response",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "poller",
+          "to": "poller",
+          "label": "4. for each config",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "poller",
+          "to": "API",
+          "label": "5. request latest data",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "API",
+          "to": "poller",
+          "label": "6. latest data response",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e6",
+          "from": "poller",
+          "to": "pollerState",
+          "label": "7. store current state",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e7",
+          "from": "poller",
+          "to": "handler",
+          "label": "8. for each change, call an endpoint (like a webhook would)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e8",
+          "from": "handler",
+          "to": "API",
+          "label": "9. request additional data",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e9",
+          "from": "API",
+          "to": "handler",
+          "label": "10. additional data response",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e10",
+          "from": "handler",
+          "to": "Service",
+          "label": "11. request additional data",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e11",
+          "from": "Service",
+          "to": "handler",
+          "label": "12. additional data response",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e12",
+          "from": "handler",
+          "to": "Service",
+          "label": "13. create user",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e13",
+          "from": "Service",
+          "to": "Service",
+          "label": "14. event changes state",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e14",
+          "from": "Service",
+          "to": "handler",
+          "label": "15. an event happened",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e15",
+          "from": "handler",
+          "to": "Service",
+          "label": "16. request additional data",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e16",
+          "from": "Service",
+          "to": "handler",
+          "label": "17. additional data response",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e17",
+          "from": "handler",
+          "to": "API",
+          "label": "18. request additional data",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e18",
+          "from": "API",
+          "to": "handler",
+          "label": "19. additional data response",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e19",
+          "from": "handler",
+          "to": "API",
+          "label": "20. update state",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "one polling cycle",
+          "duration": 12600,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "wake",
+              "name": "Wake up and remember where you left off",
+              "desc": "A poller has no one to tell it that something changed, so it asks on a timer — here every thirty minutes. Before it can ask anything useful it loads its own saved state, because 'what is new' only means something relative to what it saw last time.",
+              "start": 0,
+              "end": 1800,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 0,
+                  "end": 1800,
+                  "target": "poller"
+                },
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "poller",
+                  "to": "poller"
+                },
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1200,
+                  "edge": "e1",
+                  "from": "poller",
+                  "to": "pollerState"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1200,
+                  "end": 1800,
+                  "edge": "e2",
+                  "from": "pollerState",
+                  "to": "poller",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "fetch",
+              "name": "For each config, fetch the latest from the API",
+              "desc": "One poller usually watches many things, so it loops over its configured targets and pulls the current data for each. This is the expensive half of the cycle and the reason polling intervals exist at all: every config here is a round trip to somebody else's API.",
+              "start": 1800,
+              "end": 3800,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 1800,
+                  "end": 3800,
+                  "target": "poller"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1800,
+                  "end": 2400,
+                  "edge": "e3",
+                  "from": "poller",
+                  "to": "poller"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2400,
+                  "end": 3100,
+                  "edge": "e4",
+                  "from": "poller",
+                  "to": "API"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3100,
+                  "end": 3800,
+                  "edge": "e5",
+                  "from": "API",
+                  "to": "poller",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "store",
+              "name": "Diff against the old state and write the new one",
+              "desc": "The poller compares what it just fetched with what it loaded in step one, and the difference is the whole product of the cycle. It writes the fresh snapshot back immediately, so a crash later on cannot make it replay work it has already done.",
+              "start": 3800,
+              "end": 4500,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 3800,
+                  "end": 4500,
+                  "target": "pollerState"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3800,
+                  "end": 4500,
+                  "edge": "e6",
+                  "from": "poller",
+                  "to": "pollerState"
+                }
+              ]
+            },
+            {
+              "id": "dispatch",
+              "name": "Turn each change into a webhook-shaped call",
+              "desc": "Now the poller stops being a poller. For every change it found it calls the handler exactly the way a real webhook would, which means everything downstream is written once and does not care whether the trigger was a push or a poll.",
+              "start": 4500,
+              "end": 5300,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 4500,
+                  "end": 5300,
+                  "target": "handler"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4500,
+                  "end": 5300,
+                  "edge": "e7",
+                  "from": "poller",
+                  "to": "handler"
+                }
+              ]
+            },
+            {
+              "id": "enrich",
+              "name": "The handler enriches the change from both systems",
+              "desc": "A change notification is thin — usually an id and a verb. The handler has to fetch the rest before it can act, and it needs it from two places: the API the poller was watching, and the Service that will own the result.",
+              "start": 5300,
+              "end": 7500,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 5300,
+                  "end": 7500,
+                  "target": "handler"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5300,
+                  "end": 5850,
+                  "edge": "e8",
+                  "from": "handler",
+                  "to": "API"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5850,
+                  "end": 6400,
+                  "edge": "e9",
+                  "from": "API",
+                  "to": "handler",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 6400,
+                  "end": 6950,
+                  "edge": "e10",
+                  "from": "handler",
+                  "to": "Service"
+                },
+                {
+                  "kind": "flow",
+                  "start": 6950,
+                  "end": 7500,
+                  "edge": "e11",
+                  "from": "Service",
+                  "to": "handler",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "create",
+              "name": "Create the user in the Service",
+              "desc": "This is the one write in the whole cycle that changes the outside world. Everything before it was reading; everything after it is reacting to the fact that this happened.",
+              "start": 7500,
+              "end": 8300,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 7500,
+                  "end": 8300,
+                  "target": "Service"
+                },
+                {
+                  "kind": "flow",
+                  "start": 7500,
+                  "end": 8300,
+                  "edge": "e12",
+                  "from": "handler",
+                  "to": "Service"
+                }
+              ]
+            },
+            {
+              "id": "event",
+              "name": "The Service changes state and fans an event back out",
+              "desc": "The write is not the end of it: creating the user moves the Service through its own state machine, and that transition emits an event of its own. The handler that caused it is now also a listener for it — which is exactly where a fan-out like this starts to get hard to follow on a static diagram.",
+              "start": 8300,
+              "end": 9600,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 8300,
+                  "end": 9600,
+                  "target": "Service"
+                },
+                {
+                  "kind": "flow",
+                  "start": 8300,
+                  "end": 8900,
+                  "edge": "e13",
+                  "from": "Service",
+                  "to": "Service"
+                },
+                {
+                  "kind": "flow",
+                  "start": 8900,
+                  "end": 9600,
+                  "edge": "e14",
+                  "from": "Service",
+                  "to": "handler"
+                }
+              ]
+            },
+            {
+              "id": "reenrich",
+              "name": "The handler enriches again, for the new event",
+              "desc": "The event carries no more detail than the first notification did, so the handler goes back to the Service for the current picture. The repetition is not waste — the state it read in step five is stale now, because step six is what changed it.",
+              "start": 9600,
+              "end": 10800,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 9600,
+                  "end": 10800,
+                  "target": "handler"
+                },
+                {
+                  "kind": "flow",
+                  "start": 9600,
+                  "end": 10200,
+                  "edge": "e15",
+                  "from": "handler",
+                  "to": "Service"
+                },
+                {
+                  "kind": "flow",
+                  "start": 10200,
+                  "end": 10800,
+                  "edge": "e16",
+                  "from": "Service",
+                  "to": "handler",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "update",
+              "name": "Write the result back to the API",
+              "desc": "The handler reads the API one last time to avoid clobbering anything that moved while it worked, then writes the new state back. The cycle closes: in thirty minutes the poller will read that state as its baseline and the whole page replays.",
+              "start": 10800,
+              "end": 12600,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 10800,
+                  "end": 12600,
+                  "target": "API"
+                },
+                {
+                  "kind": "flow",
+                  "start": 10800,
+                  "end": 11350,
+                  "edge": "e17",
+                  "from": "handler",
+                  "to": "API"
+                },
+                {
+                  "kind": "flow",
+                  "start": 11350,
+                  "end": 11900,
+                  "edge": "e18",
+                  "from": "API",
+                  "to": "handler",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 11900,
+                  "end": 12600,
+                  "edge": "e19",
+                  "from": "handler",
+                  "to": "API"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 0,
+              "end": 4500,
+              "target": "poller",
+              "label": "running",
+              "value": "active"
+            },
+            {
+              "kind": "gauge",
+              "start": 3800,
+              "end": 10800,
+              "target": "poller",
+              "label": "changes",
+              "value": "3"
+            },
+            {
+              "kind": "set",
+              "start": 3800,
+              "end": 12600,
+              "target": "pollerState",
+              "label": "snapshot saved"
+            },
+            {
+              "kind": "set",
+              "start": 4500,
+              "end": 10800,
+              "target": "handler",
+              "label": "handling change"
+            },
+            {
+              "kind": "set",
+              "start": 4500,
+              "end": 10800,
+              "target": "poller",
+              "label": "waiting"
+            },
+            {
+              "kind": "gauge",
+              "start": 5300,
+              "end": 9600,
+              "target": "handler",
+              "label": "lookups",
+              "value": "2"
+            },
+            {
+              "kind": "set",
+              "start": 7500,
+              "end": 8300,
+              "target": "Service",
+              "label": "creating"
+            },
+            {
+              "kind": "set",
+              "start": 8300,
+              "end": 12600,
+              "target": "Service",
+              "label": "user created"
+            },
+            {
+              "kind": "gauge",
+              "start": 9600,
+              "end": 10800,
+              "target": "handler",
+              "label": "lookups",
+              "value": "3"
+            },
+            {
+              "kind": "set",
+              "start": 10800,
+              "end": 12600,
+              "target": "poller",
+              "label": "idle"
+            },
+            {
+              "kind": "gauge",
+              "start": 10800,
+              "end": 12600,
+              "target": "poller",
+              "label": "changes",
+              "value": "0"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

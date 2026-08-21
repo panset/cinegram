@@ -1,0 +1,593 @@
+{
+  "version": 2,
+  "root": "05-claude-code-tool-call",
+  "views": [
+    {
+      "id": "05-claude-code-tool-call",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% What actually happens when Claude Code runs a single tool call, end to end:\n%% one prompt, one round trip through the model, one Bash invocation against\n%% the repo, and the answer that comes back. Drawn for the people in\n%% anthropics/claude-code#14375\n%% (https://github.com/anthropics/claude-code/issues/14375) who use Claude\n%% Code to map out codebases and wanted real diagrams instead of ASCII art.\n%% ---\n%% The thing worth drawing here is that the model never touches your machine.\n%% It emits a `tool_use` block and stops; the harness — the CLI in your\n%% terminal — is what checks permissions, runs the tool, and feeds the output\n%% back as a `tool_result`. The loop repeats until the model replies with\n%% plain text instead of another `tool_use`.\n%% ---\n%% The counters are `gauge` state rather than narration, so scrubbing to any\n%% moment still tells you which turn of the loop you are in. The second\n%% scenario is a `variant`: it replays this one up to the permission check and\n%% then diverges, so the shared opening is written exactly once.\nflowchart LR\n  you[You]\n  cli[Claude Code TUI]\n  api[Anthropic API / model]\n  perm{Permission check}\n  bash[Bash tool]\n  fs[(Repo on disk)]\n  you --\u003e cli\n  cli --\u003e api\n  cli --\u003e perm\n  perm --\u003e bash\n  bash --\u003e fs\n  bash --\u003e cli\n"
+      },
+      "nodes": [
+        {
+          "id": "you",
+          "label": "You",
+          "shape": "rect"
+        },
+        {
+          "id": "cli",
+          "label": "Claude Code TUI",
+          "shape": "rect"
+        },
+        {
+          "id": "api",
+          "label": "Anthropic API / model",
+          "shape": "rect"
+        },
+        {
+          "id": "perm",
+          "label": "Permission check",
+          "shape": "rhombus"
+        },
+        {
+          "id": "bash",
+          "label": "Bash tool",
+          "shape": "rect"
+        },
+        {
+          "id": "fs",
+          "label": "Repo on disk",
+          "shape": "cylinder"
+        }
+      ],
+      "groups": [],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "you",
+          "to": "cli",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "cli",
+          "to": "api",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "cli",
+          "to": "perm",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "perm",
+          "to": "bash",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "bash",
+          "to": "fs",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "bash",
+          "to": "cli",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "one tool call, round trip",
+          "duration": 6800,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "ask",
+              "name": "You ask a question about the repo",
+              "desc": "\"Which tests cover the parser?\" is not answerable from the model's weights — it is a fact about files on your disk. Everything that follows exists to get that fact into the conversation.",
+              "start": 0,
+              "end": 700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 700,
+                  "edge": "e0",
+                  "from": "you",
+                  "to": "cli",
+                  "label": "which tests cover the parser?"
+                }
+              ]
+            },
+            {
+              "id": "send",
+              "name": "The CLI sends the conversation and the tool schemas",
+              "desc": "The request is the whole conversation so far plus a list of the tools available — Bash, Read, Grep and the rest — each with its JSON schema. The model cannot call anything it was not handed a schema for.",
+              "start": 700,
+              "end": 1400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 700,
+                  "end": 1400,
+                  "edge": "e1",
+                  "from": "cli",
+                  "to": "api",
+                  "label": "messages + tool schemas"
+                }
+              ]
+            },
+            {
+              "id": "tool_use",
+              "name": "The model answers with a tool call, not prose",
+              "desc": "This is the step people usually picture wrongly. The model does not run anything; it returns a `tool_use` block naming a tool and its arguments, and then it stops and waits. The turn is over until someone feeds it a result.",
+              "start": 1400,
+              "end": 2100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1400,
+                  "end": 2100,
+                  "edge": "e1",
+                  "from": "api",
+                  "to": "cli",
+                  "reverse": true,
+                  "label": "tool_use: Bash(rg -n \"parser\" tests/)",
+                  "style": "response"
+                },
+                {
+                  "kind": "note",
+                  "start": 1400,
+                  "end": 2100,
+                  "target": "api",
+                  "text": "no side effects here —\nthe model only emits JSON"
+                }
+              ]
+            },
+            {
+              "id": "permission",
+              "name": "The harness stops and checks the rule",
+              "desc": "Before anything executes, the CLI matches the concrete command against your allow and deny rules. This gate is local, it is the reason the model's output is a request rather than an instruction, and it is the last point at which nothing has happened yet.",
+              "start": 2100,
+              "end": 2700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2100,
+                  "end": 2700,
+                  "edge": "e2",
+                  "from": "cli",
+                  "to": "perm",
+                  "label": "Bash(rg -n \"parser\" tests/)"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 2100,
+                  "end": 2700,
+                  "target": "perm",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "run",
+              "name": "Allowed, so the tool runs against the repo",
+              "desc": "The command executes as your user, in your working directory, with your files — the same shell you would have typed it into. What comes back is ordinary stdout, capped and truncated by the harness rather than by the model.",
+              "start": 2700,
+              "end": 4300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2700,
+                  "end": 3200,
+                  "edge": "e3",
+                  "from": "perm",
+                  "to": "bash",
+                  "label": "execute"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3200,
+                  "end": 3800,
+                  "edge": "e4",
+                  "from": "bash",
+                  "to": "fs",
+                  "label": "rg -n \"parser\" tests/"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3800,
+                  "end": 4300,
+                  "edge": "e4",
+                  "from": "fs",
+                  "to": "bash",
+                  "reverse": true,
+                  "label": "12 matches",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "result",
+              "name": "The output goes back as a tool_result",
+              "desc": "The result is appended to the same conversation as a `tool_result` block paired to the call's id, and the whole thing is sent again. That resend is the loop: turn two carries every token of turn one plus the tool's output.",
+              "start": 4300,
+              "end": 5500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 4300,
+                  "end": 4900,
+                  "edge": "e5",
+                  "from": "bash",
+                  "to": "cli",
+                  "label": "tool_result: 12 matches",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4900,
+                  "end": 5500,
+                  "edge": "e1",
+                  "from": "cli",
+                  "to": "api",
+                  "label": "messages + tool_result"
+                }
+              ]
+            },
+            {
+              "id": "answer",
+              "name": "Plain text ends the loop",
+              "desc": "The model now has the file list, so it replies with prose and no `tool_use` block — and that absence is the only thing that stops the loop. Had it needed one more grep, the diagram would simply run again from the permission check.",
+              "start": 5500,
+              "end": 6800,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 5500,
+                  "end": 6200,
+                  "edge": "e1",
+                  "from": "api",
+                  "to": "cli",
+                  "reverse": true,
+                  "label": "text: tests/parser_test.go covers it",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 6200,
+                  "end": 6800,
+                  "edge": "e0",
+                  "from": "cli",
+                  "to": "you",
+                  "reverse": true,
+                  "label": "answer + the commands it ran",
+                  "style": "response"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "gauge",
+              "start": 0,
+              "end": 4300,
+              "target": "cli",
+              "label": "turn",
+              "value": "1"
+            },
+            {
+              "kind": "set",
+              "start": 700,
+              "end": 1400,
+              "target": "api",
+              "label": "thinking",
+              "value": "busy"
+            },
+            {
+              "kind": "set",
+              "start": 1400,
+              "end": 4300,
+              "target": "api",
+              "label": "tool_use"
+            },
+            {
+              "kind": "set",
+              "start": 2700,
+              "end": 6800,
+              "target": "perm",
+              "label": "allowed",
+              "value": "ok"
+            },
+            {
+              "kind": "gauge",
+              "start": 4300,
+              "end": 6800,
+              "target": "cli",
+              "label": "turn",
+              "value": "2"
+            },
+            {
+              "kind": "set",
+              "start": 4300,
+              "end": 5500,
+              "target": "api",
+              "label": "thinking",
+              "value": "busy"
+            }
+          ]
+        },
+        {
+          "id": "s1",
+          "name": "permission denied",
+          "duration": 5900,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "outcome": "fail",
+          "steps": [
+            {
+              "id": "ask",
+              "name": "You ask a question about the repo",
+              "desc": "\"Which tests cover the parser?\" is not answerable from the model's weights — it is a fact about files on your disk. Everything that follows exists to get that fact into the conversation.",
+              "start": 0,
+              "end": 700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 700,
+                  "edge": "e0",
+                  "from": "you",
+                  "to": "cli",
+                  "label": "which tests cover the parser?"
+                }
+              ]
+            },
+            {
+              "id": "send",
+              "name": "The CLI sends the conversation and the tool schemas",
+              "desc": "The request is the whole conversation so far plus a list of the tools available — Bash, Read, Grep and the rest — each with its JSON schema. The model cannot call anything it was not handed a schema for.",
+              "start": 700,
+              "end": 1400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 700,
+                  "end": 1400,
+                  "edge": "e1",
+                  "from": "cli",
+                  "to": "api",
+                  "label": "messages + tool schemas"
+                }
+              ]
+            },
+            {
+              "id": "tool_use",
+              "name": "The model answers with a tool call, not prose",
+              "desc": "This is the step people usually picture wrongly. The model does not run anything; it returns a `tool_use` block naming a tool and its arguments, and then it stops and waits. The turn is over until someone feeds it a result.",
+              "start": 1400,
+              "end": 2100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1400,
+                  "end": 2100,
+                  "edge": "e1",
+                  "from": "api",
+                  "to": "cli",
+                  "reverse": true,
+                  "label": "tool_use: Bash(rg -n \"parser\" tests/)",
+                  "style": "response"
+                },
+                {
+                  "kind": "note",
+                  "start": 1400,
+                  "end": 2100,
+                  "target": "api",
+                  "text": "no side effects here —\nthe model only emits JSON"
+                }
+              ]
+            },
+            {
+              "id": "permission",
+              "name": "The harness stops and checks the rule",
+              "desc": "Before anything executes, the CLI matches the concrete command against your allow and deny rules. This gate is local, it is the reason the model's output is a request rather than an instruction, and it is the last point at which nothing has happened yet.",
+              "start": 2100,
+              "end": 2700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2100,
+                  "end": 2700,
+                  "edge": "e2",
+                  "from": "cli",
+                  "to": "perm",
+                  "label": "Bash(rg -n \"parser\" tests/)"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 2100,
+                  "end": 2700,
+                  "target": "perm",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "denied",
+              "name": "No rule matches, so nothing executes",
+              "desc": "The command hits the gate and is refused — either by a deny rule or because you declined the prompt. The ✕ is on the tool, not on the model: the Bash tool was never invoked and the repo was never read.",
+              "start": 2700,
+              "end": 3400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2700,
+                  "end": 3400,
+                  "edge": "e3",
+                  "from": "perm",
+                  "to": "bash",
+                  "label": "blocked",
+                  "status": "fail"
+                },
+                {
+                  "kind": "dim",
+                  "start": 2700,
+                  "end": 3400,
+                  "target": "fs"
+                },
+                {
+                  "kind": "note",
+                  "start": 2700,
+                  "end": 3400,
+                  "target": "perm",
+                  "text": "no matching allow rule\nfor Bash(rg …)"
+                }
+              ]
+            },
+            {
+              "id": "relay",
+              "name": "The denial is reported back like any other result",
+              "desc": "The harness does not silently drop the call. It sends a `tool_result` saying the tool was not permitted, which keeps the conversation well-formed — an unanswered `tool_use` would leave the model stuck mid-turn.",
+              "start": 3400,
+              "end": 4600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3400,
+                  "end": 4000,
+                  "edge": "e2",
+                  "from": "perm",
+                  "to": "cli",
+                  "reverse": true,
+                  "label": "permission denied",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4000,
+                  "end": 4600,
+                  "edge": "e1",
+                  "from": "cli",
+                  "to": "api",
+                  "label": "tool_result: not permitted"
+                },
+                {
+                  "kind": "dim",
+                  "start": 3400,
+                  "end": 4600,
+                  "target": "bash"
+                },
+                {
+                  "kind": "dim",
+                  "start": 3400,
+                  "end": 4600,
+                  "target": "fs"
+                }
+              ]
+            },
+            {
+              "id": "explain",
+              "name": "The model answers without the tool",
+              "desc": "Given a denial, the model does what it can: it says what it wanted to run and why, and asks you to allow it or to paste the output. The loop still ends the same way it always does — with plain text and no `tool_use`.",
+              "start": 4600,
+              "end": 5900,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 4600,
+                  "end": 5300,
+                  "edge": "e1",
+                  "from": "api",
+                  "to": "cli",
+                  "reverse": true,
+                  "label": "text: I need to grep tests/ — allow Bash?",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5300,
+                  "end": 5900,
+                  "edge": "e0",
+                  "from": "cli",
+                  "to": "you",
+                  "reverse": true,
+                  "label": "what it tried, and why it stopped",
+                  "style": "response"
+                },
+                {
+                  "kind": "dim",
+                  "start": 4600,
+                  "end": 5900,
+                  "target": "bash"
+                },
+                {
+                  "kind": "dim",
+                  "start": 4600,
+                  "end": 5900,
+                  "target": "fs"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "gauge",
+              "start": 0,
+              "end": 3400,
+              "target": "cli",
+              "label": "turn",
+              "value": "1"
+            },
+            {
+              "kind": "set",
+              "start": 700,
+              "end": 1400,
+              "target": "api",
+              "label": "thinking",
+              "value": "busy"
+            },
+            {
+              "kind": "set",
+              "start": 1400,
+              "end": 4600,
+              "target": "api",
+              "label": "tool_use"
+            },
+            {
+              "kind": "set",
+              "start": 2700,
+              "end": 4600,
+              "target": "perm",
+              "label": "denied",
+              "value": "error"
+            },
+            {
+              "kind": "gauge",
+              "start": 3400,
+              "end": 5900,
+              "target": "cli",
+              "label": "turn",
+              "value": "2"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
