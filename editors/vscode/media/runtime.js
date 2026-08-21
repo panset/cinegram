@@ -106,6 +106,26 @@
     return Math.sqrt(dx * dx + dy * dy);
   }
 
+  // fitOf is how well a path endpoint fits a node: the distance from the
+  // point to the node's box — zero once the arrow touches it, which is what
+  // "this arrow belongs to this node" means — plus a small share of the
+  // distance to the node's centre as a tiebreaker between endpoints that all
+  // touch the box. Centre distance alone was the whole score once, and it
+  // mis-assigned arrows around wide nodes: a `[Payment Provider]` box is wide
+  // enough that its own arrow lands far from its centre, and the arrow into a
+  // narrow neighbour below can land nearer to that centre than the real one.
+  var CENTRE_WEIGHT = 0.1;
+
+  function fitOf(pt, box) {
+    var dx = Math.max(box.r.left - pt.x, 0, pt.x - box.r.right);
+    var dy = Math.max(box.r.top - pt.y, 0, pt.y - box.r.bottom);
+    return Math.sqrt(dx * dx + dy * dy) + CENTRE_WEIGHT * dist(pt, box.c);
+  }
+
+  function boxOf(el) {
+    return { r: el.getBoundingClientRect(), c: centreOf(el) };
+  }
+
   // relativeMatrix maps points from `from`'s user space into `into`'s.
   function relativeMatrix(into, from) {
     try {
@@ -153,13 +173,13 @@
       var edge = view.edges[e];
       var from = nodes[edge.from], to = nodes[edge.to];
       if (!from || !to) continue;
-      var a = centreOf(from), b = centreOf(to);
+      var a = boxOf(from), b = boxOf(to);
 
       var best = -1, bestScore = Infinity, bestFlip = false;
       for (var k = 0; k < paths.length; k++) {
         if (used[k] || !ends[k]) continue;
-        var fwd = dist(ends[k].start, a) + dist(ends[k].end, b);
-        var rev = REVERSE_COST * (dist(ends[k].start, b) + dist(ends[k].end, a));
+        var fwd = fitOf(ends[k].start, a) + fitOf(ends[k].end, b);
+        var rev = REVERSE_COST * (fitOf(ends[k].start, b) + fitOf(ends[k].end, a));
         var score = Math.min(fwd, rev);
         if (score < bestScore) {
           bestScore = score;
