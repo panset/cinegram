@@ -247,14 +247,29 @@ func renderScenario(tr *trace.Trace, nodes map[string]string, t *symbol.Table, n
 	fmt.Fprintf(&b, "%%%% Step boundaries fall where the trace was quiet — nothing in flight. Spans\n")
 	fmt.Fprintf(&b, "%%%% that overlapped stay in one step, placed by `at:`, so the concurrency is real.\n")
 
+	phases := tr.Phases()
+	bands := bandsOf(tr, phases)
+
+	// Say what is missing. A span covering the whole trace — the root, and any
+	// sole child beneath it — cannot be drawn without collapsing every step into
+	// one, since a step sizes itself to its longest action. Naming those spans is
+	// the honest alternative to dropping them silently.
+	if skipped := undrawn(tr, bands); len(skipped) > 0 {
+		fmt.Fprintf(&b, "%%%% -\n")
+		fmt.Fprintf(&b, "%%%% Not drawn, because each spans the whole trace and an action that long\n")
+		fmt.Fprintf(&b, "%%%% would collapse every step into one:\n")
+		for _, s := range skipped {
+			fmt.Fprintf(&b, "%%%%   %s (%s) %s, from %s\n",
+				oneLine(s.Name), s.Service, fmtMillis(s.Dur()), fmtMillis(s.Start))
+		}
+	}
+
 	fmt.Fprintf(&b, "\nscenario %q { speed: %s", name, trimFloat(speed))
 	if tr.Failed() {
 		b.WriteString(", outcome: fail")
 	}
 	b.WriteString(" }\n")
 
-	phases := tr.Phases()
-	bands := bandsOf(tr, phases)
 	byID := map[string]trace.Span{}
 	for _, s := range tr.Spans {
 		byID[s.ID] = s
@@ -294,6 +309,29 @@ func renderScenario(tr *trace.Trace, nodes map[string]string, t *symbol.Table, n
 		prevEnd = bd.end
 	}
 	return b.String(), warnings
+}
+
+// undrawn is every span no step will show, in start order.
+//
+// It exists so the generated file can admit its own omissions: a reader who
+// counts nine spans in the trace and six flows on the diagram deserves to be
+// told which three went where, rather than left to wonder.
+func undrawn(tr *trace.Trace, bands []band) []trace.Span {
+	shown := map[string]bool{}
+	for _, bd := range bands {
+		for _, p := range bd.phases {
+			for _, s := range tr.Subtree(p.ID) {
+				shown[s.ID] = true
+			}
+		}
+	}
+	var out []trace.Span
+	for _, s := range tr.Spans {
+		if !shown[s.ID] {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // actionFor turns one span into one line of scenario.

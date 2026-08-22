@@ -2,11 +2,11 @@
 
 # the slow checkout, 14:02
 
-The checkout path as the team draws it on a whiteboard, animated by a request that actually happened. The scenario below was appended by `cinegram trace` from `checkout-slow.otlp.json`, so every duration in it is a measurement rather than a guess: a card-network authorisation timed out after a full second, the retry took another 1.14s, and a checkout that should be under half a second took 2.6. Delete the scenario, re-run the command, and it comes back byte for byte. Two details are worth reading the source for: `inventory` and `payments` overlapped, so they share one step and keep their real offsets via `at:`; and the trace caught `inventory` querying the database directly, which this diagram does not draw — the command says so rather than inventing an edge.
+The checkout path as the team draws it on a whiteboard, animated by a request that actually happened. The scenario below was appended by `cinegram trace` from `checkout-slow.otlp.json`, so every duration in it is a measurement rather than a guess: a card-network authorisation burned its 1000ms deadline, backed off for 250ms, and succeeded on the retry in 240ms — turning a checkout that normally completes in about 625ms into one that took 1.9 seconds. Delete the scenario, re-run the command, and it comes back byte for byte. Two details are worth reading the source for: `inventory` and `payments` overlapped, so they share one step and keep their real offsets via `at:`; and the trace caught `inventory` querying the database directly, which this diagram does not draw — the command says so rather than inventing an edge.
 
 <div class="cinegram" data-cinegram="07-from-a-trace/01-checkout-architecture" data-height="720"></div>
 
-[Edit in the playground](../../playground/#doc=pFVdjts4Er5KQUADCSArsvonae3TIrsIAiyyQbrf7AZcIksWp2lSYVHt0TQCzOMcYK4wZ5j3OUpOMiBlyYq7gUGQJ9Mssur7Pn5VekweknKZJmS865MyyV8vamd3C1x4h4Je5cuFaEjc284v0IlGeRK-c5TJ7S5JE9uS-f5btdLESbl6TNrvv-yTMvH0s0_SRCZlcnYGtw3BeANa9A0gg28IPOEOpMM9g_JgDSDsQ7rKopMpoFE79CSh6gHB0eeO2K_N2Rn4Bj2g8B1q3UODbUuGZBYrsSCDTlmoSNs97JEhxuWQaCOUoa3DHUQ2m5gv8IPNxIq13WfW6zb7ia3ZpMAW6IFcD7Jz6JU1oEyArBgQdoTcOdqRGcA59A25gDEQ2nbEXAKCQCcXhvzeunvAzjfWKR6SebUjCUEdrD05QKg7rWMyJmGNTKNcjrzrwVt7D2hsLLLMlhcclJKhwqhxlIcb22kJFUFnJDloUNcxJR6SDpmK7CqD_5AmT7HIKF8KjhauM3FT2N0OjRwKKR_-E0OF4j5mrHpPUFsXFxnc7i1I8qg0AzqCvXW-AUcoldkORWznRLxSwkaZBzLeun4T0seEmxb7oCdvwD6Q0-EBZXwG31AP3IS01hCwpzaCuidqQ1C5UEiDrWsmz_CgcMiIvtz8Kx6NzgtvDwK7beO_QfC5I9ePMCV6rJAJpHIkvO7T4E_RHDyoGKTC6CVpicFYH90MX3_9fS4bMPYcwM-dMdQMldAAyS1la1NruxcNOg__-7Q2AEIrMv7F6qaxbUvu7mXY3KKnPfarf398D--G9d3ahAh31dZh24CwjlZvRzeEf3chDpNDVuPisD8JsJpWh8j4EKtxEfcpvFNYyGr1wjpJjheyehljLbert-gkfBi8Hjd3qDS51fBzgDuwg8Vi3eX5OY3EZhyPsRFvvDcSm6IT6OfDI_Tno7KKqA9nZre4ff7CQCJwODuDd2TIjUPqdLZEI5wMjmEqKR7Hhkyjb0RjmUwWcy4Gf0WLvq7O62tR0CUu5cWb-qrKxWu6xgtZ1Ms31bmAv_6Ea-AWDYdlkV0x7FFrENoeutNZ60v4-P-bW3g1sXlxkPjlNAV4VvsmtFVlOyPRKWKoQ8Z9Q45m3RMm6-dOkY80w0AKblYGaq22jc_gJqA6zutjJwN77MPJsYVTaDWKg4ihU8deB2GN6JwjI_ogWujtLEg_Tfl1EgdKEHUkl8LyosyLdQKPwC2RLCHPLtMwYMPgKqFGpeHLoWkCVb-cLOSIyT0QrJNpKxv3vv72x2SULDTqlkKRoVMksShhnRTZ-RWncJ2fga2PcmVweXgmFM4yQzEJEmQTqDWnkQexP60C6KHICs5gGcEHSl3L3oUPaPh6HL8dyzzPd7xORlAa-xIuwlbcqOdCwZMGgkfQWJEun-O_TlJAX0K-4zQYuoSiyHcclAypG7Vt4suDrOAxniyOR6_jkn2vqYSq43689jyiqR9ngJ5IP8BZXn0DaIYopj529rGx51mHxjh8kH-h0EWX-cWU_M0x-SBtIIG-46ONfqRUkedTqSKf1VpeTES-cWqhDJPzw9CFdfL-w81_P93C8P-pGwfZz0-8eGKP5T_YI77nxOKk4qknrp_HfU5hbjIZCeskrrPw5yni4TWLH0M8zOg56nnJU8hXc8jJl7svfwcAAP__){ .md-button }
+[Edit in the playground](../../playground/#doc=pFbdbuu4EX6VgYAA5wCy1nLik0S9KrbFYoHidLE5d3YAj8ixxYYidUgqqhoE6GUfoK_QZ-h9H2WfpBjqz3VSLBbnyhTJmflm5puPfkmekyJPEzLB9UmRrG9XR2frFa6CQ0HfrfOVqEg82Tas0IlKBRKhdZTJU52kiW3I_Haro9Lkk2L3kjS_3TgkRRLoryFJE5kUydUVfKkIJgtoMFSAHkJFEAhrkA47DyqANYDQsbvSopMpoFE1BpJQ9oDg6GtLPuzN1RWECgOgCC1q3UOFTUOGZBYjeUEGnbJQkrYddOghnsvB0UEoQyeHNcRsDtEf5weHOSuvbZfZoJvsL96aQwreAj2T60G2DoOyBpRhyMoDQk3oW0c1mQGcw1CRY4yc0Kkl7wtAEOjkylDorHsCbENlnfKDs7J1hiSo4CFfr9e1B0kotTKURo8liieSYI9HOFoHm-269lweCb4VgohTsyaW1FFwPaPb3LCfX_7-TwitM8qcGMKY4FJDY10dayhs3WgK5NkWS-7Up8225s9gwRoa7gdrnyDP7sGTsEb6DP5AbDZ6XKqfgqOVawdQwtY1GjlAVoG_ycesoOwDxaR4kcGXzoKkgEr76BIdQWddqMARSs4iBrGtE9GsgIMyz2SCdf0huj802HMr_AHsMznNvZfcwQliD75it5yTD9REqyeihg-V40CaS-0peHhWCAcMxeF38VokLdMGBLanaijkOYKvLbl-gikxYImeQCpHIug-ZXqLCkKlPEiFkYbSkgdjQxwEbthcy7Fs4LH3TMFzYg0xY1sNkDxRtjdHbTtRoQvwp5_3BkBoRSZ82D1UtmnIPX7kzRMG6rDf_f6nH-GHYf24N3zi2_LksKlAWEe776eB5a9HPoeZP7tpMe7PBdjNq_FkasZuWsR9MnIIKcvdB-skOb-S5cd41vhm9z06CZ-HUYmbNSpNbjf8jHCH7GC12rfr9TVNiZ3luJwtxF-SWE5n0O8fT9DfP5VlRD3eObPyzfsGQxKcw9UV_ECG3KRxl9IUp_dCdwZRU35SHZlG7ojKejJZ9LkaCBRpelteH-_FhraYy5u746dyLW7pHm_k5pjfldcC_vNvuAffoPG8zLP73EOHWoPQVjwNemZtKOCnPz98ge_mdD6MNf44S0Luz6I_8GCVtjUSnSIPR3bZVeTobIZYmr-2ikJM1NhQMZ-VgaNWpypk8MC4FrFa5hl8wKhy0xCn0GgUYxl5XqNmD0NkROscGdFz2Xi6z8v0eRw8k0JJAltPQCiqsSTsoKusnhDzNLKqi9iLCEpbc4qeOttqCcJqjQ17iX2LAjNJaBHvwf8vZaxiOrxG69qP16eLmXCEgeDDtMEGd3eTQb5li72Z3799ErWS-TJZpJDfFOvNPoEX8A2RLGCdbVOwbWBNLuCISsPrqAeMPeTzdDjy5J4J9sm8lU17v_zjX_MMZKxBJ-IggwhI8qKAfZJntz6Fu7srsMeFBhlsx2qjcNZ72MyNZjoI1NqnMQ3y4TIIYIA82258BnkEzynxSwvTSyuVjBOCxnfkoFPMsvGZ3ScTQI19Adex5rxxPC8avNEJeAGNJenivVrskxQwFBDfaNm6AjYbfopfB9eVOlWR3iBLeIk3N8vV-7j0oddUQNn6fjJ7H9EsO2eA3rRhgJPfLlHybXzaz10vArbo17nXgbPj35a_EYvFdn0zO7_bLs5jaTkJDK1fKPUtoTbr9Rzq5nqJNfzJic7_h7QbZTy5MDwtsE9-_Pzwx5-_wPD9lphD1W8ueHnBjvxX2BHbOSdxEfGSEvfv474mfh08GQn7JK4z_niL-FN0df1tiIeX6Bz1echLyJ_OISevj6__DQAA__8){ .md-button }
 
 ??? abstract "The source — `07-from-a-trace/01-checkout-architecture.dgm`"
 
@@ -14,13 +14,14 @@ The checkout path as the team draws it on a whiteboard, animated by a request th
     %% The checkout path as the team draws it on a whiteboard, animated by a request
     %% that actually happened. The scenario below was appended by `cinegram trace`
     %% from `checkout-slow.otlp.json`, so every duration in it is a measurement
-    %% rather than a guess: a card-network authorisation timed out after a full
-    %% second, the retry took another 1.14s, and a checkout that should be under half
-    %% a second took 2.6. Delete the scenario, re-run the command, and it comes back
-    %% byte for byte. Two details are worth reading the source for: `inventory` and
-    %% `payments` overlapped, so they share one step and keep their real offsets via
-    %% `at:`; and the trace caught `inventory` querying the database directly, which
-    %% this diagram does not draw — the command says so rather than inventing an edge.
+    %% rather than a guess: a card-network authorisation burned its 1000ms deadline,
+    %% backed off for 250ms, and succeeded on the retry in 240ms — turning a checkout
+    %% that normally completes in about 625ms into one that took 1.9 seconds. Delete
+    %% the scenario, re-run the command, and it comes back byte for byte. Two details
+    %% are worth reading the source for: `inventory` and `payments` overlapped, so
+    %% they share one step and keep their real offsets via `at:`; and the trace caught
+    %% `inventory` querying the database directly, which this diagram does not draw —
+    %% the command says so rather than inventing an edge.
     flowchart LR
       client([Shopper])
       gateway[API Gateway]
@@ -45,32 +46,37 @@ The checkout path as the team draws it on a whiteboard, animated by a request th
 
     %% Generated by `cinegram trace` — every duration below is measured, not chosen.
     %% -
-    %% trace 7b3f9c2e5a1d48f6b0c7e9a4d2f18b3c · 9 spans · 2.6s wall clock
-    %% root: POST /checkout (gateway) took 2.6s
+    %% trace 7b3f9c2e5a1d48f6b0c7e9a4d2f18b3c · 9 spans · 1.91s wall clock
+    %% root: POST /checkout (gateway) took 1.91s
     %% -
     %% Step boundaries fall where the trace was quiet — nothing in flight. Spans
     %% that overlapped stay in one step, placed by `at:`, so the concurrency is real.
+    %% -
+    %% Not drawn, because each spans the whole trace and an action that long
+    %% would collapse every step into one:
+    %%   POST /checkout (gateway) 1.91s, from 0ms
+    %%   checkout.create (checkout) 1.88s, from 15ms
 
     scenario "the slow checkout, 14:02" { speed: 0.5, outcome: fail }
 
       step t1inventoryreserve "inventory.reserve ∥ payments.charge" {
-        desc: "2.36s, 90% of the trace. 5 spans across 2 overlapping calls, slowest payments.charge at 2.2s. 1 failed: upstream timeout after 1000ms"
-        delay: 40ms
+        desc: "1.7s, 88% of the trace. 5 spans across 2 overlapping calls, slowest payments.charge at 1.52s. 1 failed: card network did not answer within 1000ms"
+        delay: 30ms
         flow checkout -> inventory { label: "inventory.reserve", at: 0ms, dur: 220ms }
         highlight db { at: 20ms, dur: 90ms, style: busy }
-        flow checkout -> payments { label: "payments.charge", at: 160ms, dur: 2200ms }
-        flow payments -> psp { label: "POST /authorize · 504", at: 180ms, dur: 1000ms, status: fail }
-        flow payments -> psp { label: "POST /authorize · 200", at: 1200ms, dur: 1140ms }
+        flow checkout -> payments { label: "payments.charge", at: 170ms, dur: 1525ms }
+        flow payments -> psp { label: "POST /authorize · 504", at: 185ms, dur: 1000ms, status: fail }
+        flow payments -> psp { label: "POST /authorize · 200", at: 1435ms, dur: 240ms }
       }
 
       step t2insertorders "INSERT orders" {
-        desc: "90ms, 3% of the trace."
+        desc: "90ms, 4% of the trace."
         delay: 10ms
         flow checkout -> db { label: "INSERT orders", at: 0ms, dur: 90ms }
       }
 
       step t3emailsend "email.send" {
-        desc: "60ms, 2% of the trace."
+        desc: "60ms, 3% of the trace."
         delay: 10ms
         flow checkout -> mailer { label: "email.send", at: 0ms, dur: 60ms }
       }
