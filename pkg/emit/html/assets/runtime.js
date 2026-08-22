@@ -624,13 +624,14 @@
     });
     controls.appendChild(this.picker);
 
-    // `dgm-authoring` marks the controls that belong to building a diagram
+    // Play used to stand here. It is transport, so it moved next to the scrub
+    // it drives — see the foot in build(). Nothing was lost by the move: the
+    // two modes that hide the foot were already the two that hid Play, since it
+    // carried `dgm-authoring` and a presenter advances a beat at a time with
+    // Space rather than running the whole thing.
+    //
+    // `dgm-authoring` still marks the controls that belong to building a diagram
     // rather than showing one; presenter mode hides exactly that set.
-    // dgm-play names the one control no mode can do without: inline strips the
-    // bar down to it by name rather than by position, so adding a button here
-    // later cannot quietly change what a document shows.
-    this.playBtn = button('Play', 'dgm-btn dgm-btn-primary dgm-authoring dgm-play', function () { self.toggle(); });
-    controls.appendChild(this.playBtn);
 
     // Presenter mode is a toggle rather than a link, so leaving it does not
     // reload and lose the moment the presenter had reached. It doubles as the
@@ -806,6 +807,27 @@
     this.root.appendChild(this.caption);
 
     var foot = el('div', 'dgm-foot');
+
+    // Transport, at the timeline it moves. Previous and next step are the arrow
+    // keys made visible — onKey has read them since the beginning, and a reader
+    // who never finds a keyboard shortcut was navigating by dragging the scrub
+    // and guessing where the beats were.
+    //
+    // `dgm-play` stays on the play control wherever it lives: pkg/embedkit and
+    // the plans refer to it by name, and it is still the one control no mode
+    // that has a transport at all can do without.
+    var transport = el('div', 'dgm-transport');
+    transport.appendChild(iconButton('prev', 'Previous step', 'dgm-btn dgm-tbtn', function () {
+      self.nextStep(-1);
+    }));
+    this.playBtn = iconButton('play', 'Play', 'dgm-btn dgm-tbtn dgm-tbtn-primary dgm-play', function () {
+      self.toggle();
+    });
+    transport.appendChild(this.playBtn);
+    transport.appendChild(iconButton('next', 'Next step', 'dgm-btn dgm-tbtn', function () {
+      self.nextStep(1);
+    }));
+    foot.appendChild(transport);
 
     var track = el('div', 'dgm-scrub-wrap');
     this.scrub = document.createElement('input');
@@ -1102,6 +1124,12 @@
       'M20 14.5V18a2 2 0 0 1-2 2h-3.5',
       'M9.5 20H6a2 2 0 0 1-2-2v-3.5'
     ],
+    // The transport, in the shapes every player has used since a tape deck:
+    // a triangle, two bars, and each with a wall to stop against.
+    play: ['M9 6.5l9 5.5-9 5.5z'],
+    pause: ['M9.5 6.5v11', 'M14.5 6.5v11'],
+    prev: ['M15.5 6.5l-8 5.5 8 5.5z', 'M6 6.5v11'],
+    next: ['M8.5 6.5l8 5.5-8 5.5z', 'M18 6.5v11'],
     help: ['M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z', 'M9.3 9.4a2.8 2.8 0 0 1 5.5.9c0 1.9-2.7 2.3-2.7 4.1', 'M12 17.6v.01'],
     // The two theme states, named for the state each *is* rather than the one
     // a press goes to: a sun for light, a moon for dark.
@@ -3448,18 +3476,33 @@
     this.play();
   };
 
+  // syncPlay swaps the glyph and the accessible name together.
+  //
+  // Together, because they are the same fact: an icon button's label *is* its
+  // name to a screen reader, and the old text button could set both by writing
+  // one string. Writing textContent now would delete the glyph, which is the
+  // trap this method exists to close.
+  Player.prototype.syncPlay = function () {
+    if (!this.playBtn) return;
+    var label = this.playing ? 'Pause' : 'Play';
+    this.playBtn.innerHTML = '';
+    this.playBtn.appendChild(icon(this.playing ? 'pause' : 'play'));
+    this.playBtn.title = label;
+    this.playBtn.setAttribute('aria-label', label);
+  };
+
   Player.prototype.play = function () {
     var sc = this.scenario();
     if (this.time >= sc.duration) this.time = 0;
     this.playing = true;
-    this.playBtn.textContent = 'Pause';
+    this.syncPlay();
     this.lastFrame = 0;
     this.loopFrame();
   };
 
   Player.prototype.pause = function () {
     this.playing = false;
-    this.playBtn.textContent = 'Play';
+    this.syncPlay();
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = null;
   };

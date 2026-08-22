@@ -967,6 +967,11 @@ here is reachable only through MCP.
 
 ### Driving the player
 
+Play, previous step and next step sit at the left of the timeline, which is what
+they move; everything that is not transport — Present, and the tool rail beside
+the stage — stays where it was. The two step buttons are the arrow keys made
+visible, for a reader who never went looking for a keyboard shortcut.
+
 Press `?` in the page for this list.
 
 | Key | Does |
