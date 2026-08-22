@@ -28,3 +28,7 @@ one question, four turns · fan out, barrier, synthesise · rag pipeline · laun
 
 build it up · walk the pipeline · one polling cycle · auth refresh edge cases · claude code tool call
 
+## [from a trace](07-from-a-trace/index.md)
+
+the slow checkout, 14:02
+

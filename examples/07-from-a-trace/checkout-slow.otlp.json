@@ -1,0 +1,415 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "gateway"
+            }
+          },
+          {
+            "key": "deployment.environment",
+            "value": {
+              "stringValue": "production"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "cinegram.example"
+          },
+          "spans": [
+            {
+              "traceId": "7b3f9c2e5a1d48f6b0c7e9a4d2f18b3c",
+              "spanId": "0000000000000001",
+              "name": "POST /checkout",
+              "startTimeUnixNano": "1763000000000000000",
+              "endTimeUnixNano": "1763000002600000000",
+              "kind": 2,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/checkout"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": "200"
+                  }
+                }
+              ],
+              "status": {
+                "code": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "checkout"
+            }
+          },
+          {
+            "key": "deployment.environment",
+            "value": {
+              "stringValue": "production"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "cinegram.example"
+          },
+          "spans": [
+            {
+              "traceId": "7b3f9c2e5a1d48f6b0c7e9a4d2f18b3c",
+              "spanId": "0000000000000002",
+              "name": "checkout.create",
+              "startTimeUnixNano": "1763000000020000000",
+              "endTimeUnixNano": "1763000002580000000",
+              "kind": 3,
+              "attributes": [
+                {
+                  "key": "cart.items",
+                  "value": {
+                    "intValue": "3"
+                  }
+                },
+                {
+                  "key": "cart.value_gbp",
+                  "value": {
+                    "stringValue": "84.00"
+                  }
+                }
+              ],
+              "parentSpanId": "0000000000000001",
+              "status": {
+                "code": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "inventory"
+            }
+          },
+          {
+            "key": "deployment.environment",
+            "value": {
+              "stringValue": "production"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "cinegram.example"
+          },
+          "spans": [
+            {
+              "traceId": "7b3f9c2e5a1d48f6b0c7e9a4d2f18b3c",
+              "spanId": "0000000000000003",
+              "name": "inventory.reserve",
+              "startTimeUnixNano": "1763000000040000000",
+              "endTimeUnixNano": "1763000000260000000",
+              "kind": 3,
+              "attributes": [
+                {
+                  "key": "sku.count",
+                  "value": {
+                    "intValue": "3"
+                  }
+                }
+              ],
+              "parentSpanId": "0000000000000002",
+              "status": {
+                "code": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "orders-postgres"
+            }
+          },
+          {
+            "key": "deployment.environment",
+            "value": {
+              "stringValue": "production"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "cinegram.example"
+          },
+          "spans": [
+            {
+              "traceId": "7b3f9c2e5a1d48f6b0c7e9a4d2f18b3c",
+              "spanId": "0000000000000004",
+              "name": "SELECT stock FOR UPDATE",
+              "startTimeUnixNano": "1763000000060000000",
+              "endTimeUnixNano": "1763000000150000000",
+              "kind": 3,
+              "attributes": [
+                {
+                  "key": "db.system",
+                  "value": {
+                    "stringValue": "postgresql"
+                  }
+                },
+                {
+                  "key": "db.rows_affected",
+                  "value": {
+                    "intValue": "3"
+                  }
+                }
+              ],
+              "parentSpanId": "0000000000000003",
+              "status": {
+                "code": 1
+              }
+            },
+            {
+              "traceId": "7b3f9c2e5a1d48f6b0c7e9a4d2f18b3c",
+              "spanId": "0000000000000008",
+              "name": "INSERT orders",
+              "startTimeUnixNano": "1763000002410000000",
+              "endTimeUnixNano": "1763000002500000000",
+              "kind": 3,
+              "attributes": [
+                {
+                  "key": "db.system",
+                  "value": {
+                    "stringValue": "postgresql"
+                  }
+                },
+                {
+                  "key": "db.rows_affected",
+                  "value": {
+                    "intValue": "1"
+                  }
+                }
+              ],
+              "parentSpanId": "0000000000000002",
+              "status": {
+                "code": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "payments"
+            }
+          },
+          {
+            "key": "deployment.environment",
+            "value": {
+              "stringValue": "production"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "cinegram.example"
+          },
+          "spans": [
+            {
+              "traceId": "7b3f9c2e5a1d48f6b0c7e9a4d2f18b3c",
+              "spanId": "0000000000000005",
+              "name": "payments.charge",
+              "startTimeUnixNano": "1763000000200000000",
+              "endTimeUnixNano": "1763000002400000000",
+              "kind": 3,
+              "attributes": [
+                {
+                  "key": "amount_gbp",
+                  "value": {
+                    "stringValue": "84.00"
+                  }
+                }
+              ],
+              "parentSpanId": "0000000000000002",
+              "status": {
+                "code": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "card-network"
+            }
+          },
+          {
+            "key": "deployment.environment",
+            "value": {
+              "stringValue": "production"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "cinegram.example"
+          },
+          "spans": [
+            {
+              "traceId": "7b3f9c2e5a1d48f6b0c7e9a4d2f18b3c",
+              "spanId": "0000000000000006",
+              "name": "POST /authorize",
+              "startTimeUnixNano": "1763000000220000000",
+              "endTimeUnixNano": "1763000001220000000",
+              "kind": 3,
+              "attributes": [
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": "504"
+                  }
+                },
+                {
+                  "key": "retry.attempt",
+                  "value": {
+                    "intValue": "1"
+                  }
+                }
+              ],
+              "parentSpanId": "0000000000000005",
+              "status": {
+                "code": 2,
+                "message": "upstream timeout after 1000ms"
+              }
+            },
+            {
+              "traceId": "7b3f9c2e5a1d48f6b0c7e9a4d2f18b3c",
+              "spanId": "0000000000000007",
+              "name": "POST /authorize",
+              "startTimeUnixNano": "1763000001240000000",
+              "endTimeUnixNano": "1763000002380000000",
+              "kind": 3,
+              "attributes": [
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": "200"
+                  }
+                },
+                {
+                  "key": "retry.attempt",
+                  "value": {
+                    "intValue": "2"
+                  }
+                }
+              ],
+              "parentSpanId": "0000000000000005",
+              "status": {
+                "code": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "mailer"
+            }
+          },
+          {
+            "key": "deployment.environment",
+            "value": {
+              "stringValue": "production"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "cinegram.example"
+          },
+          "spans": [
+            {
+              "traceId": "7b3f9c2e5a1d48f6b0c7e9a4d2f18b3c",
+              "spanId": "0000000000000009",
+              "name": "email.send",
+              "startTimeUnixNano": "1763000002510000000",
+              "endTimeUnixNano": "1763000002570000000",
+              "kind": 3,
+              "attributes": [
+                {
+                  "key": "messaging.destination",
+                  "value": {
+                    "stringValue": "order-confirmation"
+                  }
+                }
+              ],
+              "parentSpanId": "0000000000000002",
+              "status": {
+                "code": 1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

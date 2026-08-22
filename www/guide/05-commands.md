@@ -14,6 +14,7 @@ cinegram frame   <file.dgm> --at 1620ms -o still.png   # one exact moment
 cinegram record  <file.dgm> -o out.gif      # a GIF, mp4 or webm of one scenario
 cinegram sheet   <file.dgm> -o sheet.png    # a labelled grid, one cell per step
 cinegram narrate <file.dgm> [--format=md|json]   # the animation, written out
+cinegram trace   <trace.json> --over <file.dgm>  # replay a real trace over it
 cinegram lint    <file.dgm> [--format=text|json] [--strict] [--fix] # diagnostics only
 cinegram mcp                                # the same tools over MCP, on stdio
 ```

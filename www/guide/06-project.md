@@ -75,6 +75,9 @@ highlighting, a preview panel, an *Open With… → Cinegram Animation* editor, 
 `Cinegram: Export Animation…` to record one straight to a GIF (see
 `editors/vscode/`).
 
+Also working: `cinegram trace`, which replays an OpenTelemetry trace over a
+diagram you already have so the timings are measured rather than chosen.
+
 Not built yet: `architecture-beta` and the other Mermaid diagram types (the
 registry seam exists for them).
 

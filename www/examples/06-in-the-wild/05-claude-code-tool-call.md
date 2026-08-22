@@ -127,3 +127,4 @@ What actually happens when Claude Code runs a single tool call, end to end: one 
     ```
 
 ← [auth refresh edge cases](../06-in-the-wild/04-auth-refresh-edge-cases.md)  
+→ [the slow checkout, 14:02](../07-from-a-trace/01-checkout-architecture.md)

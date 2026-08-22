@@ -542,6 +542,78 @@ the link you copy names what you are looking at.
 `examples/02-storytelling/01-payment-checkout.dgm` tells checkout twice: the path everyone draws,
 and the one that costs money.
 
+## Replaying a real trace
+
+Every `dur:` above is a number somebody chose because the animation felt right at
+that speed. `cinegram trace` replaces the choosing with measuring: it reads an
+OpenTelemetry trace and appends a scenario whose timings *are* the span
+durations.
+
+```sh
+cinegram trace checkout-slow.otlp.json --over architecture.dgm \
+    --map orders-postgres=db
+```
+
+**The diagram is never generated.** It is your picture and it is left exactly as
+written — only a scenario is appended. A service graph derived from a trace is a
+different and uglier drawing than the one a person makes to explain a system, and
+the point here is to animate yours.
+
+What the spans become:
+
+| In the trace | In the scenario |
+| --- | --- |
+| A span that crossed a service boundary | `flow from -> to` along the edge between their nodes, `dur` the measured duration |
+| A span inside one service | `highlight` on that node, for exactly as long as it ran |
+| `status.code = ERROR` | `status: fail` on the flow, and `outcome: fail` on the scenario |
+| `http.status_code` | appended to the arrow's label, so `POST /authorize · 504` |
+| Idle time between phases | the next step's `delay` — a request that waited shows the wait |
+
+Services find their nodes by name: `service.name` is matched against each node's
+id and then its label, both normalised, so `card-network` finds a node labelled
+"Card Network" on its own. `--map service=node` names the ones that cannot match.
+An unmatched service is an error listing both sides rather than a guess, because
+animating the wrong box is worse than refusing.
+
+### Step boundaries mean something here
+
+Steps run in sequence — each begins where the last ended — while a trace is a
+tree of spans that overlap freely. Serialising overlapping spans into consecutive
+steps would invent timings, which is the one thing this command exists not to do.
+
+So a step is cut only where the trace was **quiet**: phases that overlapped share
+a step and keep their true offsets through `at:`, and the silence between two
+bands of activity becomes a `delay`. Absolute times survive exactly — compile the
+result and every track starts and ends on the millisecond its span did — and a
+step boundary now carries a fact, namely that nothing was in flight across it.
+
+### It also tells you when the diagram is wrong
+
+If the trace shows one service calling another and the diagram draws no edge
+between their nodes, that is reported rather than drawn:
+
+```
+cinegram: warning: the trace shows inventory calling db, which the diagram
+does not draw — shown as work on db instead
+```
+
+Which is frequently the most useful line of the run. The picture on the wiki says
+one thing and production is doing another, and the trace just proved it.
+
+### The generated prose is deliberately dull
+
+Each step's `desc` states what was measured — `"2.36s, 90% of the trace. 5 spans
+across 2 overlapping calls, slowest payments.charge at 2.2s. 1 failed: upstream
+timeout after 1000ms"` — and stops there. Generated prose that editorialises is
+how a diagram ends up asserting something nobody checked. Interpretation is a
+person's job, and `retells` is how they add it over these exact timings.
+
+Playback rate is chosen from the trace's own length, since a 300ms request is
+over before a reader has looked up and a four-minute batch job will not be
+watched at all; `--speed` overrides it. `examples/07-from-a-trace/` is a worked
+example: a checkout that should take under half a second taking 2.6, because a
+card authorisation timed out after a full second and the retry took another 1.14.
+
 ## Presenter mode
 
 Talking over a diagram is not watching a video. `?present` — or the **Present**
@@ -690,6 +762,7 @@ cinegram frame   <file.dgm> --at 1620ms -o still.png   # one exact moment
 cinegram record  <file.dgm> -o out.gif      # a GIF, mp4 or webm of one scenario
 cinegram sheet   <file.dgm> -o sheet.png    # a labelled grid, one cell per step
 cinegram narrate <file.dgm> [--format=md|json]   # the animation, written out
+cinegram trace   <trace.json> --over <file.dgm>  # replay a real trace over it
 cinegram lint    <file.dgm> [--format=text|json] [--strict] [--fix] # diagnostics only
 cinegram mcp                                # the same tools over MCP, on stdio
 ```
@@ -1123,6 +1196,9 @@ animate inside the built-in Markdown preview, and `.dgm` files get syntax
 highlighting, a preview panel, an *Open With… → Cinegram Animation* editor, and
 `Cinegram: Export Animation…` to record one straight to a GIF (see
 `editors/vscode/`).
+
+Also working: `cinegram trace`, which replays an OpenTelemetry trace over a
+diagram you already have so the timings are measured rather than chosen.
 
 Not built yet: `architecture-beta` and the other Mermaid diagram types (the
 registry seam exists for them).

@@ -70,6 +70,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return cmdLint(rest, stdout, stderr)
 	case "narrate":
 		return cmdNarrate(rest, stdout, stderr)
+	case "trace":
+		return cmdTrace(rest, stdout, stderr)
 	case "frame":
 		return cmdFrame(rest, stdout, stderr)
 	case "record":
@@ -143,6 +145,14 @@ Usage:
                               [--cols N]         columns (default: from the
                                                  step count, at most 4)
                               [--scenario ID] [--view ID] [--width N] [--height N]
+  cinegram trace   <trace.json> --over <file.dgm> [--map svc=node,...]
+                                                 replay a real OpenTelemetry
+                                                 trace over that diagram: spans
+                                                 become flows and measured span
+                                                 durations become the timings.
+                                                 Appends one scenario; the
+                                                 diagram is left untouched
+                              [--name N] [--speed R] [-o out.dgm]
   cinegram narrate <file.dgm> [-o out.md] [--format=md|json]
                                                  the animation as a walkthrough
   cinegram lint    <file.dgm> [--format=text|json]
