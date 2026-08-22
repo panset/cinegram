@@ -31,9 +31,12 @@ func table(t *testing.T) *parser.Result {
 	return res
 }
 
-func span(id, parent, service, name string, start, end int, failed bool) trace.Span {
+// span takes milliseconds for readability and stores the microseconds the type
+// actually holds.
+func span(id, parent, service, name string, startMs, endMs int, failed bool) trace.Span {
 	return trace.Span{ID: id, ParentID: parent, Service: service, Name: name,
-		Start: start, End: end, Failed: failed, Attrs: map[string]string{}}
+		StartUs: startMs * 1000, EndUs: endMs * 1000, Failed: failed,
+		Attrs: map[string]string{}}
 }
 
 // TestServicesResolveByIDThenLabel is what keeps the common case flag-free:
@@ -122,11 +125,11 @@ func TestBandsKeepOverlappingPhasesTogether(t *testing.T) {
 	if len(bands[0].phases) != 2 {
 		t.Errorf("first band holds %d phases, want the two overlapping ones", len(bands[0].phases))
 	}
-	if bands[0].start != 40 || bands[0].end != 900 {
-		t.Errorf("first band = [%d,%d], want [40,900]", bands[0].start, bands[0].end)
+	if bands[0].start != 40_000 || bands[0].end != 900_000 {
+		t.Errorf("first band = [%d,%d]us, want [40000,900000]", bands[0].start, bands[0].end)
 	}
-	if bands[1].start != 950 {
-		t.Errorf("second band starts at %d, want 950", bands[1].start)
+	if bands[1].start != 950_000 {
+		t.Errorf("second band starts at %dus, want 950000", bands[1].start)
 	}
 }
 
@@ -141,7 +144,7 @@ func TestBandCoversASubtreeOutlivingItsParent(t *testing.T) {
 	tr.Roots = []trace.Span{tr.Spans[0]}
 
 	bands := bandsOf(tr, tr.Phases())
-	if len(bands) != 1 || bands[0].end != 800 {
+	if len(bands) != 1 || bands[0].end != 800_000 {
 		t.Errorf("band = %+v, want one ending at 800", bands)
 	}
 }
@@ -152,7 +155,7 @@ func TestCrossServiceSpanBecomesAFlow(t *testing.T) {
 	nodes := map[string]string{"checkout": "checkout", "payments": "payments"}
 	byID := map[string]trace.Span{"1": span("1", "", "checkout", "parent", 0, 500, false)}
 
-	line, warn := actionFor(span("2", "1", "payments", "charge", 100, 400, false), byID, nodes, res.Symbols, 0)
+	line, warn := actionFor(span("2", "1", "payments", "charge", 100, 400, false), byID, nodes, res.Symbols, 0, 1)
 	if warn != "" {
 		t.Errorf("unexpected warning: %s", warn)
 	}
@@ -163,7 +166,7 @@ func TestCrossServiceSpanBecomesAFlow(t *testing.T) {
 	}
 
 	// Same service: work, not a call.
-	same, _ := actionFor(span("3", "1", "checkout", "internal", 10, 20, false), byID, nodes, res.Symbols, 0)
+	same, _ := actionFor(span("3", "1", "checkout", "internal", 10, 20, false), byID, nodes, res.Symbols, 0, 1)
 	if !strings.HasPrefix(same, "highlight checkout") {
 		t.Errorf("same-service span became %q, want a highlight", same)
 	}
@@ -175,7 +178,7 @@ func TestFailedSpanCarriesItsStatus(t *testing.T) {
 	nodes := map[string]string{"checkout": "checkout", "payments": "payments"}
 	byID := map[string]trace.Span{"1": span("1", "", "checkout", "parent", 0, 500, false)}
 
-	line, _ := actionFor(span("2", "1", "payments", "charge", 0, 100, true), byID, nodes, res.Symbols, 0)
+	line, _ := actionFor(span("2", "1", "payments", "charge", 0, 100, true), byID, nodes, res.Symbols, 0, 1)
 	if !strings.Contains(line, "status: fail") {
 		t.Errorf("a failed span produced %q, want status: fail", line)
 	}
@@ -189,7 +192,7 @@ func TestUndrawnCallIsReportedNotInvented(t *testing.T) {
 	nodes := map[string]string{"payments": "payments", "orders-postgres": "db"}
 	byID := map[string]trace.Span{"1": span("1", "", "payments", "parent", 0, 500, false)}
 
-	line, warn := actionFor(span("2", "1", "orders-postgres", "SELECT", 10, 60, false), byID, nodes, res.Symbols, 0)
+	line, warn := actionFor(span("2", "1", "orders-postgres", "SELECT", 10, 60, false), byID, nodes, res.Symbols, 0, 1)
 	if warn == "" {
 		t.Fatal("a call the diagram does not draw passed without a warning")
 	}
@@ -208,21 +211,67 @@ func TestZeroLengthSpanStillDraws(t *testing.T) {
 	nodes := map[string]string{"checkout": "checkout", "payments": "payments"}
 	byID := map[string]trace.Span{"1": span("1", "", "checkout", "parent", 0, 500, false)}
 
-	line, _ := actionFor(span("2", "1", "payments", "instant", 5, 5, false), byID, nodes, res.Symbols, 0)
+	line, _ := actionFor(span("2", "1", "payments", "instant", 5, 5, false), byID, nodes, res.Symbols, 0, 1)
 	if strings.Contains(line, "dur: 0ms") {
 		t.Errorf("a zero-length span produced %q, which draws nothing", line)
 	}
 }
 
-func TestSuggestSpeedKeepsAReplayWatchable(t *testing.T) {
-	if s := suggestSpeed(300); s >= 1 {
-		t.Errorf("a 300ms trace got speed %v, want slower than real time", s)
-	}
+func TestSuggestSpeedOnlyFastForwards(t *testing.T) {
 	if s := suggestSpeed(180000); s <= 1 {
-		t.Errorf("a three-minute trace got speed %v, want faster than real time", s)
+		t.Errorf("a three-minute animation got speed %v, want faster than real time", s)
 	}
 	if s := suggestSpeed(8000); s != 1 {
-		t.Errorf("an 8s trace got speed %v, want real time", s)
+		t.Errorf("an 8s animation got speed %v, want real time", s)
+	}
+	// Slowing down is suggestScale's job: playback rate cannot go far enough and
+	// the reader's own speed menu bottoms out at 0.25x.
+	if s := suggestSpeed(300); s != 1 {
+		t.Errorf("a short animation got speed %v; slowing down is the scale's job", s)
+	}
+}
+
+// TestSuggestScaleStretchesWhatCannotBeWatched covers the case playback rate
+// cannot reach: an 8ms trace needs the timeline itself made longer, both to be
+// visible and because whole milliseconds have no room for a 0.8ms span.
+func TestSuggestScaleStretchesWhatCannotBeWatched(t *testing.T) {
+	if got := suggestScale(8_000); got < 100 {
+		t.Errorf("an 8ms trace got scale %v, want a large stretch", got)
+	}
+	if got := suggestScale(2_000_000); got != 1 {
+		t.Errorf("a 2s trace got scale %v, want no stretch", got)
+	}
+	if got := suggestScale(0); got != 1 {
+		t.Errorf("an empty trace got scale %v, want 1", got)
+	}
+}
+
+// TestScaleLadderOffersRealTimeToo: the picker is the selector, and the real-time
+// telling is what shows the reader why a stretch was needed.
+func TestScaleLadderOffersRealTimeToo(t *testing.T) {
+	rungs := scaleLadder(1000)
+	if len(rungs) < 2 {
+		t.Fatalf("ladder = %v, want several rungs", rungs)
+	}
+	if rungs[0] != 1000 {
+		t.Errorf("ladder starts at %v, want the chosen scale first", rungs[0])
+	}
+	if rungs[len(rungs)-1] != 1 {
+		t.Errorf("ladder ends at %v, want real time last", rungs[len(rungs)-1])
+	}
+	if got := scaleLadder(1); len(got) != 1 || got[0] != 1 {
+		t.Errorf("a trace needing no stretch got %v, want just real time", got)
+	}
+}
+
+func TestFmtMicrosKeepsSubMillisecondTruth(t *testing.T) {
+	for in, want := range map[int]string{
+		800: "0.8ms", 1700: "1.7ms", 8000: "8ms",
+		220_000: "220ms", 1_910_000: "1.91s",
+	} {
+		if got := fmtMicros(in); got != want {
+			t.Errorf("fmtMicros(%d) = %q, want %q", in, got, want)
+		}
 	}
 }
 
@@ -260,7 +309,7 @@ func TestRenderedScenarioParses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sc, _ := renderScenario(tr, nodes, res.Symbols, "replay", 1)
+	sc, _ := renderScenario(tr, nodes, res.Symbols, "replay", 1, []float64{1})
 
 	full, bag := parser.Parse("gen.dgm", diagram+"\n"+sc)
 	if bag.HasErrors() {
@@ -274,5 +323,27 @@ func TestRenderedScenarioParses(t *testing.T) {
 	}
 	if !strings.Contains(sc, "%% Generated by") {
 		t.Error("the generated block should say it was generated")
+	}
+}
+
+// TestScaleMsRounds is the single place microseconds become the whole
+// milliseconds `ir` holds, so both the rounding and the stretch are pinned here.
+func TestScaleMsRounds(t *testing.T) {
+	cases := []struct {
+		us    int
+		scale float64
+		want  int
+	}{
+		{1600, 1, 2},     // rounds up, not truncates
+		{1400, 1, 1},     // and down
+		{800, 1000, 800}, // 0.8ms stretched 1000x is 800ms
+		{200, 1000, 200}, // a 0.2ms gap becomes visible
+		{800, 1, 1},      // unstretched, it has nowhere to go — hence the scale
+		{1_910_000, 1, 1910},
+	}
+	for _, c := range cases {
+		if got := scaleMs(c.us, c.scale); got != c.want {
+			t.Errorf("scaleMs(%dus, %v) = %d, want %d", c.us, c.scale, got, c.want)
+		}
 	}
 }

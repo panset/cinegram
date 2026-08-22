@@ -20,23 +20,27 @@ import (
 
 // Span is one operation, with times rebased so the trace starts at zero.
 //
-// Start and End are milliseconds from the first span in the trace, because that
-// is what a scenario needs: a timeline's origin is the beginning of the story,
-// not 1970.
+// Times are **microseconds** from the first span in the trace. Two reasons, and
+// the second is the one that bites: a timeline's origin is the beginning of the
+// story rather than 1970, and an internal RPC chain finishes in single-digit
+// milliseconds — rounding to whole milliseconds here would turn a 0.8ms cache
+// read and a 1.7ms rate lookup into 1ms and 2ms before anything downstream got a
+// say. `pkg/ir` is integer milliseconds, so that conversion happens once, at
+// emit, after any scaling.
 type Span struct {
 	ID       string
 	ParentID string
 	Service  string
 	Name     string
-	Start    int // ms from the trace's first span
-	End      int // ms from the trace's first span
+	StartUs  int // microseconds from the trace's first span
+	EndUs    int // microseconds from the trace's first span
 	Failed   bool
 	Message  string            // status message, when the span failed
 	Attrs    map[string]string // flattened span attributes
 }
 
-// Dur is how long the span took.
-func (s Span) Dur() int { return s.End - s.Start }
+// DurUs is how long the span took, in microseconds.
+func (s Span) DurUs() int { return s.EndUs - s.StartUs }
 
 // Trace is every span of one trace, ordered by start time.
 type Trace struct {
@@ -49,12 +53,12 @@ type Trace struct {
 	Roots []Span
 }
 
-// Dur is the wall-clock length of the whole trace.
-func (t *Trace) Dur() int {
+// DurUs is the wall-clock length of the whole trace, in microseconds.
+func (t *Trace) DurUs() int {
 	end := 0
 	for _, s := range t.Spans {
-		if s.End > end {
-			end = s.End
+		if s.EndUs > end {
+			end = s.EndUs
 		}
 	}
 	return end
@@ -107,7 +111,7 @@ func (t *Trace) Subtree(id string) []Span {
 		}
 	}
 	walk(id)
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Start < out[j].Start })
+	sort.SliceStable(out, func(i, j int) bool { return out[i].StartUs < out[j].StartUs })
 	return out
 }
 
@@ -141,7 +145,7 @@ func (t *Trace) Phases() []Span {
 		}
 		phases = append(phases, kids...)
 	}
-	sort.SliceStable(phases, func(i, j int) bool { return phases[i].Start < phases[j].Start })
+	sort.SliceStable(phases, func(i, j int) bool { return phases[i].StartUs < phases[j].StartUs })
 	return phases
 }
 
@@ -288,16 +292,16 @@ func Parse(data []byte) (*Trace, error) {
 			ParentID: r.span.ParentSpanID,
 			Service:  r.service,
 			Name:     r.span.Name,
-			Start:    int((start - origin) / 1e6),
-			End:      int((end - origin) / 1e6),
+			StartUs:  int((start - origin) / 1e3),
+			EndUs:    int((end - origin) / 1e3),
 			Failed:   failed(r.span.Status.Code),
 			Message:  r.span.Status.Message,
 			Attrs:    attrs,
 		}
 		// A clock that ran backwards is the exporter's problem, not something to
 		// propagate into a timeline as a negative duration.
-		if s.End < s.Start {
-			s.End = s.Start
+		if s.EndUs < s.StartUs {
+			s.EndUs = s.StartUs
 		}
 		t.Spans = append(t.Spans, s)
 		ids[s.ID] = true
@@ -306,7 +310,7 @@ func Parse(data []byte) (*Trace, error) {
 		return nil, fmt.Errorf("every span was missing a usable start or end time")
 	}
 
-	sort.SliceStable(t.Spans, func(i, j int) bool { return t.Spans[i].Start < t.Spans[j].Start })
+	sort.SliceStable(t.Spans, func(i, j int) bool { return t.Spans[i].StartUs < t.Spans[j].StartUs })
 
 	// A root is a span whose parent is not in this file — which covers both a
 	// true root and a subtree exported on its own.

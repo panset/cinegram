@@ -44,7 +44,7 @@ flowchart LR
 %%   POST /checkout (gateway) 1.91s, from 0ms
 %%   checkout.create (checkout) 1.88s, from 15ms
 
-scenario "the slow checkout, 14:02" { speed: 0.5, outcome: fail }
+scenario "the slow checkout, 14:02" { speed: 1, outcome: fail }
 
   step t1inventoryreserve "inventory.reserve ∥ payments.charge" {
     desc: "1.7s, 88% of the trace. 5 spans across 2 overlapping calls, slowest payments.charge at 1.52s. 1 failed: card network did not answer within 1000ms"

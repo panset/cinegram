@@ -56,14 +56,14 @@ func TestParseRebasesOntoTheTraceStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tr.Spans[0].Start != 0 {
-		t.Errorf("first span starts at %d, want 0", tr.Spans[0].Start)
+	if tr.Spans[0].StartUs != 0 {
+		t.Errorf("first span starts at %d, want 0", tr.Spans[0].StartUs)
 	}
-	if got := tr.Spans[1]; got.Start != 100 || got.Dur() != 500 {
-		t.Errorf("child at %d for %dms, want 100 for 500", got.Start, got.Dur())
+	if got := tr.Spans[1]; got.StartUs != 100_000 || got.DurUs() != 500_000 {
+		t.Errorf("child at %dus for %dus, want 100000 for 500000", got.StartUs, got.DurUs())
 	}
-	if tr.Dur() != 900 {
-		t.Errorf("trace length = %d, want 900", tr.Dur())
+	if tr.DurUs() != 900_000 {
+		t.Errorf("trace length = %dus, want 900000", tr.DurUs())
 	}
 	if tr.ID != "abc" {
 		t.Errorf("trace id = %q, want abc", tr.ID)
@@ -81,8 +81,8 @@ func TestNanosecondPrecisionSurvives(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tr.Spans[1].Start != 7 {
-		t.Errorf("offset = %dms, want 7 — nanosecond precision was lost", tr.Spans[1].Start)
+	if tr.Spans[1].StartUs != 7_000 {
+		t.Errorf("offset = %dus, want 7000 — nanosecond precision was lost", tr.Spans[1].StartUs)
 	}
 }
 
@@ -196,7 +196,7 @@ func TestBackwardsClockIsClamped(t *testing.T) {
 	tr, _ := Parse(otlp(
 		sp{id: "1", service: "gw", name: "root", startNs: base + 500*ms, endNs: base + 100*ms},
 	))
-	if got := tr.Spans[0].Dur(); got != 0 {
+	if got := tr.Spans[0].DurUs(); got != 0 {
 		t.Errorf("duration = %d, want 0 rather than a negative span", got)
 	}
 }
@@ -243,5 +243,25 @@ func TestAttributesAreFlattenedToStrings(t *testing.T) {
 	a := tr.Spans[0].Attrs
 	if a["http.status_code"] != "503" || a["db.system"] != "postgres" || a["retry"] != "true" {
 		t.Errorf("attrs = %v, want every value flattened to its string form", a)
+	}
+}
+
+// TestSubMillisecondSpansSurvive is why Span carries microseconds. An internal
+// RPC chain finishes in single-digit milliseconds, and rounding here would turn a
+// 0.8ms cache read into 1ms before any scaling could give it room.
+func TestSubMillisecondSpansSurvive(t *testing.T) {
+	const us = 1_000
+	tr, err := Parse(otlp(
+		sp{id: "1", service: "gw", name: "root", startNs: base, endNs: base + 8_000*us},
+		sp{id: "2", parent: "1", service: "cache", name: "get", startNs: base + 400*us, endNs: base + 1_200*us},
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tr.Spans[1].DurUs(); got != 800 {
+		t.Errorf("a 0.8ms span measured %dus, want 800", got)
+	}
+	if got := tr.Spans[1].StartUs; got != 400 {
+		t.Errorf("offset = %dus, want 400", got)
 	}
 }
