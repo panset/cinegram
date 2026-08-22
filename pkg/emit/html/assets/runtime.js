@@ -1165,7 +1165,12 @@
       'M5.6 5.6l1.5 1.5', 'M16.9 16.9l1.5 1.5',
       'M18.4 5.6l-1.5 1.5', 'M7.1 16.9l-1.5 1.5'
     ],
-    'theme-dark': ['M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z']
+    'theme-dark': ['M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z'],
+    // A display, for the state that is neither side but whatever the machine is
+    // set to. A half-shaded disc would say it more literally and cannot be drawn
+    // here: every glyph is stroke on `fill: none`, so a shaded half has nothing
+    // to shade it with.
+    'theme-system': ['M3.5 5.5h17v10.5h-17z', 'M12 16v3.5', 'M9 19.5h6']
   };
 
   function icon(name) {
@@ -1211,30 +1216,44 @@
   // builds, the playground — and a control implemented three times is a
   // control that works on two of them.
   //
-  // Two states: a press flips light to dark and back, and that is the whole
-  // vocabulary. A page nobody has pressed carries no data-theme at all, so
-  // runtime.css's prefers-color-scheme rules answer for it — a fresh reader
-  // opens in whatever the system is showing, and an OS switch moves the page
-  // with no script in the way. That is the state every page starts in.
+  // Three states, and the third one is not new — it is the state every page has
+  // always started in, finally reachable. A page carrying no data-theme lets
+  // runtime.css's prefers-color-scheme rules answer, so a fresh reader opens in
+  // whatever the system is showing and an OS switch moves the page with no
+  // script in the way. What was missing was any way back to it: once a side was
+  // pinned, following the system again meant clearing localStorage by hand.
   //
-  // The first press ends the following. It stores a side, and from then on
-  // this browser shows that side whatever the system does. The trade is
-  // deliberate rather than overlooked: a reader who asked for dark meant dark,
-  // including at sunrise. It does mean the glyph can outlive the system it was
-  // drawn from, which is why drawing goes through the *effective* theme below
-  // rather than the stored one, and why the control watches the media query
-  // itself for as long as nothing is stored.
+  // A pinned side still means pinned — a reader who asked for dark meant dark,
+  // including at sunrise. Letting go is now a press rather than an impossibility.
+  //
+  // The cycle is derived rather than fixed, so that no press is invisible.
+  // Following → the side you are *not* seeing; that side → the side you were;
+  // and that → following again. On a dark machine: system, light, dark, system.
+  // On a light one: system, dark, light, system. Both are three steps and only
+  // the last is a no-op on screen, which it has to be — releasing the pin when
+  // the machine already agrees cannot look like anything.
+  //
+  // A pinned glyph can outlive the system it was drawn from, which is why
+  // drawing goes through the *effective* theme below rather than the stored one,
+  // and why the control watches the media query itself for as long as nothing is
+  // pinned.
 
   // The one storage key, unchanged from the rail button so a reader who chose
   // dark keeps dark, and the same key the boot script in pkg/emit/html reads
-  // before the first paint. Only 'light' and 'dark' are ever written to it.
+  // before the first paint.
+  //
+  // 'system' is written to it as well now, and writing it is safe for the reason
+  // it looks unsafe: neither reader has a branch for it. The boot script sets the
+  // attribute for 'light' and 'dark' and removes it for anything else; themeChoice
+  // returns those two and null for anything else. Both collapse every other
+  // string to "follow the system" by omission, so there is no second resolution
+  // to disagree with the first.
   var THEME_KEY = 'dgm.theme';
 
-  // themeChoice is the side the reader picked, or null while they have picked
-  // none. Anything else in the key reads as null — a value some other page
-  // wrote, or a stale one from a build that had a third state — which is
-  // exactly how the boot script treats it, so the attribute and the glyph
-  // agree from the very first frame.
+  // themeChoice is the side the reader pinned, or null while they are following
+  // the system. Anything else in the key reads as null — 'system', or a value
+  // some other page wrote — which is exactly how the boot script treats it, so
+  // the attribute and the glyph agree from the very first frame.
   function themeChoice() {
     var v = prefGet(THEME_KEY);
     return v === 'light' || v === 'dark' ? v : null;
@@ -1255,7 +1274,24 @@
   // day without the control noticing.
   function chooseTheme(state) {
     prefSet(THEME_KEY, state);
-    document.documentElement.setAttribute('data-theme', state);
+    // Following the system is the *absence* of the attribute, not a value of
+    // it: the stylesheet keys its palettes off `[data-theme]` and a
+    // `data-theme="system"` would match neither, leaving a page with no palette
+    // at all.
+    if (state === 'system') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', state);
+  }
+
+  // nextTheme is the cycle, computed from what is on screen rather than listed,
+  // so that the first press off "following" always changes something. See the
+  // note above the storage key for the two orders this produces.
+  function nextTheme() {
+    var pinned = themeChoice();
+    var system = systemDark() ? 'dark' : 'light';
+    var other = system === 'dark' ? 'light' : 'dark';
+    if (!pinned) return other;
+    if (pinned === other) return system;
+    return 'system';
   }
 
   // drawThemeToggle draws the state the page is *in* and names the action the
@@ -1264,8 +1300,16 @@
   // own; the accessible name says it instead, and aria-live on the button
   // means the new state is announced rather than only shown.
   function drawThemeToggle(btn) {
-    var state = effectiveTheme();
-    var label = 'Theme: ' + state + ' — click for ' + (state === 'dark' ? 'light' : 'dark');
+    var pinned = themeChoice();
+    var showing = effectiveTheme();
+    // Following the system draws the display rather than the palette, because
+    // the palette is not the state: a sun on a page that follows a light machine
+    // would say "light" and be wrong the moment the machine changed. The name
+    // carries what it resolves to, which the glyph then does not have to.
+    var state = pinned || 'system';
+    var label = pinned
+      ? 'Theme: ' + pinned + ' — click for ' + nextTheme()
+      : 'Theme: system (' + showing + ') — click for ' + nextTheme();
     btn.title = label;
     btn.setAttribute('aria-label', label);
     btn.innerHTML = '';
@@ -1307,7 +1351,7 @@
     if (btn.dgmThemeWired) return btn;
     btn.dgmThemeWired = true;
     btn.addEventListener('click', function () {
-      chooseTheme(effectiveTheme() === 'dark' ? 'light' : 'dark');
+      chooseTheme(nextTheme());
       drawThemeToggle(btn);
     });
     drawThemeToggle(btn);

@@ -248,40 +248,56 @@ func TestTheRailDoesNotOwnTheTheme(t *testing.T) {
 
 // TestTheThemeControlIsLightAndDark pins the control's whole vocabulary.
 //
-// A press flips the palette on screen, and that is all it can do. A page nobody
-// has pressed it on carries no data-theme at all, so runtime.css's
-// prefers-color-scheme rules answer for it and an OS switch moves the page
-// live — the state every reader arrives in, and the reason there is no third
-// button state to reach it with. The first press ends that following for good,
-// which is deliberate: a reader who asked for dark meant dark, sunrise
-// included.
-func TestTheThemeControlIsLightAndDark(t *testing.T) {
+// A press moves through three: the side you are not seeing, the side you were,
+// and following the system again. Following is the state every reader arrives in
+// — no data-theme at all, so runtime.css's prefers-color-scheme rules answer and
+// an OS switch moves the page live — and it used to be unreachable once a side
+// was pinned, which made clearing localStorage the only way back to it. A pinned
+// side still means pinned: a reader who asked for dark meant dark, sunrise
+// included. Letting go is now a press.
+func TestTheThemeControlCyclesThroughSystem(t *testing.T) {
 	js := string(runtimeJS)
 
-	// Only a side is ever stored. A third value in the key would be a state the
-	// boot script and the control each have to resolve for themselves, and
-	// nothing makes two resolutions of one string agree.
-	if strings.Contains(js, "'system'") {
-		t.Error("runtime.js still names a 'system' theme state; the control writes 'light' or " +
-			"'dark', and no stored value at all is what following the system is")
+	// Following the system is the *absence* of the attribute. A
+	// `data-theme="system"` would match neither palette in the stylesheet and
+	// leave the page with none, so the write has to be a removal.
+	if !strings.Contains(js, "if (state === 'system') document.documentElement.removeAttribute('data-theme');") {
+		t.Error("chooseTheme does not remove data-theme for 'system'; stamping the word would " +
+			"match neither palette and leave the page unstyled")
 	}
-	if strings.Contains(ThemeBootScript(), "'system'") {
-		t.Error("the boot script still tests for a stored 'system'; nothing writes that value " +
-			"any more, and an unrecognised one already falls through to removing the attribute")
-	}
-	if strings.Contains(js, "'theme-system'") {
-		t.Error("the half-shaded system glyph is still in ICONS with nothing left to draw it")
+	if !strings.Contains(js, "'theme-system'") {
+		t.Error("ICONS has no glyph for the system state, so the control cannot show which of " +
+			"three it is in")
 	}
 
-	// The flip is computed from what the reader can see, not from what is
-	// stored. On a page still following the system nothing is stored, so a flip
-	// read off storage has no side to reverse — the first press would pin a
-	// palette by luck, and half the time pin the one already on screen, which
-	// looks exactly like a button that does nothing.
-	if !strings.Contains(js, "chooseTheme(effectiveTheme() === 'dark' ? 'light' : 'dark');") {
-		t.Error("the control's press does not flip the effective theme; the stored choice is " +
-			"absent on a page that is following the system, and it is the palette on screen " +
-			"that a press is understood to reverse")
+	// The one thing that made a third state look dangerous, held to: both
+	// readers collapse every value that is not a side to "follow the system", so
+	// there is no second resolution of 'system' to disagree with the first. The
+	// boot script must keep testing for the two sides only.
+	if !strings.Contains(ThemeBootScript(), "if (t === 'light' || t === 'dark')") {
+		t.Error("the boot script no longer tests for exactly the two sides; it and themeChoice " +
+			"agree about 'system' only by both treating anything else as following the system")
+	}
+	if !strings.Contains(js, "return v === 'light' || v === 'dark' ? v : null;") {
+		t.Error("themeChoice no longer reads a stored 'system' as null, so the attribute the " +
+			"boot script removed and the glyph the control draws can now disagree")
+	}
+
+	// The cycle is derived from what is on screen, not a fixed list. A fixed
+	// order would send the first press from "following" to whichever side came
+	// first, which half the time is the side already showing — a button that
+	// looks like it does nothing.
+	if !strings.Contains(js, "chooseTheme(nextTheme());") {
+		t.Error("the control's press does not go through nextTheme, so the cycle is no longer " +
+			"computed from the palette on screen")
+	}
+	if !strings.Contains(js, "if (!pinned) return other;") {
+		t.Error("nextTheme does not leave 'following' for the side that is not showing; the " +
+			"first press would then pin the palette already on screen half the time")
+	}
+	if !strings.Contains(js, "return 'system';") {
+		t.Error("nextTheme never returns to 'system', which is the whole point: a pinned side " +
+			"was otherwise a dead end short of clearing localStorage")
 	}
 	if !strings.Contains(js, "return themeChoice() || (systemDark() ? 'dark' : 'light');") {
 		t.Error("nothing resolves the effective theme from the stored choice and the system; " +

@@ -1003,12 +1003,22 @@ Theme and speed persist in `localStorage`. The theme control is page chrome
 rather than a diagram tool — top right on a page `cinegram preview` writes, in
 the header of a `cinegram site` page, beside the other buttons in the playground
 — because dark and light describe the page, and every player on it follows the
-`data-theme` the control writes. It is a **light ⇄ dark** flip. Until you press
-it a page has no theme of its own and simply shows whichever your OS is set to,
-following it live through `prefers-color-scheme` with no script in the way; the
-first press picks a side and keeps it, on that page and every other cinegram
-page in that browser. Inside VS Code there is no control at all: the editor's
-theme is the answer, and the preview follows it live.
+`data-theme` the control writes. It cycles **light → dark → system**.
+
+`system` is where every page starts, and it is not a value of `data-theme` but the
+absence of one: the stylesheet's `prefers-color-scheme` rules answer instead, so
+an OS switch moves the page live with no script in the way. Pinning a side keeps
+it, on that page and every other cinegram page in that browser — a reader who
+asked for dark meant dark, sunrise included — and a third press lets go again,
+which previously meant clearing `localStorage` by hand.
+
+The cycle is derived from what is on screen rather than fixed, so no press is
+invisible: from `system` it moves to the side you are *not* seeing. On a dark
+machine that reads system → light → dark → system; on a light one, system → dark
+→ light → system.
+
+Inside VS Code there is no control at all: the editor's theme is the answer, and
+the preview follows it live.
 
 Speed sits in the transport, beside Play, because that is what it is: the rate
 the clock runs at. The menu offers
