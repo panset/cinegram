@@ -827,6 +827,32 @@
     transport.appendChild(iconButton('next', 'Next step', 'dgm-btn dgm-tbtn', function () {
       self.nextStep(1);
     }));
+
+    // Speed is transport too, and it was two keystrokes away in the settings
+    // sheet. It sits here rather than in the rail — where it used to be — for
+    // the reason it left: its label is its own value, so the control is as wide
+    // as "0.25x" and a vertical column had to widen for it. A horizontal row
+    // whose scrub flexes has the width to spare.
+    //
+    // It stays one control rather than gaining a twin, because the rate is
+    // remembered per origin, not per diagram: two views of one stored preference
+    // is two things to keep honest. syncSpeed is still its only writer.
+    this.speedSel = el('select', 'dgm-select dgm-foot-speed');
+    for (var si = 0; si < SPEED_PRESETS.length; si++) {
+      var sopt = document.createElement('option');
+      sopt.value = String(SPEED_PRESETS[si]);
+      sopt.textContent = speedLabel(SPEED_PRESETS[si]);
+      this.speedSel.appendChild(sopt);
+    }
+    this.speedSel.title = 'Playback speed';
+    this.speedSel.addEventListener('change', function () {
+      self.setSpeed(parseFloat(self.speedSel.value));
+    });
+    transport.appendChild(this.speedSel);
+    // Written once from whatever this.speed already is; adoptScenarioSpeed
+    // writes it again the moment a scenario has an opinion.
+    this.syncSpeed();
+
     foot.appendChild(transport);
 
     var track = el('div', 'dgm-scrub-wrap');
@@ -1081,7 +1107,7 @@
     this.shareBtn.appendChild(this.shareNote);
     rail.appendChild(this.shareBtn);
 
-    this.helpBtn = iconButton('help', 'Settings and shortcuts', 'dgm-btn', function () { self.toggleHelp(); });
+    this.helpBtn = iconButton('help', 'Shortcuts', 'dgm-btn', function () { self.toggleHelp(); });
     rail.appendChild(this.helpBtn);
 
     return rail;
@@ -1373,27 +1399,43 @@
     }
   };
 
-  // SPEED_PRESETS is the sheet's speed menu. Five rates, coarse on purpose:
-  // this is a reader asking for slower or faster, not an author timing a beat
-  // — `speed:` in the scenario is for that, and outranks this.
-  var SPEED_PRESETS = [0.25, 0.5, 1, 1.5, 2];
+  // SPEED_PRESETS is the speed menu. The five middle rates were the whole list
+  // when this was a button in the rail, and the list was short for a reason the
+  // comment there gave: it was "reachable only by cycling forwards through five
+  // rates — four clicks to get from 2x back to 0.25x". Coarseness was a property
+  // of *cycling*, and nobody cycles a <select>.
+  //
+  // So the ends are open now, because the material stopped being hand-authored
+  // explainers where 0.25x to 2x is plenty. `cinegram trace` replays measured
+  // time: a trace is 8ms or it is four minutes, and both want watching. 0.1x and
+  // 10x are the rates those need.
+  //
+  // Purely additive — the original five are all still here, in place — because
+  // the chosen rate is remembered across every cinegram this browser opens, and
+  // dropping 1.5x would have quietly moved somebody's saved preference.
+  var SPEED_PRESETS = [0.1, 0.25, 0.5, 1, 1.5, 2, 4, 10];
 
-  // The sheet is settings *and* shortcuts. It was a read-only list, and speed
-  // was a button in the rail: a preference, persisted across every diagram on
-  // the origin, sitting in the narrowest and most contested column on the page,
-  // hidden from presenters by dgm-authoring, and reachable only by cycling
-  // forwards through five rates — four clicks to get from 2x back to 0.25x.
-  // Somewhere a reader opens deliberately is where a preference belongs, and
-  // once there is one such place there is somewhere for the next one to go.
+  // The sheet is shortcuts, and for a while it was settings too.
+  //
+  // Speed came here from the rail, which was right at the time: the rail is the
+  // narrowest column on the page and a control whose label is its own value had
+  // to widen it, four clicks stood between 2x and 0.25x, and dgm-authoring hid
+  // it from presenters. Somewhere a reader opens deliberately was better than
+  // that.
+  //
+  // It has since moved on to the foot, beside the transport it belongs to, where
+  // the width objection does not apply and it is one click rather than three.
+  // The sheet is a list again. If a real setting turns up — one that is neither
+  // transport nor page chrome — this is still where it goes.
   Player.prototype.buildHelp = function () {
     var self = this;
     var box = el('div', 'dgm-help');
     box.setAttribute('role', 'dialog');
-    box.setAttribute('aria-label', 'Settings and shortcuts');
+    box.setAttribute('aria-label', 'Shortcuts');
     box.style.display = 'none';
 
     var panel = el('div', 'dgm-help-panel');
-    panel.appendChild(elText('div', 'dgm-help-title', 'Settings and shortcuts'));
+    panel.appendChild(elText('div', 'dgm-help-title', 'Shortcuts'));
 
     // With reduced motion there is no autoplay, so stepping is not a fallback
     // — it is how the diagram is meant to be read. Say so where it is useful.
@@ -1402,31 +1444,6 @@
         'Your system asks for reduced motion, so playback does not start on its own. ' +
         'Step through with the arrow keys.'));
     }
-
-    panel.appendChild(elText('div', 'dgm-help-section', 'Playback'));
-
-    // A <label> wrapping the control rather than a `for`/id pair: one document
-    // can hold several players, ids have to be unique across it, and the pair
-    // would need a counter nothing else in this file needs. Wrapping asks for
-    // no id at all.
-    var speedRow = el('label', 'dgm-help-row');
-    speedRow.appendChild(elText('span', '', 'Speed'));
-    this.speedSel = el('select', 'dgm-select dgm-help-speed');
-    for (var i = 0; i < SPEED_PRESETS.length; i++) {
-      var opt = document.createElement('option');
-      opt.value = String(SPEED_PRESETS[i]);
-      opt.textContent = speedLabel(SPEED_PRESETS[i]);
-      this.speedSel.appendChild(opt);
-    }
-    this.speedSel.addEventListener('change', function () {
-      self.setSpeed(parseFloat(self.speedSel.value));
-    });
-    speedRow.appendChild(this.speedSel);
-    panel.appendChild(speedRow);
-    // The menu exists before any scenario has been adopted, so it is written
-    // once from whatever this.speed already is; adoptScenarioSpeed writes it
-    // again the moment a scenario has an opinion.
-    this.syncSpeed();
 
     panel.appendChild(elText('div', 'dgm-help-section', 'Shortcuts'));
 
@@ -3778,13 +3795,12 @@
     }
 
     sel.value = String(this.speed);
-    // The rate is deliberately no longer part of the accessible name. The
-    // button this replaced had to carry it, because its label *was* the rate
-    // and "1x" read out of context is a number attached to nothing; a select
-    // announces its own value, so repeating it in the name would have a screen
-    // reader say the rate twice and re-announce the control on every change.
-    // What the name has to supply is the word the visible "Speed" leaves to its
-    // heading.
+    // The rate is deliberately not part of the accessible name: a select
+    // announces its own value, so repeating it would have a screen reader say
+    // the rate twice and re-announce the control on every change. What the name
+    // supplies is what the rate is *of* — and in the foot it is the whole name,
+    // since there is no "Speed" heading beside it any more. The visible title
+    // says the same thing to a mouse.
     sel.setAttribute('aria-label', 'Playback speed');
   };
 

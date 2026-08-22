@@ -489,14 +489,59 @@ func TestTheRailCollapseIsGone(t *testing.T) {
 	}
 }
 
-// TestSpeedLivesInTheSettingsSheet pins where playback speed went.
+// TestTransportSitsAtTheTimeline pins the cluster that moves the clock.
 //
-// Speed is a preference — one localStorage key for every cinegram this browser
-// opens — and it sat in the rail, which is the narrowest and most contested
-// space on the page, hidden from presenters by dgm-authoring, and reachable
-// only by cycling forwards through five rates. The help overlay was a read-only
-// list with nowhere for a setting to live. Putting one in the other fixes both.
-func TestSpeedLivesInTheSettingsSheet(t *testing.T) {
+// Play used to stand in the top bar while the scrub it drives sat at the bottom,
+// which asked a reader to operate one thing from two places. Previous and next
+// step are the arrow keys made visible: onKey has read them from the beginning,
+// and a reader who never went looking for a shortcut was dragging the scrub and
+// guessing where the beats were.
+func TestTransportSitsAtTheTimeline(t *testing.T) {
+	js, css := string(runtimeJS), string(runtimeCSS)
+
+	if !strings.Contains(js, "el('div', 'dgm-transport')") {
+		t.Error("runtime.js builds no transport cluster, so Play is back to being a bar away " +
+			"from the timeline it drives")
+	}
+	for _, label := range []string{"'Previous step'", "'Next step'"} {
+		if !strings.Contains(js, label) {
+			t.Errorf("the transport has no %s button; the arrow keys stay the only way to "+
+				"walk the beats, which is the thing this cluster exists to surface", label)
+		}
+	}
+	// The glyph is the whole control, so the label cannot be written as text:
+	// textContent would delete the icon. syncPlay writes both together.
+	if strings.Contains(js, "this.playBtn.textContent") {
+		t.Error("something writes playBtn.textContent; the play control is an icon button now " +
+			"and that would delete its glyph — see syncPlay")
+	}
+	if !strings.Contains(js, "Player.prototype.syncPlay") {
+		t.Error("syncPlay is gone, so nothing keeps the play glyph and its accessible name in " +
+			"step with whether the clock is running")
+	}
+	// Play left the bar, so the rule that used to restore it there restores
+	// nothing, and the third rule that arbitrated between them has no parties.
+	if strings.Contains(css, ".dgm-inline .dgm-controls > .dgm-play") {
+		t.Error("runtime.css still restores a bar Play for inline mode; the control is in the " +
+			"foot, which inline shows, so the rule and the conflict it caused are both dead")
+	}
+	if !strings.Contains(css, ".dgm-transport {") {
+		t.Error("runtime.css does not style .dgm-transport, so the cluster is unspaced buttons " +
+			"crowding the scrub")
+	}
+}
+
+// TestSpeedLivesInTheTransport pins where playback speed went, and the invariant
+// underneath every move it has made: a reader can always change the rate, and
+// exactly one control writes the key that remembers it.
+//
+// It began as a button in the rail, cycling one way through five rates. It moved
+// to the settings sheet, because the rail is the narrowest space on the page, a
+// control whose label is its own value has to widen it, and dgm-authoring hid it
+// from presenters. It now sits in the foot beside the transport it belongs to,
+// where a horizontal row has the width the column did not and it is one click
+// instead of three.
+func TestSpeedLivesInTheTransport(t *testing.T) {
 	js, css := string(runtimeJS), string(runtimeCSS)
 
 	for _, gone := range []string{"speedBtn", "cycleSpeed"} {
@@ -505,23 +550,48 @@ func TestSpeedLivesInTheSettingsSheet(t *testing.T) {
 				"what the sheet's menu replaces, and two writers of dgm.speed is one too many", gone)
 		}
 	}
-	if !strings.Contains(js, "el('select', 'dgm-select dgm-help-speed')") {
-		t.Error("the sheet builds no speed menu; with the rail button gone there is then no " +
+	if !strings.Contains(js, "el('select', 'dgm-select dgm-foot-speed')") {
+		t.Error("the foot builds no speed menu; with the rail button gone there is then no " +
 			"way at all for a reader to change the playback rate")
+	}
+	// One writer, because the rate is remembered per origin rather than per
+	// diagram: a second menu would be a second view of one stored preference.
+	if n := strings.Count(js, "self.setSpeed(parseFloat("); n != 1 {
+		t.Errorf("runtime.js has %d speed menus, want exactly 1: the rate is a preference and "+
+			"two controls for it are two things to keep honest", n)
+	}
+	// The ends are open because the material stopped being hand-authored
+	// explainers: `cinegram trace` replays measured time, and a trace is 8ms or
+	// four minutes. Coarseness was a property of cycling, and this is a select.
+	for _, rate := range []string{"0.1", "10"} {
+		if !strings.Contains(js, "var SPEED_PRESETS = [0.1, 0.25, 0.5, 1, 1.5, 2, 4, 10];") {
+			t.Errorf("SPEED_PRESETS no longer reaches %sx, so a trace measured in milliseconds "+
+				"or minutes cannot be watched at a sensible rate", rate)
+			break
+		}
+	}
+	// Additive on purpose: the original five are still there, because the chosen
+	// rate is remembered and dropping one would move somebody's saved preference.
+	for _, rate := range []string{"0.25", "0.5", "1.5", "2"} {
+		if !strings.Contains(js, rate) {
+			t.Errorf("SPEED_PRESETS dropped %sx; widening the range must not move a rate a "+
+				"reader has already chosen and had remembered", rate)
+		}
 	}
 	// The key is the whole point of moving the control rather than deleting it:
 	// a rate chosen here is remembered, and adoptScenarioSpeed is what keeps an
 	// authored `speed:` outranking it.
 	if !strings.Contains(js, "prefSet('dgm.speed', String(v))") {
-		t.Error("the sheet's speed menu no longer writes dgm.speed, so the choice is forgotten " +
+		t.Error("the speed menu no longer writes dgm.speed, so the choice is forgotten " +
 			"on the next page — which is the one thing a preference has to do")
 	}
 	// The sheet is a dialog and stays one: Esc and the backdrop close it, and a
 	// role that went missing would leave a screen reader reading a settings
 	// panel as part of the page behind it.
 	if !strings.Contains(js, "box.setAttribute('role', 'dialog')") {
-		t.Error("the settings sheet is no longer a dialog; it holds a control now, so what it " +
-			"is matters more than it did when it was a list")
+		t.Error("the shortcuts sheet is no longer a dialog; it is an overlay a reader opens " +
+			"deliberately, and a role that went missing would leave a screen reader reading " +
+			"it as part of the page behind it")
 	}
 	// The property cycleSpeed had and a <select> does not: it stepped to the
 	// next preset by value, so a scenario declaring `speed: 0.8` went somewhere
@@ -537,9 +607,11 @@ func TestSpeedLivesInTheSettingsSheet(t *testing.T) {
 				"rounder answer but a different one", part)
 		}
 	}
-	if !strings.Contains(css, ".dgm-help-row {") {
-		t.Error("runtime.css does not style .dgm-help-row, so the sheet's one setting is an " +
-			"unaligned label and menu above a grid that is carefully aligned")
+	// The sheet's one row went with the control. Styling a class nothing builds
+	// is dead weight in a sheet every page carries, so the rule left too.
+	if strings.Contains(css, ".dgm-help-row {") {
+		t.Error("runtime.css still styles .dgm-help-row, which nothing builds now that speed " +
+			"lives in the foot")
 	}
 	if !strings.Contains(css, ".dgm-help-section {") {
 		t.Error("runtime.css does not style .dgm-help-section; the sheet holds settings and " +

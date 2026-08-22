@@ -614,19 +614,6 @@ body.dgm-standalone {
   margin: 0 0 8px;
 }
 
-/* A <label> wrapping its control, which is why this is a flex row rather than a
-   grid like the shortcut list: the name goes left, the control right, and the
-   whole row is the click target that focuses it. */
-.dgm-help-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0 0 14px;
-  font-size: 13px;
-  cursor: pointer;
-}
-
 .dgm-help-list {
   display: grid;
   grid-template-columns: max-content 1fr;
@@ -1529,6 +1516,15 @@ body.dgm-standalone {
   padding: 6px;
   line-height: 0;
   border-radius: 4px;
+}
+
+/* Tighter than the scenario picker: this one holds "0.25x", not the name of a
+   walkthrough, so the padding that suits a sentence wastes the row here. `em`
+   for the width so a reader who has scaled their text keeps a box that fits. */
+.dgm-foot-speed {
+  padding: 5px 8px;
+  font-size: 12px;
+  min-width: 4.5em;
 }
 
 /* Play is the one a reader reaches for without looking, so it is the only one
