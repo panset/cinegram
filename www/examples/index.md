@@ -26,5 +26,5 @@ one question, four turns · fan out, barrier, synthesise · rag pipeline · laun
 
 ## [in the wild](06-in-the-wild/index.md)
 
-build it up · walk the pipeline · one polling cycle · auth refresh edge cases · claude code tool call
+build it up · walk the pipeline · one polling cycle · auth refresh edge cases · claude code tool call · pytest tests/ — one session, hook by hook · architecture canvas · map applies the function to every element, in order
 

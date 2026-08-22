@@ -1,0 +1,837 @@
+{
+  "version": 2,
+  "root": "06-pytest-session-hooks",
+  "views": [
+    {
+      "id": "06-pytest-session-hooks",
+      "title": "pytest tests/ — one session, hook by hook",
+      "diagram": {
+        "type": "stateDiagram",
+        "mermaid": "%% One pytest run, hook by hook. The diagram is the `stateDiagram-v2` that\n%% BeniaminK posted in pytest-dev/pytest#3261\n%% (https://github.com/pytest-dev/pytest/issues/3261), unchanged — the thread\n%% has asked since 2018 for \"a flowchart of all the pytest test session states\n%% together with all the applicable hooks\", and the diagram answers the\n%% *which* but not the *when*. The scenario adds the when: every step is one\n%% phase of the session, lit, with everything the run has not reached yet\n%% greyed back, and a note saying what a plugin author can do at that hook.\n%% ---\n%% Composite states (`Collection`, `DirectoryCollection`, `GenTests`) are\n%% animation targets like any other state, so `dim Collection` greys the\n%% whole collection phase with one word, and `flow pytest_sessionstart -\u003e\n%% Collection` animates the transition that enters it. `[*]` is addressable\n%% as `root_start` / `root_end`, which is how the first and last arrows move.\n%% ---\n%% Transitions already print their own labels (`1..N`), so flows here carry\n%% none — a label would draw a second copy on top.\nstateDiagram-v2\n  state \"pytest_addhooks(pluginmanager)\" as pytest_addhooks\n  state \"pytest_addoption(parser, pluginmanager)\" as pytest_addoption\n  state \"pytest_plugin_registered(plugin, plugin_name, manager)\" as pytest_plugin_registered\n  state \"pytest_load_initial_conftests(early_config, parser, args)\" as pytest_load_initial_conftests\n  state \"pytest_collect_directory(path, parent)\" as pytest_collect_directory\n  state \"pytest_ignore_collect(collection_path, path, config)\" as pytest_ignore_collect\n  state \"pytest_collect_file(file_path, path, parent)\" as pytest_collect_file\n  state \"pytest_pycollect_makemodule(module_path, path, parent)\" as pytest_pycollect_makemodule\n  state \"pytest_pycollect_makeitem(collector, name, obj)\" as pytest_pycollect_makeitem\n  state \"pytest_collection_modifyitems(session, config, items)\" as pytest_collection_modifyitems\n  state \"pytest_sessionfinish(session, exitstatus)\" as pytest_sessionfinish\n  pytest_cmdline_main: pytest_cmdline_main(config)\n  pytest_configure: pytest_configure(config)\n  pytest_sessionstart: pytest_sessionstart(session)\n  pytest_collection: pytest_collection(session)\n  pytest_generate_tests: pytest_generate_tests(metafunc)\n  pytest_collection_finish: pytest_collection_finish(session)\n  pytest_unconfigure: pytest_unconfigure(config)\n\n  [*] --\u003e pytest_addhooks\n  pytest_addhooks --\u003e pytest_addoption\n  pytest_addoption --\u003e pytest_plugin_registered\n  pytest_plugin_registered  --\u003e pytest_load_initial_conftests\n  pytest_load_initial_conftests --\u003e pytest_cmdline_main\n  pytest_cmdline_main --\u003e pytest_configure\n  pytest_configure --\u003e pytest_sessionstart\n  pytest_sessionstart --\u003e Collection\n  state Collection {\n    pytest_collection --\u003e DirectoryCollection : 1..N\n    state DirectoryCollection {\n      pytest_collect_directory --\u003e pytest_ignore_collect : 1..N\n      pytest_collect_directory --\u003e pytest_collect_file : 1..N\n      pytest_collect_file --\u003e pytest_pycollect_makemodule : 1..N\n    }\n\n    DirectoryCollection --\u003e GenTests : 1..N\n\n    state GenTests {\n      pytest_pycollect_makeitem --\u003e pytest_generate_tests\n    }\n\n    GenTests --\u003e pytest_collection_modifyitems\n    pytest_collection_modifyitems --\u003e pytest_collection_finish\n  }\n\n  Collection --\u003e pytest_sessionfinish\n  pytest_sessionfinish --\u003e pytest_unconfigure\n  pytest_unconfigure --\u003e [*]\n\n"
+      },
+      "nodes": [
+        {
+          "id": "pytest_addhooks",
+          "label": "pytest_addhooks(pluginmanager)",
+          "shape": "state"
+        },
+        {
+          "id": "pytest_addoption",
+          "label": "pytest_addoption(parser, pluginmanager)",
+          "shape": "state"
+        },
+        {
+          "id": "pytest_plugin_registered",
+          "label": "pytest_plugin_registered(plugin, plugin_name, manager)",
+          "shape": "state"
+        },
+        {
+          "id": "pytest_load_initial_conftests",
+          "label": "pytest_load_initial_conftests(early_config, parser, args)",
+          "shape": "state"
+        },
+        {
+          "id": "pytest_collect_directory",
+          "label": "pytest_collect_directory(path, parent)",
+          "shape": "state",
+          "group": "DirectoryCollection"
+        },
+        {
+          "id": "pytest_ignore_collect",
+          "label": "pytest_ignore_collect(collection_path, path, config)",
+          "shape": "state",
+          "group": "DirectoryCollection"
+        },
+        {
+          "id": "pytest_collect_file",
+          "label": "pytest_collect_file(file_path, path, parent)",
+          "shape": "state",
+          "group": "DirectoryCollection"
+        },
+        {
+          "id": "pytest_pycollect_makemodule",
+          "label": "pytest_pycollect_makemodule(module_path, path, parent)",
+          "shape": "state",
+          "group": "DirectoryCollection"
+        },
+        {
+          "id": "pytest_pycollect_makeitem",
+          "label": "pytest_pycollect_makeitem(collector, name, obj)",
+          "shape": "state",
+          "group": "GenTests"
+        },
+        {
+          "id": "pytest_collection_modifyitems",
+          "label": "pytest_collection_modifyitems(session, config, items)",
+          "shape": "state",
+          "group": "Collection"
+        },
+        {
+          "id": "pytest_sessionfinish",
+          "label": "pytest_sessionfinish(session, exitstatus)",
+          "shape": "state"
+        },
+        {
+          "id": "pytest_cmdline_main",
+          "label": "pytest_cmdline_main(config)",
+          "shape": "state"
+        },
+        {
+          "id": "pytest_configure",
+          "label": "pytest_configure(config)",
+          "shape": "state"
+        },
+        {
+          "id": "pytest_sessionstart",
+          "label": "pytest_sessionstart(session)",
+          "shape": "state"
+        },
+        {
+          "id": "pytest_collection",
+          "label": "pytest_collection(session)",
+          "shape": "state",
+          "group": "Collection"
+        },
+        {
+          "id": "pytest_generate_tests",
+          "label": "pytest_generate_tests(metafunc)",
+          "shape": "state",
+          "group": "GenTests"
+        },
+        {
+          "id": "pytest_collection_finish",
+          "label": "pytest_collection_finish(session)",
+          "shape": "state",
+          "group": "Collection"
+        },
+        {
+          "id": "pytest_unconfigure",
+          "label": "pytest_unconfigure(config)",
+          "shape": "state"
+        },
+        {
+          "id": "root_start",
+          "label": "start",
+          "shape": "start"
+        },
+        {
+          "id": "Collection",
+          "label": "Collection"
+        },
+        {
+          "id": "DirectoryCollection",
+          "label": "DirectoryCollection",
+          "group": "Collection"
+        },
+        {
+          "id": "GenTests",
+          "label": "GenTests",
+          "group": "Collection"
+        },
+        {
+          "id": "root_end",
+          "label": "end",
+          "shape": "end"
+        }
+      ],
+      "groups": [
+        {
+          "id": "Collection",
+          "label": "Collection",
+          "children": [
+            "pytest_collection",
+            "DirectoryCollection",
+            "DirectoryCollection",
+            "GenTests",
+            "GenTests",
+            "pytest_collection_modifyitems",
+            "pytest_collection_finish"
+          ]
+        },
+        {
+          "id": "DirectoryCollection",
+          "label": "DirectoryCollection",
+          "parent": "Collection",
+          "children": [
+            "pytest_collect_directory",
+            "pytest_ignore_collect",
+            "pytest_collect_file",
+            "pytest_pycollect_makemodule"
+          ]
+        },
+        {
+          "id": "GenTests",
+          "label": "GenTests",
+          "parent": "Collection",
+          "children": [
+            "pytest_pycollect_makeitem",
+            "pytest_generate_tests"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "root_start",
+          "to": "pytest_addhooks",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "pytest_addhooks",
+          "to": "pytest_addoption",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "pytest_addoption",
+          "to": "pytest_plugin_registered",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "pytest_plugin_registered",
+          "to": "pytest_load_initial_conftests",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "pytest_load_initial_conftests",
+          "to": "pytest_cmdline_main",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "pytest_cmdline_main",
+          "to": "pytest_configure",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e6",
+          "from": "pytest_configure",
+          "to": "pytest_sessionstart",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e7",
+          "from": "pytest_sessionstart",
+          "to": "Collection",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e8",
+          "from": "pytest_collection",
+          "to": "DirectoryCollection",
+          "label": "1..N",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e9",
+          "from": "pytest_collect_directory",
+          "to": "pytest_ignore_collect",
+          "label": "1..N",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e10",
+          "from": "pytest_collect_directory",
+          "to": "pytest_collect_file",
+          "label": "1..N",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e11",
+          "from": "pytest_collect_file",
+          "to": "pytest_pycollect_makemodule",
+          "label": "1..N",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e12",
+          "from": "DirectoryCollection",
+          "to": "GenTests",
+          "label": "1..N",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e13",
+          "from": "pytest_pycollect_makeitem",
+          "to": "pytest_generate_tests",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e14",
+          "from": "GenTests",
+          "to": "pytest_collection_modifyitems",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e15",
+          "from": "pytest_collection_modifyitems",
+          "to": "pytest_collection_finish",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e16",
+          "from": "Collection",
+          "to": "pytest_sessionfinish",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e17",
+          "from": "pytest_sessionfinish",
+          "to": "pytest_unconfigure",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e18",
+          "from": "pytest_unconfigure",
+          "to": "root_end",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "pytest tests/ — one session, hook by hook",
+          "duration": 8100,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "plugins",
+              "name": "Plugins register before anything is configured",
+              "desc": "The first three hooks run while pytest is still assembling itself. pytest_addhooks lets a plugin declare new hook specs; pytest_addoption is where --my-flag and ini keys are added to the parser; pytest_plugin_registered fires once per plugin, including the built-ins. None of them can see a test yet.",
+              "start": 0,
+              "end": 1200,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "pytest_load_initial_conftests"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "pytest_cmdline_main"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "pytest_configure"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "pytest_sessionstart"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "Collection"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "pytest_sessionfinish"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "pytest_unconfigure"
+                },
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 400,
+                  "edge": "e0",
+                  "from": "root_start",
+                  "to": "pytest_addhooks"
+                },
+                {
+                  "kind": "flow",
+                  "start": 400,
+                  "end": 800,
+                  "edge": "e1",
+                  "from": "pytest_addhooks",
+                  "to": "pytest_addoption"
+                },
+                {
+                  "kind": "flow",
+                  "start": 800,
+                  "end": 1200,
+                  "edge": "e2",
+                  "from": "pytest_addoption",
+                  "to": "pytest_plugin_registered"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "pytest_addhooks",
+                  "style": "active"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "pytest_addoption",
+                  "style": "active"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "pytest_plugin_registered",
+                  "style": "active"
+                },
+                {
+                  "kind": "note",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "pytest_addoption",
+                  "text": "parser.addoption('--slow')\nparser.addini('timeout', ...)",
+                  "side": "right"
+                }
+              ]
+            },
+            {
+              "id": "conftest",
+              "name": "Initial conftests load, then the command line is acted on",
+              "desc": "pytest_load_initial_conftests imports the conftest.py files on the rootdir and on every path you passed — it is the last moment to change early_config. pytest_cmdline_main is the whole run as one hook (a plugin can return an exit code here and nothing else happens); pytest_configure is where most plugins do their setup, because config is final.",
+              "start": 1200,
+              "end": 2550,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "pytest_sessionstart"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "Collection"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "pytest_sessionfinish"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "pytest_unconfigure"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1200,
+                  "end": 1650,
+                  "edge": "e3",
+                  "from": "pytest_plugin_registered",
+                  "to": "pytest_load_initial_conftests"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1650,
+                  "end": 2100,
+                  "edge": "e4",
+                  "from": "pytest_load_initial_conftests",
+                  "to": "pytest_cmdline_main"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2100,
+                  "end": 2550,
+                  "edge": "e5",
+                  "from": "pytest_cmdline_main",
+                  "to": "pytest_configure"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "pytest_load_initial_conftests",
+                  "style": "active"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "pytest_cmdline_main",
+                  "style": "active"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "pytest_configure",
+                  "style": "active"
+                },
+                {
+                  "kind": "note",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "pytest_configure",
+                  "text": "config.addinivalue_line('markers', ...)\nregister plugins that need config",
+                  "side": "right"
+                }
+              ]
+            },
+            {
+              "id": "session",
+              "name": "The session starts and collection begins",
+              "desc": "pytest_sessionstart is the first hook with a Session object, and the last one before pytest looks at the filesystem. The whole Collection phase is about to run; it is lit as a block here so the audience sees how much of the diagram is 'finding tests' versus 'running them'.",
+              "start": 2550,
+              "end": 3500,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 2550,
+                  "end": 3500,
+                  "target": "pytest_sessionfinish"
+                },
+                {
+                  "kind": "dim",
+                  "start": 2550,
+                  "end": 3500,
+                  "target": "pytest_unconfigure"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2550,
+                  "end": 3000,
+                  "edge": "e6",
+                  "from": "pytest_configure",
+                  "to": "pytest_sessionstart"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3000,
+                  "end": 3500,
+                  "edge": "e7",
+                  "from": "pytest_sessionstart",
+                  "to": "Collection"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 2550,
+                  "end": 3500,
+                  "target": "pytest_sessionstart",
+                  "style": "active"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 2550,
+                  "end": 3500,
+                  "target": "Collection"
+                }
+              ]
+            },
+            {
+              "id": "dirs",
+              "name": "Directories and files, 1..N times each",
+              "desc": "pytest_collection kicks off one walk. For every directory pytest_collect_directory is asked, pytest_ignore_collect can veto it (this is where norecursedirs and --ignore act), and each surviving file goes through pytest_collect_file; Python files become a Module via pytest_pycollect_makemodule. The 1..N on the transitions is literal: these hooks fire once per path.",
+              "start": 3500,
+              "end": 5000,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 3500,
+                  "end": 5000,
+                  "target": "GenTests"
+                },
+                {
+                  "kind": "dim",
+                  "start": 3500,
+                  "end": 5000,
+                  "target": "pytest_collection_modifyitems"
+                },
+                {
+                  "kind": "dim",
+                  "start": 3500,
+                  "end": 5000,
+                  "target": "pytest_collection_finish"
+                },
+                {
+                  "kind": "dim",
+                  "start": 3500,
+                  "end": 5000,
+                  "target": "pytest_sessionfinish"
+                },
+                {
+                  "kind": "dim",
+                  "start": 3500,
+                  "end": 5000,
+                  "target": "pytest_unconfigure"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3500,
+                  "end": 3950,
+                  "edge": "e8",
+                  "from": "pytest_collection",
+                  "to": "DirectoryCollection"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3950,
+                  "end": 4300,
+                  "edge": "e9",
+                  "from": "pytest_collect_directory",
+                  "to": "pytest_ignore_collect"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4300,
+                  "end": 4650,
+                  "edge": "e10",
+                  "from": "pytest_collect_directory",
+                  "to": "pytest_collect_file"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4650,
+                  "end": 5000,
+                  "edge": "e11",
+                  "from": "pytest_collect_file",
+                  "to": "pytest_pycollect_makemodule"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 3500,
+                  "end": 5000,
+                  "target": "DirectoryCollection"
+                },
+                {
+                  "kind": "note",
+                  "start": 3500,
+                  "end": 5000,
+                  "target": "pytest_ignore_collect",
+                  "text": "return True → skip this path\n(norecursedirs, --ignore, conftest)",
+                  "side": "right"
+                }
+              ]
+            },
+            {
+              "id": "items",
+              "name": "Each test function becomes an item; parametrize expands here",
+              "desc": "Inside every module, pytest_pycollect_makeitem turns a collected name into an Item (or a Collector). pytest_generate_tests is the hook behind @pytest.mark.parametrize — it runs once per test function with a metafunc and may add calls. Custom plugins that collect non-Python tests (YAML, SQL) live in these two hooks.",
+              "start": 5000,
+              "end": 5850,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 5000,
+                  "end": 5850,
+                  "target": "pytest_collection_modifyitems"
+                },
+                {
+                  "kind": "dim",
+                  "start": 5000,
+                  "end": 5850,
+                  "target": "pytest_collection_finish"
+                },
+                {
+                  "kind": "dim",
+                  "start": 5000,
+                  "end": 5850,
+                  "target": "pytest_sessionfinish"
+                },
+                {
+                  "kind": "dim",
+                  "start": 5000,
+                  "end": 5850,
+                  "target": "pytest_unconfigure"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5000,
+                  "end": 5450,
+                  "edge": "e12",
+                  "from": "DirectoryCollection",
+                  "to": "GenTests"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5450,
+                  "end": 5850,
+                  "edge": "e13",
+                  "from": "pytest_pycollect_makeitem",
+                  "to": "pytest_generate_tests"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 5000,
+                  "end": 5850,
+                  "target": "GenTests"
+                }
+              ]
+            },
+            {
+              "id": "modify",
+              "name": "The item list is filtered, reordered, and sealed",
+              "desc": "pytest_collection_modifyitems receives the full list and may mutate it in place — -k and -m deselection, random ordering, xdist's distribution all happen here. pytest_collection_finish is the announcement that the list is final. After this, the runtest hooks (not in this diagram) execute each item.",
+              "start": 5850,
+              "end": 6750,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 5850,
+                  "end": 6750,
+                  "target": "pytest_sessionfinish"
+                },
+                {
+                  "kind": "dim",
+                  "start": 5850,
+                  "end": 6750,
+                  "target": "pytest_unconfigure"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5850,
+                  "end": 6300,
+                  "edge": "e14",
+                  "from": "GenTests",
+                  "to": "pytest_collection_modifyitems"
+                },
+                {
+                  "kind": "flow",
+                  "start": 6300,
+                  "end": 6750,
+                  "edge": "e15",
+                  "from": "pytest_collection_modifyitems",
+                  "to": "pytest_collection_finish"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 5850,
+                  "end": 6750,
+                  "target": "pytest_collection_modifyitems",
+                  "style": "active"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 5850,
+                  "end": 6750,
+                  "target": "pytest_collection_finish",
+                  "style": "active"
+                },
+                {
+                  "kind": "note",
+                  "start": 5850,
+                  "end": 6750,
+                  "target": "pytest_collection_modifyitems",
+                  "text": "items[:] = [i for i in items if ...]\nconfig.hook.pytest_deselected(items=...)",
+                  "side": "right"
+                }
+              ]
+            },
+            {
+              "id": "finish",
+              "name": "The session ends and plugins tear down",
+              "desc": "pytest_sessionfinish sees the exit status and is where reports are written (junitxml, coverage). pytest_unconfigure is the mirror of pytest_configure — the last hook of the process. Plugins that opened resources in configure close them here.",
+              "start": 6750,
+              "end": 8100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 6750,
+                  "end": 7250,
+                  "edge": "e16",
+                  "from": "Collection",
+                  "to": "pytest_sessionfinish"
+                },
+                {
+                  "kind": "flow",
+                  "start": 7250,
+                  "end": 7700,
+                  "edge": "e17",
+                  "from": "pytest_sessionfinish",
+                  "to": "pytest_unconfigure"
+                },
+                {
+                  "kind": "flow",
+                  "start": 7700,
+                  "end": 8100,
+                  "edge": "e18",
+                  "from": "pytest_unconfigure",
+                  "to": "root_end"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 6750,
+                  "end": 8100,
+                  "target": "pytest_sessionfinish",
+                  "style": "active"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 6750,
+                  "end": 8100,
+                  "target": "pytest_unconfigure",
+                  "style": "active"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "gauge",
+              "start": 3500,
+              "end": 8100,
+              "target": "pytest_collect_file",
+              "label": "files",
+              "value": "tests/ · 12 .py"
+            },
+            {
+              "kind": "gauge",
+              "start": 5000,
+              "end": 8100,
+              "target": "pytest_generate_tests",
+              "label": "items",
+              "value": "84 → 131 after parametrize"
+            },
+            {
+              "kind": "set",
+              "start": 6750,
+              "end": 8100,
+              "target": "pytest_sessionfinish",
+              "label": "exitstatus 0"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

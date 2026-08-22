@@ -1,0 +1,360 @@
+{
+  "version": 2,
+  "root": "08-scala-list-map",
+  "views": [
+    {
+      "id": "08-scala-list-map",
+      "title": "map applies the function to every element, in order",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% `List(1, 2, 3).map(_ * 2)`, one element at a time. scala/docs.scala-lang#1107\n%% (https://github.com/scala/docs.scala-lang/issues/1107) has asked since 2019\n%% for animated diagrams of the collection operations, and the latest\n%% proposal there is a proof-of-concept GIF of a single operation: map. This\n%% is that — as text, in the docs repo, with `cinegram record … -o map.gif`\n%% producing the GIF and the same file playable in a page.\n%% ---\n%% The result list is `hide`-den at the start and each element is `show`n\n%% as the function produces it, so the reader sees the new list being built\n%% rather than already built. The input list is never touched: immutability\n%% is a thing the animation can actually show, by leaving the left column lit\n%% at the end.\nflowchart LR\n  subgraph in[\"List(1, 2, 3)\"]\n    direction TB\n    x1[1]\n    x2[2]\n    x3[3]\n  end\n  f[[\"_ * 2\"]]\n  subgraph out[\"result: List(2, 4, 6)\"]\n    direction TB\n    y1[2]\n    y2[4]\n    y3[6]\n  end\n  x1 --\u003e f\n  x2 --\u003e f\n  x3 --\u003e f\n  f --\u003e y1\n  f --\u003e y2\n  f --\u003e y3\n"
+      },
+      "nodes": [
+        {
+          "id": "x1",
+          "label": "1",
+          "shape": "rect",
+          "group": "in"
+        },
+        {
+          "id": "x2",
+          "label": "2",
+          "shape": "rect",
+          "group": "in"
+        },
+        {
+          "id": "x3",
+          "label": "3",
+          "shape": "rect",
+          "group": "in"
+        },
+        {
+          "id": "f",
+          "label": "_ * 2",
+          "shape": "subroutine"
+        },
+        {
+          "id": "y1",
+          "label": "2",
+          "shape": "rect",
+          "group": "out"
+        },
+        {
+          "id": "y2",
+          "label": "4",
+          "shape": "rect",
+          "group": "out"
+        },
+        {
+          "id": "y3",
+          "label": "6",
+          "shape": "rect",
+          "group": "out"
+        }
+      ],
+      "groups": [
+        {
+          "id": "in",
+          "label": "List(1, 2, 3)",
+          "children": [
+            "x1",
+            "x2",
+            "x3"
+          ]
+        },
+        {
+          "id": "out",
+          "label": "result: List(2, 4, 6)",
+          "children": [
+            "y1",
+            "y2",
+            "y3"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "x1",
+          "to": "f",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "x2",
+          "to": "f",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "x3",
+          "to": "f",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "f",
+          "to": "y1",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "f",
+          "to": "y2",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "f",
+          "to": "y3",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "map applies the function to every element, in order",
+          "duration": 4600,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "start",
+              "name": "map takes a function and a list",
+              "desc": "Nothing has happened yet. The function _ * 2 is the box in the middle; the result list does not exist.",
+              "start": 0,
+              "end": 800,
+              "tracks": [
+                {
+                  "kind": "hide",
+                  "start": 0,
+                  "end": 800,
+                  "target": "y1"
+                },
+                {
+                  "kind": "hide",
+                  "start": 0,
+                  "end": 800,
+                  "target": "y2"
+                },
+                {
+                  "kind": "hide",
+                  "start": 0,
+                  "end": 800,
+                  "target": "y3"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 800,
+                  "target": "f"
+                },
+                {
+                  "kind": "note",
+                  "start": 0,
+                  "end": 800,
+                  "target": "f",
+                  "text": "def map[B](f: A =\u003e B): List[B]",
+                  "side": "below"
+                }
+              ]
+            },
+            {
+              "id": "first",
+              "name": "The head goes through first",
+              "desc": "map walks the list from the head. 1 is passed to the function, and the answer, 2, becomes the head of a new list.",
+              "start": 800,
+              "end": 1800,
+              "tracks": [
+                {
+                  "kind": "hide",
+                  "start": 800,
+                  "end": 1800,
+                  "target": "y2"
+                },
+                {
+                  "kind": "hide",
+                  "start": 800,
+                  "end": 1800,
+                  "target": "y3"
+                },
+                {
+                  "kind": "flow",
+                  "start": 800,
+                  "end": 1300,
+                  "edge": "e0",
+                  "from": "x1",
+                  "to": "f",
+                  "label": "1"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1300,
+                  "end": 1800,
+                  "edge": "e3",
+                  "from": "f",
+                  "to": "y1",
+                  "label": "2",
+                  "style": "response"
+                },
+                {
+                  "kind": "show",
+                  "start": 800,
+                  "end": 1800,
+                  "target": "y1"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 800,
+                  "end": 1800,
+                  "target": "x1"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 800,
+                  "end": 1800,
+                  "target": "y1"
+                }
+              ]
+            },
+            {
+              "id": "second",
+              "name": "Then the next element",
+              "desc": "Order is preserved: the second input produces the second output. map never reorders, drops or duplicates — it is one-in, one-out.",
+              "start": 1800,
+              "end": 2800,
+              "tracks": [
+                {
+                  "kind": "hide",
+                  "start": 1800,
+                  "end": 2800,
+                  "target": "y3"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1800,
+                  "end": 2300,
+                  "edge": "e1",
+                  "from": "x2",
+                  "to": "f",
+                  "label": "2"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2300,
+                  "end": 2800,
+                  "edge": "e4",
+                  "from": "f",
+                  "to": "y2",
+                  "label": "4",
+                  "style": "response"
+                },
+                {
+                  "kind": "show",
+                  "start": 1800,
+                  "end": 2800,
+                  "target": "y2"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1800,
+                  "end": 2800,
+                  "target": "x2"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1800,
+                  "end": 2800,
+                  "target": "y2"
+                }
+              ]
+            },
+            {
+              "id": "third",
+              "name": "And the last",
+              "desc": "The function is applied exactly once per element, three times for three elements; map on a List is O(n).",
+              "start": 2800,
+              "end": 3800,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2800,
+                  "end": 3300,
+                  "edge": "e2",
+                  "from": "x3",
+                  "to": "f",
+                  "label": "3"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3300,
+                  "end": 3800,
+                  "edge": "e5",
+                  "from": "f",
+                  "to": "y3",
+                  "label": "6",
+                  "style": "response"
+                },
+                {
+                  "kind": "show",
+                  "start": 2800,
+                  "end": 3800,
+                  "target": "y3"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 2800,
+                  "end": 3800,
+                  "target": "x3"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 2800,
+                  "end": 3800,
+                  "target": "y3"
+                }
+              ]
+            },
+            {
+              "id": "done",
+              "name": "Two lists, not one",
+              "desc": "The original List(1, 2, 3) is unchanged — it is still there on the left, still usable. map returned a new list; it did not modify anything. That is what immutability looks like.",
+              "start": 3800,
+              "end": 4600,
+              "tracks": [
+                {
+                  "kind": "highlight",
+                  "start": 3800,
+                  "end": 4600,
+                  "target": "in"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 3800,
+                  "end": 4600,
+                  "target": "out"
+                },
+                {
+                  "kind": "note",
+                  "start": 3800,
+                  "end": 4600,
+                  "target": "in",
+                  "text": "still List(1, 2, 3)",
+                  "side": "below"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

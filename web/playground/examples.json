@@ -137,5 +137,23 @@
     "title": "One Claude Code tool call",
     "entry": "06-in-the-wild/05-claude-code-tool-call.dgm",
     "files": ["06-in-the-wild/05-claude-code-tool-call.dgm"]
+  },
+  {
+    "id": "pytest-session-hooks",
+    "title": "A pytest session, hook by hook",
+    "entry": "06-in-the-wild/06-pytest-session-hooks.dgm",
+    "files": ["06-in-the-wild/06-pytest-session-hooks.dgm"]
+  },
+  {
+    "id": "architecture-canvas",
+    "title": "One architecture canvas, two conversations",
+    "entry": "06-in-the-wild/07-architecture-canvas.dgm",
+    "files": ["06-in-the-wild/07-architecture-canvas.dgm"]
+  },
+  {
+    "id": "scala-list-map",
+    "title": "List.map, one element at a time",
+    "entry": "06-in-the-wild/08-scala-list-map.dgm",
+    "files": ["06-in-the-wild/08-scala-list-map.dgm"]
   }
 ]

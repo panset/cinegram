@@ -1,0 +1,860 @@
+{
+  "version": 2,
+  "root": "07-architecture-canvas",
+  "views": [
+    {
+      "id": "07-architecture-canvas",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% A persistent architecture canvas for an agent session, asked for in\n%% openai/codex#35100 (https://github.com/openai/codex/issues/35100): \"keep\n%% one architecture view pinned that updates, highlighting the component\n%% being discussed\", instead of regenerating a disconnected Mermaid diagram\n%% every turn. The diagram below is drawn once — it is the same unchanged\n%% Mermaid the agent would commit to docs/ — and each scenario is one\n%% conversation with that codebase. Every step is one turn: the component\n%% under discussion is lit, the file that implements it is the note, and\n%% everything else recedes. Nothing is redrawn, so nothing moves between\n%% turns, and the second scenario reuses the first's layout exactly.\n%% ---\n%% The `cinegram mcp` server exposes exactly these operations (write the\n%% .dgm, lint it, render it, report what it animates), so the agent can be\n%% the one writing the scenario while the human asks the questions.\nflowchart LR\n  client[Browser / CLI]\n  subgraph api[api/]\n    router[Router]\n    auth[Auth middleware]\n    orders[orders handler]\n    reports[reports handler]\n  end\n  subgraph core[core/]\n    svc[OrderService]\n    pricing[PricingRules]\n    repo[OrderRepository]\n  end\n  subgraph infra[infra/]\n    db[(Postgres)]\n    cache[(Redis)]\n    queue[/Job queue/]\n    worker[reconcile worker]\n    ledger[External ledger API]\n  end\n  client --\u003e router\n  router --\u003e auth\n  auth --\u003e orders\n  auth --\u003e reports\n  orders --\u003e svc\n  svc --\u003e pricing\n  svc --\u003e repo\n  repo --\u003e db\n  pricing --\u003e cache\n  svc --\u003e queue\n  queue --\u003e worker\n  worker --\u003e ledger\n  worker --\u003e repo\n  reports --\u003e repo\n"
+      },
+      "nodes": [
+        {
+          "id": "client",
+          "label": "Browser / CLI",
+          "shape": "rect"
+        },
+        {
+          "id": "router",
+          "label": "Router",
+          "shape": "rect",
+          "group": "api"
+        },
+        {
+          "id": "auth",
+          "label": "Auth middleware",
+          "shape": "rect",
+          "group": "api"
+        },
+        {
+          "id": "orders",
+          "label": "orders handler",
+          "shape": "rect",
+          "group": "api"
+        },
+        {
+          "id": "reports",
+          "label": "reports handler",
+          "shape": "rect",
+          "group": "api"
+        },
+        {
+          "id": "svc",
+          "label": "OrderService",
+          "shape": "rect",
+          "group": "core"
+        },
+        {
+          "id": "pricing",
+          "label": "PricingRules",
+          "shape": "rect",
+          "group": "core"
+        },
+        {
+          "id": "repo",
+          "label": "OrderRepository",
+          "shape": "rect",
+          "group": "core"
+        },
+        {
+          "id": "db",
+          "label": "Postgres",
+          "shape": "cylinder",
+          "group": "infra"
+        },
+        {
+          "id": "cache",
+          "label": "Redis",
+          "shape": "cylinder",
+          "group": "infra"
+        },
+        {
+          "id": "queue",
+          "label": "Job queue",
+          "shape": "parallelogram",
+          "group": "infra"
+        },
+        {
+          "id": "worker",
+          "label": "reconcile worker",
+          "shape": "rect",
+          "group": "infra"
+        },
+        {
+          "id": "ledger",
+          "label": "External ledger API",
+          "shape": "rect",
+          "group": "infra"
+        }
+      ],
+      "groups": [
+        {
+          "id": "api",
+          "label": "api/",
+          "children": [
+            "router",
+            "auth",
+            "orders",
+            "reports"
+          ]
+        },
+        {
+          "id": "core",
+          "label": "core/",
+          "children": [
+            "svc",
+            "pricing",
+            "repo"
+          ]
+        },
+        {
+          "id": "infra",
+          "label": "infra/",
+          "children": [
+            "db",
+            "cache",
+            "queue",
+            "worker",
+            "ledger"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "client",
+          "to": "router",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "router",
+          "to": "auth",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "auth",
+          "to": "orders",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "auth",
+          "to": "reports",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "orders",
+          "to": "svc",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "svc",
+          "to": "pricing",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e6",
+          "from": "svc",
+          "to": "repo",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e7",
+          "from": "repo",
+          "to": "db",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e8",
+          "from": "pricing",
+          "to": "cache",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e9",
+          "from": "svc",
+          "to": "queue",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e10",
+          "from": "queue",
+          "to": "worker",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e11",
+          "from": "worker",
+          "to": "ledger",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e12",
+          "from": "worker",
+          "to": "repo",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e13",
+          "from": "reports",
+          "to": "repo",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "Trace: what happens when a client POSTs an order?",
+          "duration": 5700,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "enter",
+              "name": "Where does a request enter the codebase?",
+              "desc": "Every request lands in the router, which only maps paths to handlers. Nothing business-related lives here; if you are looking for behaviour, this is the wrong file.",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 600,
+                  "target": "auth"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 600,
+                  "target": "orders"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 600,
+                  "target": "reports"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 600,
+                  "target": "core"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 600,
+                  "target": "infra"
+                },
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "client",
+                  "to": "router",
+                  "label": "POST /orders"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 600,
+                  "target": "router",
+                  "style": "active"
+                },
+                {
+                  "kind": "note",
+                  "start": 0,
+                  "end": 600,
+                  "target": "router",
+                  "text": "api/router.ts\napp.post('/orders', auth, ordersHandler)",
+                  "side": "below"
+                }
+              ]
+            },
+            {
+              "id": "guard",
+              "name": "Who decides whether the caller is allowed in?",
+              "desc": "The auth middleware runs before any handler. It verifies the bearer token and attaches the principal to the request; a 401 here means no handler ever ran. If a bug looks like 'the order was never created', check this first.",
+              "start": 600,
+              "end": 1050,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 600,
+                  "end": 1050,
+                  "target": "orders"
+                },
+                {
+                  "kind": "dim",
+                  "start": 600,
+                  "end": 1050,
+                  "target": "reports"
+                },
+                {
+                  "kind": "dim",
+                  "start": 600,
+                  "end": 1050,
+                  "target": "core"
+                },
+                {
+                  "kind": "dim",
+                  "start": 600,
+                  "end": 1050,
+                  "target": "infra"
+                },
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1050,
+                  "edge": "e1",
+                  "from": "router",
+                  "to": "auth"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 600,
+                  "end": 1050,
+                  "target": "auth",
+                  "style": "active"
+                },
+                {
+                  "kind": "note",
+                  "start": 600,
+                  "end": 1050,
+                  "target": "auth",
+                  "text": "api/middleware/auth.ts\nverifyJwt() → req.user",
+                  "side": "below"
+                }
+              ]
+            },
+            {
+              "id": "handler",
+              "name": "Which handler owns the endpoint, and what does it do itself?",
+              "desc": "The handler validates the body and translates HTTP into a call on the service. Deliberately thin: it knows about status codes and JSON, not about prices.",
+              "start": 1050,
+              "end": 1500,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 1050,
+                  "end": 1500,
+                  "target": "reports"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1050,
+                  "end": 1500,
+                  "target": "core"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1050,
+                  "end": 1500,
+                  "target": "infra"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1050,
+                  "end": 1500,
+                  "edge": "e2",
+                  "from": "auth",
+                  "to": "orders"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1050,
+                  "end": 1500,
+                  "target": "orders",
+                  "style": "active"
+                },
+                {
+                  "kind": "note",
+                  "start": 1050,
+                  "end": 1500,
+                  "target": "orders",
+                  "text": "api/handlers/orders.ts\nzod schema → svc.place(cmd)",
+                  "side": "below"
+                }
+              ]
+            },
+            {
+              "id": "logic",
+              "name": "Where is the actual business logic?",
+              "desc": "OrderService is the component you were asking about. It applies pricing rules, persists the order through the repository, and enqueues a reconciliation job — in that order. Pricing reads from a Redis cache, which is why the first order after a deploy is slow.",
+              "start": 1500,
+              "end": 2600,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 1500,
+                  "end": 2600,
+                  "target": "reports"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1500,
+                  "end": 2600,
+                  "target": "queue"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1500,
+                  "end": 2600,
+                  "target": "worker"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1500,
+                  "end": 2600,
+                  "target": "ledger"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1500,
+                  "end": 1900,
+                  "edge": "e4",
+                  "from": "orders",
+                  "to": "svc"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1900,
+                  "end": 2250,
+                  "edge": "e5",
+                  "from": "svc",
+                  "to": "pricing"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2250,
+                  "end": 2600,
+                  "edge": "e8",
+                  "from": "pricing",
+                  "to": "cache",
+                  "label": "GET rules:v7"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1500,
+                  "end": 2600,
+                  "target": "svc",
+                  "style": "active"
+                },
+                {
+                  "kind": "note",
+                  "start": 1500,
+                  "end": 2600,
+                  "target": "svc",
+                  "text": "core/order_service.ts\nplace(): price → save → enqueue",
+                  "side": "below"
+                }
+              ]
+            },
+            {
+              "id": "persist",
+              "name": "Where does the write happen?",
+              "desc": "The repository is the only code that speaks SQL. OrderService hands it a domain object and gets back an id; the INSERT and the transaction boundary are here.",
+              "start": 2600,
+              "end": 3450,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 2600,
+                  "end": 3450,
+                  "target": "reports"
+                },
+                {
+                  "kind": "dim",
+                  "start": 2600,
+                  "end": 3450,
+                  "target": "queue"
+                },
+                {
+                  "kind": "dim",
+                  "start": 2600,
+                  "end": 3450,
+                  "target": "worker"
+                },
+                {
+                  "kind": "dim",
+                  "start": 2600,
+                  "end": 3450,
+                  "target": "ledger"
+                },
+                {
+                  "kind": "dim",
+                  "start": 2600,
+                  "end": 3450,
+                  "target": "pricing"
+                },
+                {
+                  "kind": "dim",
+                  "start": 2600,
+                  "end": 3450,
+                  "target": "cache"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2600,
+                  "end": 3000,
+                  "edge": "e6",
+                  "from": "svc",
+                  "to": "repo"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3000,
+                  "end": 3450,
+                  "edge": "e7",
+                  "from": "repo",
+                  "to": "db",
+                  "label": "INSERT orders"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 2600,
+                  "end": 3450,
+                  "target": "repo",
+                  "style": "active"
+                },
+                {
+                  "kind": "note",
+                  "start": 2600,
+                  "end": 3450,
+                  "target": "repo",
+                  "text": "core/order_repository.ts\nwithTx(insert → outbox)",
+                  "side": "below"
+                }
+              ]
+            },
+            {
+              "id": "async",
+              "name": "What happens after the response is sent?",
+              "desc": "The service enqueues a job, and that is where the request ends — the client has its 201 by now. The worker picks the job up later, talks to the external ledger, and writes the result back through the same repository. This is the part people miss when they read only the handler.",
+              "start": 3450,
+              "end": 5700,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 3450,
+                  "end": 5700,
+                  "target": "reports"
+                },
+                {
+                  "kind": "dim",
+                  "start": 3450,
+                  "end": 5700,
+                  "target": "pricing"
+                },
+                {
+                  "kind": "dim",
+                  "start": 3450,
+                  "end": 5700,
+                  "target": "cache"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3450,
+                  "end": 3900,
+                  "edge": "e9",
+                  "from": "svc",
+                  "to": "queue",
+                  "label": "reconcile(#8841)"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3900,
+                  "end": 4350,
+                  "edge": "e10",
+                  "from": "queue",
+                  "to": "worker"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4350,
+                  "end": 4850,
+                  "edge": "e11",
+                  "from": "worker",
+                  "to": "ledger",
+                  "label": "POST /entries"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4850,
+                  "end": 5250,
+                  "edge": "e11",
+                  "from": "ledger",
+                  "to": "worker",
+                  "reverse": true,
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5250,
+                  "end": 5700,
+                  "edge": "e12",
+                  "from": "worker",
+                  "to": "repo",
+                  "label": "mark reconciled"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 3450,
+                  "end": 5700,
+                  "target": "worker",
+                  "style": "active"
+                },
+                {
+                  "kind": "note",
+                  "start": 3450,
+                  "end": 5700,
+                  "target": "worker",
+                  "text": "infra/workers/reconcile.ts\nretries: 5, backoff: exp",
+                  "side": "below"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 2600,
+              "end": 3450,
+              "target": "db",
+              "label": "order #8841"
+            },
+            {
+              "kind": "set",
+              "start": 3450,
+              "end": 5700,
+              "target": "db",
+              "label": "#8841 reconciled"
+            }
+          ]
+        },
+        {
+          "id": "s1",
+          "name": "Trace: why is the reports endpoint slow?",
+          "duration": 2550,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "same_canvas",
+              "name": "Same diagram, different question",
+              "desc": "Nothing was redrawn: this is the same canvas the previous conversation used, so the team's mental map is intact. The reports handler is lit this time; everything involved in placing an order recedes.",
+              "start": 0,
+              "end": 1200,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "orders"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "svc"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "pricing"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "cache"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "queue"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "worker"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "ledger"
+                },
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 500,
+                  "edge": "e0",
+                  "from": "client",
+                  "to": "router",
+                  "label": "GET /reports/daily"
+                },
+                {
+                  "kind": "flow",
+                  "start": 500,
+                  "end": 850,
+                  "edge": "e1",
+                  "from": "router",
+                  "to": "auth"
+                },
+                {
+                  "kind": "flow",
+                  "start": 850,
+                  "end": 1200,
+                  "edge": "e3",
+                  "from": "auth",
+                  "to": "reports"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "reports",
+                  "style": "active"
+                },
+                {
+                  "kind": "note",
+                  "start": 0,
+                  "end": 1200,
+                  "target": "reports",
+                  "text": "api/handlers/reports.ts",
+                  "side": "below"
+                }
+              ]
+            },
+            {
+              "id": "bypass",
+              "name": "It goes straight to the repository",
+              "desc": "The reports handler skips the service layer and queries the repository directly — which means it also skips the cache, and every call is a full scan over orders. That shortcut is the answer to the question.",
+              "start": 1200,
+              "end": 2550,
+              "tracks": [
+                {
+                  "kind": "dim",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "orders"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "svc"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "pricing"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "cache"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "queue"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "worker"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "ledger"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1200,
+                  "end": 1650,
+                  "edge": "e13",
+                  "from": "reports",
+                  "to": "repo"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1650,
+                  "end": 2550,
+                  "edge": "e7",
+                  "from": "repo",
+                  "to": "db",
+                  "label": "SELECT … GROUP BY day"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "repo",
+                  "style": "active"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "db",
+                  "style": "active"
+                },
+                {
+                  "kind": "note",
+                  "start": 1200,
+                  "end": 2550,
+                  "target": "db",
+                  "text": "seq scan, 2.1M rows\nno index on created_at",
+                  "side": "below"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "gauge",
+              "start": 1200,
+              "end": 2550,
+              "target": "db",
+              "label": "p95",
+              "value": "4.8 s"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
