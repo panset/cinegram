@@ -1026,7 +1026,20 @@
     if (deep.t !== undefined) {
       var ms = parseInt(deep.t, 10);
       if (!isNaN(ms)) {
-        this.time = Math.max(0, ms);
+        // Clamped at both ends, exactly as seek does it — a hash can carry any
+        // `t=` at all, from a hand-edited link or from `frame --at 30s` on an
+        // eighteen-second scenario. Only the low end was clamped here, so a
+        // time past the end read `30.0s / 18.0s` on the clock while the
+        // scrubber, bounded by its own max, sat at the end: the disagreement
+        // seek's own comment warns about. The two paths that answer the same
+        // `t=` now answer it alike — this one on load, applyHash on a
+        // hashchange, which goes through seek and was always clamped.
+        //
+        // Not seek itself: this runs before the first render, on purpose, so a
+        // deep link's scenario is the one that gets built. seek would apply a
+        // frame against a diagram that does not exist yet.
+        var max = this.scenario().duration || 0;
+        this.time = Math.min(max, Math.max(0, ms));
         this.pendingAutoplay = false;
       }
     } else {

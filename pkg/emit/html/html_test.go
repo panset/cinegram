@@ -803,6 +803,31 @@ func TestCineAnnouncesItsState(t *testing.T) {
 	}
 }
 
+// TestADeepLinkedTimeCannotLandPastTheEnd pins the clamp on both of the paths
+// that turn a hash `t=` into a time. They used to disagree: applyHash went
+// through seek, which clamps at both ends, while the read on load clamped only
+// at zero — so `#t=30000` on an eighteen-second scenario, which is what
+// `frame --at 30s` builds, put "30.0s / 18.0s" on the clock while the scrubber,
+// bounded by its own max, sat at the end.
+func TestADeepLinkedTimeCannotLandPastTheEnd(t *testing.T) {
+	js := codeOnly(string(runtimeJS))
+
+	if strings.Contains(js, "this.time = Math.max(0, ms);") {
+		t.Error("a hash `t=` is clamped at zero but not at the scenario's duration, so a link " +
+			"past the end leaves the clock reading a time the scrubber has already stopped " +
+			"short of — and a scenario's own end is the only total the page ever shows")
+	}
+	// Twice, once per path, and by the same arithmetic: the guarantee is that
+	// the same link lands in the same place whether it was loaded or navigated
+	// to, which is a property of the two agreeing rather than of either alone.
+	const clamp = "this.time = Math.min(max, Math.max(0, ms));"
+	if n := strings.Count(js, clamp); n != 2 {
+		t.Errorf("runtime.js clamps a `t=` into range %d times, want exactly 2 — seek for a "+
+			"hashchange and the read in build() for a page loaded at a moment. Fewer means "+
+			"one of the two paths accepts a time past the end again", n)
+	}
+}
+
 // ruleBody returns the declarations of the first CSS rule opening with sel, so
 // that a test about one box's numbers cannot be satisfied by the same numbers
 // somewhere else in a two-thousand-line sheet.
