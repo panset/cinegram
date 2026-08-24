@@ -672,6 +672,38 @@
     // Appended to the scenario row rather than the bar's controls; see there.
     this.scenarioLine.appendChild(this.presentBtn);
 
+    // Fit one axis, and let the other overflow.
+    //
+    // A diagram rests letterboxed: `.dgm-svg-holder svg` is `max-height: 100%`
+    // with `width: auto`, so it is scaled down until the *whole* of it is on the
+    // stage. That is right until a document is large — sixty messages down a
+    // sequence diagram fit into 900px of window put the message labels at about
+    // four pixels, and the drawing used half the width it was given, because the
+    // height was what constrained it. Legible and partly off-screen beats
+    // complete and unreadable, and that is the choice these two offer.
+    //
+    // Two buttons rather than one, so the reader says which axis matters: for a
+    // tall diagram it is the width, for a wide one the height. Only one of them
+    // does anything for any given drawing — fitting the axis that already
+    // constrains the fit is the state the page is in — and rather than infer
+    // which, the row shows both and lets a press answer it.
+    //
+    // A press, not a toggle. Fill was a toggle because a diagram scaled to fit
+    // has to be re-fitted when the stage changes; this deliberately ends with the
+    // drawing larger than the stage and the reader panning around inside it, and
+    // a re-fit on every resize would haul them back to the top mid-read.
+    //
+    // No exit control either, and none is needed: zooming in past the stage is
+    // exactly what stops the minimap being `is-off`, so the moment either of
+    // these does anything, the map appears — with the whole diagram as a
+    // thumbnail to orient by, and Fit in its corner to undo this.
+    this.fitWideBtn = iconButton('fitwide', 'Fit the width, and scroll down',
+      'dgm-btn dgm-fit-axis', function () { self.fitAxis('x'); });
+    this.fitTallBtn = iconButton('fittall', 'Fit the height, and scroll across',
+      'dgm-btn dgm-fit-axis', function () { self.fitAxis('y'); });
+    this.scenarioLine.appendChild(this.fitWideBtn);
+    this.scenarioLine.appendChild(this.fitTallBtn);
+
     bar.appendChild(controls);
     this.root.appendChild(bar);
 
@@ -1190,6 +1222,11 @@
       'M20 14.5V18a2 2 0 0 1-2 2h-3.5',
       'M9.5 20H6a2 2 0 0 1-2-2v-3.5'
     ],
+    // Two walls and a double-headed arrow between them: fit this axis to the
+    // stage, and let the other one run off the edge. A pair rather than one
+    // glyph because the reader picks the axis — see the scenario row.
+    fitwide: ['M4 6.5v11', 'M20 6.5v11', 'M7.5 12h9', 'M10 9.5 7.5 12l2.5 2.5', 'M14 9.5 16.5 12 14 14.5'],
+    fittall: ['M6.5 4h11', 'M6.5 20h11', 'M12 7.5v9', 'M9.5 10 12 7.5l2.5 2.5', 'M9.5 14 12 16.5 14.5 14'],
     // The transport, in the shapes every player has used since a tape deck: a
     // triangle, two bars, and each with a wall to stop against.
     //
@@ -2067,6 +2104,86 @@
       // resetZoom relays out the overlays itself, via applyTransform.
       this.resetZoom();
     }
+  };
+
+  // fitAxis scales the drawing so one axis fills the stage, and lets the other
+  // run off it. axis is 'x' for the width or 'y' for the height.
+  //
+  // Measured at scale 1 rather than from the current transform: reading a scaled
+  // box and scaling it again compounds, so pressing twice would walk the zoom
+  // away from the truth. The reset-measure-set costs one forced reflow, which is
+  // fine for a button press and would not be per frame.
+  //
+  // Clamped to the same ZOOM_MIN/ZOOM_MAX the wheel obeys, so neither button can
+  // reach a scale a reader could not have reached by hand — and so could not undo
+  // by hand either.
+  //
+  // The fitted axis centres its leftover, which is only ever the slack the clamp
+  // left. The overflowing axis is pinned to its start instead, deliberately: the
+  // reader has just asked to read a diagram too big for the stage, and reading
+  // starts at the top of a sequence diagram, not in the middle of one.
+  Player.prototype.fitAxis = function (axis) {
+    if (!this.holder || !this.stage || !this.svg) return;
+
+    // Cine writes zoom and pan too, and two things steering one transform is a
+    // fight decided by whichever ran last — the camera would re-frame on the
+    // next beat and this press would look broken. Cine yields, as it did to
+    // Fill: following each step is the more specific intent, and it is not
+    // something a fitted axis can also be doing.
+    if (this.follow) this.setFollow(false);
+
+    this.zoom = 1;
+    this.panX = 0;
+    this.panY = 0;
+    this.setTransform();
+
+    // The drawing, not the box it sits in. `.dgm-svg-holder` is a flex row that
+    // fills the stage, so its width *is* the stage's width and measuring it
+    // answers scale 1 every time — which is what the first version of this did,
+    // and pressing the button did nothing at all. The svg inside is the thing
+    // mermaid sized and the thing the reader is reading.
+    //
+    // localRect divides the current transform back out, which is why the reset
+    // above has to have happened: it returns holder-local, untransformed
+    // geometry, the same coordinates the camera and the minimap work in.
+    var holderR = this.holder.getBoundingClientRect();
+    var box = this.localRect(this.svg, holderR);
+    if (!box || !box.w || !box.h) return;
+
+    // The stage's content box: its own padding is furniture, and the right-hand
+    // strip is the rail's reserved lane — scaling into it would put the drawing
+    // under the buttons, which is the thing that padding exists to prevent.
+    var cs = getComputedStyle(this.stage);
+    var availW = this.stage.clientWidth -
+      (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+    var availH = this.stage.clientHeight -
+      (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0);
+    if (availW <= 0 || availH <= 0) return;
+
+    var scale = axis === 'y' ? availH / box.h : availW / box.w;
+    scale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, scale));
+
+    this.zoom = scale;
+
+    // Take the holder's own centring back out. The svg is centred inside the
+    // holder by flexbox, and that offset scales with everything else, so left
+    // alone it would push the drawing off the corner by whatever the letterbox
+    // margin had been — times the new scale. The holder is a block child filling
+    // the stage's content box, so its untransformed origin *is* that box's
+    // corner: pinning the drawing there needs no padding or border arithmetic,
+    // only the offset undone.
+    //
+    // transformOrigin is 0 0, so each of these is the whole offset rather than
+    // half of it applied twice.
+    this.panX = -box.x * scale;
+    this.panY = -box.y * scale;
+
+    // The fitted axis has only the clamp's leftover to place, so centre it. The
+    // overflowing one keeps the pin: a reader who has just asked to read a
+    // diagram bigger than the stage starts at the top of it, not in the middle.
+    if (axis === 'x') this.panX += Math.max(0, (availW - box.w * scale) / 2);
+    if (axis === 'y') this.panY += Math.max(0, (availH - box.h * scale) / 2);
+    this.applyTransform();
   };
 
   // restingTime is where an idle page sits: the author's poster moment, or the

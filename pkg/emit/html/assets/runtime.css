@@ -291,6 +291,23 @@ body.dgm-standalone {
   padding-right: 10px;
 }
 
+/* The two axis-fit buttons are icons in a row of words. They take the row's
+   height from the rule above, but not its horizontal padding: 12px each side of
+   a 16px glyph is a button half again as wide as it is tall, and two of those
+   beside Present read as a third and fourth word rather than a pair of tools.
+   4px puts them at 26px across against the row's 24 tall.
+
+   `display: block` on the glyph for the same reason it is set in the rail: an
+   inline svg sits on the text baseline and leaves the descender's gap under
+   itself, which is exactly the couple of pixels that would stop these lining up
+   with the picker they sit next to. */
+.dgm-fit-axis {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.dgm-fit-axis svg { display: block; }
+
 .dgm-title {
   font-size: 16px;
   font-weight: 600;
