@@ -229,10 +229,29 @@ body.dgm-standalone {
   flex-wrap: wrap;
 }
 
+/* Two rows: the title, and the scenario under it. Column rather than a wider
+   bar, because the alternative was capping the picker to fit beside the title —
+   and a menu whose closed state is truncated hides the one thing it exists to
+   show. */
 .dgm-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dgm-heading-row {
   display: flex;
   align-items: baseline;
   gap: 10px;
+  min-width: 0;
+}
+
+.dgm-scenario {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -264,18 +283,62 @@ body.dgm-standalone {
   flex-wrap: wrap;
 }
 
+/* Buttons and menus share their skin. `background-color` rather than the
+   `background` shorthand, because the chevron below is a background-image and the
+   shorthand would reset it — which is how a button and a menu came to share an
+   arrow neither of them should have had. */
 .dgm-btn,
 .dgm-select {
   appearance: none;
   border: 1px solid var(--dgm-border);
-  background: var(--dgm-panel);
+  background-color: var(--dgm-panel);
   color: var(--dgm-fg);
   border-radius: 7px;
   padding: 6px 12px;
   font: inherit;
   font-size: 13px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+/* And only a menu gets the arrow. `appearance: none` takes the platform's one off
+   along with its styling, and for a long time nothing put one back — which left
+   every <select> here looking exactly like a text field, the scenario picker most
+   of all. It is the affordance that says "there are others": without it a reader
+   has no way to know the walkthrough on screen is one of three.
+
+   Two gradients rather than a background-image, so it is drawn in `currentColor`
+   and needs no second copy for the dark palette. The right-hand padding is the
+   arrow's room, not decoration. */
+.dgm-select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: right 13px center, right 9px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 26px;
+}
+
+/* Caption size, and wide enough for a sentence: on its own row the picker has the
+   page's width, so the cap is a backstop against a pathological name rather than
+   the everyday case. `ch` so it tracks the reader's own font size. The ellipsis
+   stays for when the backstop is reached. */
+.dgm-picker {
+  font-size: 12px;
+  padding: 3px 24px 3px 8px;
+  background-position: right 11px center, right 7px center;
+  max-width: 56ch;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The word the picker cannot say itself. Muted because it is a caption, not a
+   control, and it disappears with the picker when there is only one scenario. */
+.dgm-picker-label {
+  font-size: 12px;
+  color: var(--dgm-muted);
 }
 
 .dgm-btn:hover,
@@ -322,7 +385,11 @@ body.dgm-standalone {
 .dgm-inline .dgm-bar { display: flex; }
 .dgm-inline .dgm-title { display: none; }
 .dgm-inline .dgm-controls > * { display: none; }
-.dgm-inline .dgm-controls > .dgm-select { display: inline-block; }
+/* The picker used to be restored here, when it lived in the bar's controls. It
+   is under the title now, inside .dgm-heading, which inline mode already shows —
+   so it survives on its own and this rule has nothing to name. Its caption does
+   not survive: an embed's furniture belongs to the page around it. */
+.dgm-inline .dgm-picker-label { display: none; }
 
 /* Back and the scenario picker are left to the runtime, which already hides
    each until it has something to offer — Back until the reader has drilled into
@@ -1522,9 +1589,12 @@ body.dgm-standalone {
    walkthrough, so the padding that suits a sentence wastes the row here. `em`
    for the width so a reader who has scaled their text keeps a box that fits. */
 .dgm-foot-speed {
-  padding: 5px 8px;
+  /* Same reasoning as .dgm-select's padding, at this control's scale: the
+     right-hand room is the chevron's. */
+  padding: 5px 22px 5px 8px;
+  background-position: right 9px center, right 5px center;
   font-size: 12px;
-  min-width: 4.5em;
+  min-width: 5.5em;
 }
 
 /* Play is the one a reader reaches for without looking, so it is the only one

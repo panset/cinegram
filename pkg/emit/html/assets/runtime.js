@@ -603,26 +603,41 @@
     // sideways as the trail grows.
     this.backBtn = button('← Back', 'dgm-btn dgm-back', function () { self.back(); });
     this.backBtn.style.display = 'none';
-    heading.appendChild(this.backBtn);
+
+    // The heading is two lines now. A scenario name is a sentence — "happy path:
+    // access token expires, refresh, retry" — and a control on the title's own
+    // row had to be capped to fit beside it, which truncated the very thing a
+    // reader opens the menu to read. Underneath, at caption size, it has the
+    // width of the page.
+    var titleRow = el('div', 'dgm-heading-row');
+    titleRow.appendChild(this.backBtn);
     this.title = el('div', 'dgm-title');
-    heading.appendChild(this.title);
+    titleRow.appendChild(this.title);
     this.crumb = el('div', 'dgm-crumb');
-    heading.appendChild(this.crumb);
-    bar.appendChild(heading);
+    titleRow.appendChild(this.crumb);
+    heading.appendChild(titleRow);
 
-    var controls = el('div', 'dgm-controls');
-
-    // The scenario picker is rebuilt per view, since each view brings its
-    // own scenarios. It stays in the DOM and hides when there is nothing to
-    // choose between.
-    this.picker = el('select', 'dgm-select');
+    // Built here rather than with the bar's other controls, because the line
+    // below adopts it and a child has to exist before its parent asks for it.
+    this.picker = el('select', 'dgm-select dgm-picker');
     this.picker.addEventListener('change', function () {
       self.selectScenario(parseInt(self.picker.value, 10));
       // Only here: a pick is the one scenario change the address does not
       // already know about. See syncHash.
       self.syncHash();
     });
-    controls.appendChild(this.picker);
+
+    // The whole line is what hides when there is one scenario, rather than its
+    // two halves separately: hiding a label and a control inside a flex row
+    // leaves the row's gap behind.
+    this.scenarioLine = el('div', 'dgm-scenario');
+    this.scenarioLine.appendChild(elText('span', 'dgm-picker-label', 'Scenario'));
+    this.scenarioLine.appendChild(this.picker);
+    heading.appendChild(this.scenarioLine);
+
+    bar.appendChild(heading);
+
+    var controls = el('div', 'dgm-controls');
 
     // Play used to stand here. It is transport, so it moved next to the scrub
     // it drives — see the foot in build(). Nothing was lost by the move: the
@@ -1150,12 +1165,17 @@
       'M20 14.5V18a2 2 0 0 1-2 2h-3.5',
       'M9.5 20H6a2 2 0 0 1-2-2v-3.5'
     ],
-    // The transport, in the shapes every player has used since a tape deck:
-    // a triangle, two bars, and each with a wall to stop against.
-    play: ['M9 6.5l9 5.5-9 5.5z'],
-    pause: ['M9.5 6.5v11', 'M14.5 6.5v11'],
-    prev: ['M15.5 6.5l-8 5.5 8 5.5z', 'M6 6.5v11'],
-    next: ['M8.5 6.5l8 5.5-8 5.5z', 'M18 6.5v11'],
+    // The transport, in the shapes every player has used since a tape deck: a
+    // triangle, two bars, and each with a wall to stop against.
+    //
+    // These four are *filled* — see FILLED below. Every other glyph here is a
+    // line drawing, which is right for a camera or a question mark and wrong for
+    // these: a hollow triangle at 16px reads as an arrowhead pointing somewhere,
+    // not as Play. Transport controls have been solid since tape.
+    play: ['M8.5 5.5v13l11-6.5z'],
+    pause: ['M9 5.5h3.1v13H9z', 'M13.9 5.5H17v13h-3.1z'],
+    prev: ['M17 5.5v13l-9.5-6.5z', 'M6 5.5h2.1v13H6z'],
+    next: ['M7 5.5v13l9.5-6.5z', 'M15.9 5.5H18v13h-2.1z'],
     help: ['M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z', 'M9.3 9.4a2.8 2.8 0 0 1 5.5.9c0 1.9-2.7 2.3-2.7 4.1', 'M12 17.6v.01'],
     // The two theme states, named for the state each *is* rather than the one
     // a press goes to: a sun for light, a moon for dark.
@@ -1173,6 +1193,10 @@
     'theme-system': ['M3.5 5.5h17v10.5h-17z', 'M12 16v3.5', 'M9 19.5h6']
   };
 
+  // The glyphs drawn as solids rather than strokes. A set rather than a second
+  // ICONS table, because everything else about drawing them is identical.
+  var FILLED = { play: 1, pause: 1, prev: 1, next: 1 };
+
   function icon(name) {
     var svg = document.createElementNS(SVG_NS, 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
@@ -1182,11 +1206,16 @@
     // focusable=false is for the browsers that made an inline svg a tab stop.
     svg.setAttribute('aria-hidden', 'true');
     svg.setAttribute('focusable', 'false');
-    svg.setAttribute('fill', 'none');
-    svg.setAttribute('stroke', 'currentColor');
-    svg.setAttribute('stroke-width', '1.7');
-    svg.setAttribute('stroke-linecap', 'round');
-    svg.setAttribute('stroke-linejoin', 'round');
+    if (FILLED[name]) {
+      svg.setAttribute('fill', 'currentColor');
+      svg.setAttribute('stroke', 'none');
+    } else {
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '1.7');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
+    }
     var d = ICONS[name] || [];
     for (var i = 0; i < d.length; i++) {
       var p = document.createElementNS(SVG_NS, 'path');
@@ -3004,7 +3033,18 @@
       self.picker.appendChild(o);
     });
     this.picker.value = String(this.scenarioIndex);
-    this.picker.style.display = scenarios.length > 1 ? '' : 'none';
+
+    // A <select> with `appearance: none` and no arrow of its own reads as a text
+    // field, so what it is has to be said rather than drawn. The count goes in
+    // because "one of three" is the fact that makes it worth opening.
+    this.picker.setAttribute('aria-label', 'Scenario');
+    this.picker.title = scenarios.length > 1
+      ? 'Choose one of ' + scenarios.length + ' scenarios'
+      : 'Scenario';
+
+    if (this.scenarioLine) {
+      this.scenarioLine.style.display = scenarios.length > 1 ? '' : 'none';
+    }
   };
 
   Player.prototype.selectScenario = function (i) {

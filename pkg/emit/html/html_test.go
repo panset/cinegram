@@ -505,6 +505,108 @@ func TestTheRailCollapseIsGone(t *testing.T) {
 	}
 }
 
+// TestASelectLooksLikeOneAndTheScenarioPickerSaysSo pins the affordance.
+//
+// `appearance: none` takes the platform's arrow off along with its styling, and
+// for a long time nothing put one back: every <select> here rendered as a
+// bordered box indistinguishable from a text input. On the scenario picker that
+// was not cosmetic — the control is the only thing telling a reader the
+// walkthrough on screen is one of several, and with no arrow it told them
+// nothing. A diagram with three scenarios read as a diagram with one.
+func TestASelectLooksLikeOneAndTheScenarioPickerSaysSo(t *testing.T) {
+	js, css := string(runtimeJS), string(runtimeCSS)
+
+	// The skin is shared with .dgm-btn; the arrow is not, and the two have to stay
+	// in separate rules. Folding the chevron into the shared one put an arrow on
+	// every button on the page, Present included.
+	skin := ruleBody(t, css, ".dgm-btn,\n.dgm-select {")
+	if !strings.Contains(skin, "appearance: none") {
+		t.Error("the shared button/menu rule no longer sets appearance: none, so a <select> is " +
+			"the platform's control again and the arrow below fights it")
+	}
+	if strings.Contains(skin, "linear-gradient(") {
+		t.Error("the chevron is in the rule .dgm-btn shares, so every button on the page draws " +
+			"a dropdown arrow it cannot open")
+	}
+	// The `background` shorthand resets background-image, which is how the arrow
+	// would go missing again without anybody editing the arrow.
+	if strings.Contains(skin, "background:") {
+		t.Error("the shared rule uses the background shorthand, which resets the chevron's " +
+			"background-image; set background-color instead")
+	}
+
+	// The arrow itself, asserted on its declarations rather than through ruleBody:
+	// both rules' selectors contain the text ".dgm-select {", so an anchor on that
+	// finds whichever comes first and cannot tell them apart.
+	//
+	// Two gradients rather than a background-image, so the arrow is drawn in
+	// currentColor and one declaration serves both palettes.
+	for _, decl := range []string{
+		"linear-gradient(45deg, transparent 50%, currentColor 50%)",
+		"linear-gradient(135deg, currentColor 50%, transparent 50%)",
+		"padding-right: 26px",
+	} {
+		if !strings.Contains(css, decl) {
+			t.Errorf("runtime.css is missing %q; without the arrow a select with "+
+				"appearance: none is a text field to look at", decl)
+		}
+	}
+
+	// Under the title at caption size, with a backstop rather than a cap: a
+	// scenario name is a sentence, and capping it to fit beside the title
+	// truncated the one thing the menu exists to show.
+	picker := ruleBody(t, css, ".dgm-picker {")
+	for _, want := range []string{"font-size: 12px", "max-width", "text-overflow: ellipsis"} {
+		if !strings.Contains(picker, want) {
+			t.Errorf("the scenario picker does not set %s. Rule reads:\n%s", want, picker)
+		}
+	}
+	if !strings.Contains(css, ".dgm-heading-row {") {
+		t.Error("the heading is not two rows, so the scenario has nowhere to sit but beside " +
+			"the title, where it has to be truncated to fit")
+	}
+
+	// And it says what it is, since the arrow alone does not name it.
+	if !strings.Contains(js, "this.picker.setAttribute('aria-label', 'Scenario');") {
+		t.Error("the scenario picker has no accessible name; a screen reader announces an " +
+			"unnamed select, and the option text alone does not say what choosing does")
+	}
+	if !strings.Contains(js, "'Choose one of ' + scenarios.length + ' scenarios'") {
+		t.Error("the picker's title does not say how many there are, which is the fact that " +
+			"makes it worth opening")
+	}
+	// The whole line hides, not its halves: hiding a label and a control inside a
+	// flex row leaves the row's gap behind.
+	if !strings.Contains(js, "this.scenarioLine.style.display = scenarios.length > 1 ? '' : 'none';") {
+		t.Error("the scenario line does not hide itself when there is one scenario, so a " +
+			"document with one captions a control that is not on the page")
+	}
+}
+
+// TestTransportGlyphsAreSolid pins the one place a line drawing was wrong.
+//
+// Every other glyph in ICONS is a stroke on `fill: none`, which is right for a
+// camera or a question mark. A hollow triangle at 16px reads as an arrowhead
+// pointing somewhere rather than as Play — transport controls have been solid
+// since tape, and these four are the exception the drawing code has to know about.
+func TestTransportGlyphsAreSolid(t *testing.T) {
+	js := string(runtimeJS)
+
+	if !strings.Contains(js, "var FILLED = { play: 1, pause: 1, prev: 1, next: 1 };") {
+		t.Error("the transport glyphs are no longer marked as filled, so they draw as outlines " +
+			"and Play reads as an arrowhead")
+	}
+	if !strings.Contains(js, "svg.setAttribute('fill', 'currentColor');") {
+		t.Error("icon() never fills a glyph; the FILLED set has nothing to act on")
+	}
+	// And the line drawings keep their stroke, or every other glyph becomes a
+	// solid blob.
+	if !strings.Contains(js, "svg.setAttribute('stroke', 'currentColor');") {
+		t.Error("icon() no longer strokes the line glyphs, so the rail's camera and question " +
+			"mark fill in solid")
+	}
+}
+
 // TestTransportSitsAtTheTimeline pins the cluster that moves the clock.
 //
 // Play used to stand in the top bar while the scrub it drives sat at the bottom,
