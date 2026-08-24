@@ -265,6 +265,32 @@ body.dgm-standalone {
   min-width: 0;
 }
 
+/* One row, one size. Present arrived here at the bar's 13px and stood a couple of
+   pixels taller than the picker beside it, which reads as two controls that were
+   not meant to be together.
+
+   `line-height` as well as `font-size`, because a <select> and a <button> do not
+   agree on their intrinsic height from a font size alone — one lays its text out
+   as a form control and the other as a box — and matching them by eye is a fight
+   that resumes at every zoom level. Pinned, the arithmetic is the same on both:
+   16px of line, 3px above and below, and a 1px border each side.
+
+   Vertical padding only. The horizontal is each control's own business: the
+   picker's right side is the chevron's room, and stealing it would put the arrow
+   on top of the text. */
+.dgm-scenario .dgm-btn,
+.dgm-scenario .dgm-select {
+  font-size: 12px;
+  line-height: 16px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.dgm-present-btn {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
 .dgm-title {
   font-size: 16px;
   font-weight: 600;
@@ -335,8 +361,8 @@ body.dgm-standalone {
    the everyday case. `ch` so it tracks the reader's own font size. The ellipsis
    stays for when the backstop is reached. */
 .dgm-picker {
-  font-size: 12px;
-  padding: 3px 24px 3px 8px;
+  padding-left: 8px;
+  padding-right: 24px;
   background-position: right 11px center, right 7px center;
   max-width: 56ch;
   overflow: hidden;

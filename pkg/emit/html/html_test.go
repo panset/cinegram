@@ -556,10 +556,26 @@ func TestASelectLooksLikeOneAndTheScenarioPickerSaysSo(t *testing.T) {
 	// scenario name is a sentence, and capping it to fit beside the title
 	// truncated the one thing the menu exists to show.
 	picker := ruleBody(t, css, ".dgm-picker {")
-	for _, want := range []string{"font-size: 12px", "max-width", "text-overflow: ellipsis"} {
+	for _, want := range []string{"max-width", "text-overflow: ellipsis"} {
 		if !strings.Contains(picker, want) {
 			t.Errorf("the scenario picker does not set %s. Rule reads:\n%s", want, picker)
 		}
+	}
+	// The row sizes both of its controls, and pins line-height as well as
+	// font-size: a select and a button do not agree on their intrinsic height from
+	// a font size alone, which is how Present came to stand taller than the picker
+	// beside it.
+	row := ruleBody(t, css, ".dgm-scenario .dgm-btn,\n.dgm-scenario .dgm-select {")
+	for _, want := range []string{"font-size: 12px", "line-height: 16px", "padding-top", "padding-bottom"} {
+		if !strings.Contains(row, want) {
+			t.Errorf("the scenario row does not set %s, so its picker and its Present button "+
+				"are sized apart. Rule reads:\n%s", want, row)
+		}
+	}
+	// Vertical only: the picker's right-hand padding is the chevron's room.
+	if strings.Contains(row, "padding:") {
+		t.Error("the scenario row sets padding wholesale, which takes the chevron's room from " +
+			"the picker and puts the arrow on top of the text")
 	}
 	if !strings.Contains(css, ".dgm-heading-row {") {
 		t.Error("the heading is not two rows, so the scenario has nowhere to sit but beside " +
