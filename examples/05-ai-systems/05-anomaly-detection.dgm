@@ -1,0 +1,344 @@
+%% A production anomaly detector, drawn once and walked through twice: the
+%% thirty-second inference window that scores five thousand events, and the
+%% retraining run its drift check sets off days later. Two scenarios over one
+%% diagram, which is the point — the same system at two time scales, and the
+%% labels a human writes in the first are the training data for the second.
+%% ---
+%% Scenario one is a single window: hydrate features, score with two models,
+%% ask whether "high" is actually unusual for a Monday, suppress what is
+%% already known, page a human on what is left, and feed their verdict back
+%% into the store the next window will read. Forty-one candidate anomalies
+%% become three pages, and the thirty-eight that did not page anyone are the
+%% whole engineering problem.
+%% ---
+%% Scenario two picks up the retrain ticket that window filed: point-in-time
+%% correctness, eight hundred positives in four million rows, PR-AUC rather
+%% than accuracy, and three places where a person has to say yes. Nothing in it
+%% refits itself automatically, which is deliberate — a detector that retrains
+%% the moment its inputs move will learn that the new anomaly is normal.
+%% ---
+%% It is also the largest example here on purpose: sixty messages do not stay
+%% legible scaled into a stage, so this is the one to read with Cine on, which
+%% frames each step rather than the whole drawing.
+sequenceDiagram
+participant Stream
+participant Features
+participant Model
+participant Baseline
+participant Alerts
+participant Analyst
+participant Trainer
+participant Registry
+Stream->>Stream: 1. 30s window closes — 5,120 events
+Stream->>Features: 2. hydrate entity features
+Features->>Features: 3. cache lookup — 94% hit
+Features->>Features: 4. backfill 307 cold entities
+Features->>Stream: 5. feature vectors ready
+Stream->>Model: 6. score 5,120 vectors
+Model->>Model: 7. autoencoder reconstruction error
+Model->>Model: 8. isolation forest score
+Model->>Model: 9. blend into one anomaly score
+Model->>Stream: 10. scores returned
+Stream->>Baseline: 11. 41 above static threshold
+Baseline->>Baseline: 12. compare against seasonal band
+Baseline->>Baseline: 13. 29 explained by the Monday peak
+Baseline->>Baseline: 14. 12 unexplained by season
+Baseline->>Alerts: 15. 12 candidate anomalies
+Alerts->>Alerts: 16. group by entity + signature
+Alerts->>Alerts: 17. suppress 7 — open incident
+Alerts->>Alerts: 18. rate-limit 2 — flapping entity
+Alerts->>Analyst: 19. page on 3 anomalies
+Analyst->>Alerts: 20. acknowledge
+Analyst->>Model: 21. why this one?
+Model->>Features: 22. fetch contributing features
+Features->>Model: 23. 6 feature attributions
+Model->>Analyst: 24. attributions + nearest normal
+Analyst->>Analyst: 25. confirm 2, dismiss 1
+Analyst->>Alerts: 26. label the outcomes
+Alerts->>Features: 27. write labels to the store
+Features->>Baseline: 28. widen the seasonal band
+Baseline->>Baseline: 29. drift check on the score distribution
+Baseline->>Model: 30. PSI 0.27 — distribution has moved
+Model->>Model: 31. flag the model for retraining
+Model->>Alerts: 32. open a retrain ticket
+Alerts->>Analyst: 33. retrain queued for review
+Analyst->>Stream: 34. resume the window
+Alerts->>Trainer: 35. retrain ticket approved
+Trainer->>Features: 36. request 90 days of labelled history
+Features->>Features: 37. assemble 4.1M rows, 812 labels
+Features->>Features: 38. point-in-time correctness check
+Features->>Trainer: 39. training set + held-out month
+Trainer->>Trainer: 40. rebalance — 812 positives in 4.1M
+Trainer->>Trainer: 41. fit autoencoder — 12 epochs
+Trainer->>Trainer: 42. fit isolation forest
+Trainer->>Trainer: 43. sweep the blend weight
+Trainer->>Baseline: 44. recompute seasonal bands
+Baseline->>Trainer: 45. bands for 7 day-parts
+Trainer->>Trainer: 46. holdout PR-AUC 0.71 vs 0.63
+Trainer->>Registry: 47. register candidate v14
+Registry->>Registry: 48. record data + code + params
+Registry->>Analyst: 49. v14 ready for review
+Analyst->>Registry: 50. compare against v13
+Registry->>Analyst: 51. 812 labels replayed, 41 disagreements
+Analyst->>Analyst: 52. read the disagreements
+Analyst->>Registry: 53. approve for shadow
+Registry->>Model: 54. deploy v14 in shadow
+Model->>Model: 55. score both, serve v13
+Model->>Registry: 56. 48h shadow agreement 0.94
+Registry->>Analyst: 57. promote v14?
+Analyst->>Registry: 58. promote
+Registry->>Model: 59. v14 is serving
+Model->>Stream: 60. new thresholds live
+
+scenario "one inference window" { speed: 1.0 }
+
+  step arrive "The window closes, and the features are not all there" {
+    desc: "Nothing here is asked for; a window of five thousand events simply ends and the pipeline has to say something about it. The first move is not the model, it is the feature store: a score is only as current as the numbers behind it. Most entities are warm in cache, and the three hundred that are not have to be fetched before anything can be scored — which is why the slowest part of inference is often not inference."
+    focus Features
+    set Stream { badge: "5,120", state: active }
+    seq {
+      flow Stream -> Stream { dur: 500ms, msg: 1 }
+      flow Stream -> Features { dur: 600ms, msg: 1 }
+      flow Features -> Features { dur: 450ms, msg: 1 }
+      flow Features -> Features { dur: 900ms, msg: 2 }
+      flow Features -> Stream { dur: 500ms, style: response, msg: 1 }
+    }
+  }
+
+  step score "Two models, because one model is a guess" {
+    desc: "Both models answer the same question and neither is trusted alone. The autoencoder asks how badly it fails to rebuild this record from what it learned normal looks like; the isolation forest asks how few splits it takes to cut this record away from the rest. They disagree in different directions, and the blend is what gets a number."
+    focus Model
+    set Model { badge: "scoring", state: active }
+    seq {
+      flow Stream -> Model { dur: 600ms, msg: 1 }
+      flow Model -> Model { dur: 700ms, msg: 1 }
+      flow Model -> Model { dur: 700ms, msg: 2 }
+      flow Model -> Model { dur: 500ms, msg: 3 }
+      flow Model -> Stream { dur: 500ms, style: response, msg: 1 }
+    }
+  }
+
+  step baseline "Forty-one high scores, twenty-nine of them a Monday" {
+    desc: "This is the step that decides whether the system is usable. A raw threshold on a raw score fires on every payday, every deploy and every Monday morning, and a pipeline that pages on all of them gets muted inside a week. So each candidate is compared against what this entity normally does at this hour on this day, and most of the spike turns out to be the week starting."
+    focus Baseline
+    set Baseline { badge: "41 → 12", state: active }
+    seq {
+      flow Stream -> Baseline { dur: 550ms, msg: 1 }
+      flow Baseline -> Baseline { dur: 700ms, msg: 1 }
+      flow Baseline -> Baseline { dur: 600ms, msg: 2 }
+      flow Baseline -> Baseline { dur: 500ms, msg: 3 }
+    }
+  }
+
+  step page "Twelve candidates, three pages" {
+    desc: "Twelve is still too many, and most of them are not news. Alerts groups by entity and signature so one failing dependency is one alert rather than nine, drops what an already-open incident covers, and rate-limits the entity that has flapped all morning. Three anomalies reach a person, and the nine that did not are the reason this step exists."
+    focus Alerts
+    set Alerts { badge: "12 → 3", state: active }
+    seq {
+      flow Baseline -> Alerts { dur: 500ms, msg: 1 }
+      flow Alerts -> Alerts { dur: 550ms, msg: 1 }
+      flow Alerts -> Alerts { dur: 550ms, msg: 2 }
+      flow Alerts -> Alerts { dur: 500ms, msg: 3 }
+      flow Alerts -> Analyst { dur: 600ms, msg: 1 }
+    }
+  }
+
+  step explain "The first question a human asks is why" {
+    desc: "A score on its own is unactionable: nobody can confirm or dismiss 0.94. So the analyst asks the model to show its work, and gets back the handful of features that moved the score and the nearest record the model considers normal. The comparison is what makes a verdict possible — not the number, the difference."
+    focus Analyst
+    set Analyst { badge: "triage", state: active }
+    seq {
+      flow Analyst -> Alerts { dur: 400ms, msg: 1 }
+      flow Analyst -> Model { dur: 500ms, msg: 1 }
+      flow Model -> Features { dur: 550ms, msg: 1 }
+      flow Features -> Model { dur: 550ms, style: response, msg: 1 }
+      flow Model -> Analyst { dur: 600ms, style: response, msg: 1 }
+    }
+  }
+
+  step label "The verdict is training data" {
+    desc: "Two confirmed and one dismissed is not just today's outcome, it is three labels — and labels are the scarcest thing an anomaly detector ever gets, because by definition almost nothing is an anomaly. They go back to the store the next window will read, and the dismissed one widens the seasonal band so the same normal Monday does not page anybody again."
+    focus Features
+    seq {
+      flow Analyst -> Analyst { dur: 700ms, msg: 1 }
+      flow Analyst -> Alerts { dur: 500ms, msg: 2 }
+      flow Alerts -> Features { dur: 550ms, msg: 1 }
+      flow Features -> Baseline { dur: 550ms, msg: 1 }
+    }
+  }
+
+  step drift "The scores themselves have moved" {
+    desc: "Separately from any single anomaly, the shape of the whole score distribution is being watched. A population stability index of 0.27 says the model is now seeing a different world from the one it was fitted on — nothing has failed, but its thresholds are calibrated against a distribution that no longer holds. That is a retraining decision, and it is filed rather than acted on."
+    focus Baseline
+    set Model { badge: "PSI 0.27", state: warn }
+    seq {
+      flow Baseline -> Baseline { dur: 700ms, msg: 4 }
+      flow Baseline -> Model { dur: 550ms, msg: 1 }
+      flow Model -> Model { dur: 500ms, msg: 4 }
+      flow Model -> Alerts { dur: 500ms, msg: 1 }
+    }
+  }
+
+  step resume "And then it happens again in thirty seconds" {
+    desc: "The retrain goes to a queue a human will look at, and the window reopens. Nothing about this cycle was triggered by a request; the whole flow above runs twice a minute whether or not anything is wrong, and the work of the pipeline is almost entirely deciding what not to say."
+    focus Stream
+    set Stream { badge: "next window", state: active }
+    seq {
+      flow Alerts -> Analyst { dur: 500ms, msg: 2 }
+      flow Analyst -> Stream { dur: 600ms, msg: 1 }
+    }
+  }
+
+scenario "the retraining run" { speed: 1.0 }
+
+  step approve "Somebody agrees to retrain" {
+    desc: "Drift filed a ticket; it did not retrain anything. That gap is deliberate — a detector that refits itself the moment its inputs move will happily learn that the new anomaly is normal, and the failure is silent. So the run starts with a person saying yes."
+    focus Trainer
+    set Trainer { badge: "queued", state: active }
+    seq {
+      flow Alerts -> Trainer { dur: 600ms, msg: 1 }
+    }
+  }
+
+  step assemble "Ninety days, and only eight hundred labels" {
+    desc: "The training set is assembled from the same store inference reads, which is the point of having one: the features a model learns from are the features it will be given. Four million rows carry eight hundred and twelve labels between them — every one of them an analyst's verdict from a window like the one before."
+    focus Features
+    set Features { badge: "4.1M rows", state: active }
+    seq {
+      flow Trainer -> Features { dur: 600ms, msg: 1 }
+      flow Features -> Features { dur: 700ms, msg: 3 }
+      flow Features -> Features { dur: 800ms, msg: 4 }
+      flow Features -> Trainer { dur: 600ms, style: response, msg: 1 }
+    }
+  }
+
+  step pit "The check that keeps the score honest" {
+    desc: "Point-in-time correctness is the step everyone skips once. If a training row is built from feature values as they look today rather than as they looked at the moment of the event, the model learns from the future and scores beautifully in the lab, then falls over in production. The holdout is a whole month, kept aside untouched."
+    focus Features
+    set Features { badge: "point-in-time", state: active }
+  }
+
+  step rebalance "Eight hundred positives in four million rows" {
+    desc: "This is what makes anomaly detection its own problem rather than a classification problem. At two ten-thousandths of a percent, a model that answers 'normal' every time is 99.98% accurate and completely useless, so the loss has to be reweighted before any fitting starts."
+    focus Trainer
+    set Trainer { badge: "0.02%", state: warn }
+    seq {
+      flow Trainer -> Trainer { dur: 800ms, msg: 1 }
+    }
+  }
+
+  step autoencoder "Teach one model what normal looks like" {
+    desc: "The autoencoder never sees a label. It is trained only to compress and rebuild ordinary traffic, and its anomaly score is how badly it fails on a record — the reasoning being that whatever it cannot reconstruct is unlike anything it was shown."
+    focus Trainer
+    set Trainer { badge: "12 epochs", state: active }
+    seq {
+      flow Trainer -> Trainer { dur: 900ms, msg: 2 }
+    }
+  }
+
+  step forest "And teach the other one to cut things off" {
+    desc: "The isolation forest comes at it from the opposite direction: it splits the data at random and asks how few cuts it takes to isolate a record. Outliers fall out early. It is cheap, it needs no notion of normal, and it catches the plainly-strange the autoencoder can sometimes rebuild too well."
+    focus Trainer
+    set Trainer { badge: "fitting", state: active }
+    seq {
+      flow Trainer -> Trainer { dur: 700ms, msg: 3 }
+    }
+  }
+
+  step blend "One weight, swept rather than chosen" {
+    desc: "The two scores have to become one number, and the weight between them is the only knob a human would otherwise pick by feel. It is swept against the holdout instead — the eight hundred labels are worth more spent here, calibrating, than they would be as extra training rows."
+    focus Trainer
+    seq {
+      flow Trainer -> Trainer { dur: 700ms, msg: 4 }
+    }
+  }
+
+  step bands "Recompute what normal means for a Tuesday" {
+    desc: "The seasonal bands are refitted alongside the models, because they are half the system: the inference window threw away twenty-nine of forty-one candidates on this basis. Seven day-parts, each with its own idea of a normal range."
+    focus Baseline
+    set Baseline { badge: "7 day-parts", state: active }
+    seq {
+      flow Trainer -> Baseline { dur: 600ms, msg: 1 }
+      flow Baseline -> Trainer { dur: 600ms, style: response, msg: 1 }
+    }
+  }
+
+  step holdout "0.71 against 0.63, and not accuracy" {
+    desc: "Precision-recall area, not accuracy and not ROC — with a positive rate this low, ROC flatters everything and accuracy is meaningless. 0.71 against the incumbent's 0.63 is the whole case for replacing a model that is currently working."
+    focus Trainer
+    set Trainer { badge: "PR-AUC 0.71", state: active }
+    seq {
+      flow Trainer -> Trainer { dur: 700ms, msg: 5 }
+    }
+  }
+
+  step register "Register it, with everything needed to rebuild it" {
+    desc: "The candidate is not a file, it is a file plus the data window, the code revision and the parameters that produced it. Six months from now the only useful question about v14 will be what it was trained on, and nobody will remember."
+    focus Registry
+    set Registry { badge: "v14", state: active }
+    seq {
+      flow Trainer -> Registry { dur: 600ms, msg: 1 }
+      flow Registry -> Registry { dur: 700ms, msg: 1 }
+    }
+  }
+
+  step review "A better number is not yet a decision" {
+    desc: "v14 goes to the analyst who has been triaging the pages, not to a deployment. A model that scores better in aggregate can still be worse at the handful of things that actually matter, and the person who reads the alerts is the only one who knows which those are."
+    focus Analyst
+    set Analyst { badge: "review", state: active }
+    seq {
+      flow Registry -> Analyst { dur: 600ms, msg: 1 }
+      flow Analyst -> Registry { dur: 500ms, msg: 1 }
+    }
+  }
+
+  step disagree "Forty-one disagreements are the actual review" {
+    desc: "Both models are replayed over every labelled record and the aggregate is set aside; what gets read is the forty-one cases where they disagree. That is a morning's work and it is the only part of this run that cannot be automated — the aggregate says v14 is better, the disagreements say whether it is better at the right things."
+    focus Analyst
+    set Analyst { badge: "41 cases", state: warn }
+    seq {
+      flow Registry -> Analyst { dur: 700ms, style: response, msg: 2 }
+      flow Analyst -> Analyst { dur: 900ms, msg: 2 }
+    }
+  }
+
+  step shadow "Serve the old one, score with both" {
+    desc: "Approval buys a shadow deployment, not traffic. v14 scores every window beside v13 and nobody is paged on its output; the pipeline behaves exactly as it did yesterday while the new model builds a record in production conditions no holdout reproduces."
+    focus Model
+    set Model { badge: "v13 + v14", state: active }
+    seq {
+      flow Analyst -> Registry { dur: 500ms, msg: 2 }
+      flow Registry -> Model { dur: 600ms, msg: 1 }
+      flow Model -> Model { dur: 800ms, msg: 5 }
+    }
+  }
+
+  step agreement "Two days of agreeing, and where it did not" {
+    desc: "0.94 agreement over forty-eight hours is not a pass mark on its own — it is the six per cent that gets looked at, because that is where v14 would have changed what a human saw. Shadowing is the only test that runs against the traffic the model will actually meet."
+    focus Registry
+    set Registry { badge: "0.94", state: active }
+    seq {
+      flow Model -> Registry { dur: 600ms, msg: 1 }
+      flow Registry -> Analyst { dur: 600ms, msg: 3 }
+    }
+  }
+
+  step promote "Promote, on a person's word" {
+    desc: "The last gate is a human again, and by design: every automatic step in this run was reversible and this one is not. What follows is a live change to what the on-call gets woken for."
+    focus Analyst
+    set Analyst { badge: "promote", state: active }
+    seq {
+      flow Analyst -> Registry { dur: 500ms, msg: 3 }
+      flow Registry -> Model { dur: 600ms, msg: 2 }
+    }
+  }
+
+  step live "New thresholds, and the loop closes" {
+    desc: "v14 is serving, its bands are live, and the next window will be scored against them. Which means the pipeline is back at the top of the other scenario — and the labels an analyst writes tonight are the training data for whatever replaces v14."
+    focus Stream
+    set Model { badge: "v14", state: done }
+    set Stream { badge: "live", state: active }
+    seq {
+      flow Model -> Stream { dur: 700ms, msg: 2 }
+    }
+  }

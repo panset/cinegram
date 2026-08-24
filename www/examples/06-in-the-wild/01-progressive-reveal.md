@@ -106,5 +106,5 @@ A `<v-click>`-style build-up of one Mermaid flowchart: seven steps, each reveali
       }
     ```
 
-← [launch, negotiate, call](../05-ai-systems/04-mcp-handshake.md)  
+← [anomaly detection](../05-ai-systems/05-anomaly-detection.md)  
 → [walk the pipeline](../06-in-the-wild/02-stepwise-greyed-out.md)

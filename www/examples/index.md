@@ -22,7 +22,7 @@ the upgrade · tcp connection · leader failure and re-election
 
 ## [ai systems](05-ai-systems/index.md)
 
-one question, four turns · fan out, barrier, synthesise · rag pipeline · launch, negotiate, call
+one question, four turns · fan out, barrier, synthesise · rag pipeline · launch, negotiate, call · anomaly detection
 
 ## [in the wild](06-in-the-wild/index.md)
 

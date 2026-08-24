@@ -18,3 +18,7 @@ Retrieval-augmented generation, told twice: once with a warm cache, and once wit
 
 The handshake `cinegram mcp` performs. An agent host launches the server on stdin and stdout, agrees a protocol version with it, asks what it can do, and only then calls a tool — here `sheet`, which comes back as a picture of a whole scenario.
 
+## [anomaly detection](05-anomaly-detection.md)
+
+A production anomaly detector, drawn once and walked through twice: the thirty-second inference window that scores five thousand events, and the retraining run its drift check sets off days later. Two scenarios over one diagram, which is the point — the same system at two time scales, and the labels a human writes in the first are the training data for the second.
+
