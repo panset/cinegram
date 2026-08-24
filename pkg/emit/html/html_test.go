@@ -575,11 +575,96 @@ func TestASelectLooksLikeOneAndTheScenarioPickerSaysSo(t *testing.T) {
 		t.Error("the picker's title does not say how many there are, which is the fact that " +
 			"makes it worth opening")
 	}
-	// The whole line hides, not its halves: hiding a label and a control inside a
-	// flex row leaves the row's gap behind.
-	if !strings.Contains(js, "this.scenarioLine.style.display = scenarios.length > 1 ? '' : 'none';") {
-		t.Error("the scenario line does not hide itself when there is one scenario, so a " +
-			"document with one captions a control that is not on the page")
+	// The picker and its caption hide together and nothing else goes with them.
+	// Wrapping them is what keeps Present — which shares the row — on a page with
+	// one scenario, and Present is the way out of presenter mode.
+	if !strings.Contains(js, "this.pickerWrap.style.display = scenarios.length > 1 ? '' : 'none';") {
+		t.Error("the picker and its caption do not hide together when there is one scenario, " +
+			"so a document with one captions a control that is not on the page")
+	}
+	if !strings.Contains(js, "this.scenarioLine.appendChild(this.presentBtn);") {
+		t.Error("Present is not in the scenario row; it sat at the far end of a bar as wide as " +
+			"the page, hanging past the stage's own edge over the step list")
+	}
+	if strings.Contains(js, "this.pickerWrap.appendChild(this.presentBtn)") {
+		t.Error("Present is inside the wrapper that hides with the picker, so a document with " +
+			"one scenario has no way out of presenter mode")
+	}
+	// The heading is shown in inline mode, so Present has to be hidden by name
+	// there — an embed is a diagram inside somebody's page and has no business
+	// taking the whole screen.
+	if !strings.Contains(css, ".dgm-inline .dgm-present-btn") {
+		t.Error("inline mode does not hide Present, which now lives in the heading that inline " +
+			"mode shows")
+	}
+}
+
+// TestTheStepListReachesTheStage pins the two boxes being one height.
+//
+// .dgm-body sets `align-items: start`, which is right for the storyboard panel —
+// content, sized by what it holds — and wrong for the step list, which is
+// furniture beside the stage. A four-step walkthrough left the panel floating
+// short of the diagram next to it, two boxes of different heights with nothing
+// explaining the difference.
+func TestTheStepListReachesTheStage(t *testing.T) {
+	css := string(runtimeCSS)
+
+	steps := ruleBody(t, css, ".dgm-steps {")
+	if !strings.Contains(steps, "align-self: stretch") {
+		t.Errorf("the step list does not stretch, so it stops short of the stage whenever the "+
+			"walkthrough has few steps. Rule reads:\n%s", steps)
+	}
+	// And it still scrolls rather than growing the row, or a thirty-step
+	// walkthrough would stretch the stage to match it instead.
+	if !strings.Contains(steps, "overflow: auto") {
+		t.Error("the step list no longer scrolls; stretching it without that lets a long " +
+			"walkthrough set the height of the stage beside it")
+	}
+	body := ruleBody(t, css, ".dgm-body {")
+	if !strings.Contains(body, "align-items: start") {
+		t.Error(".dgm-body no longer starts its items, so the storyboard panel stretches too — " +
+			"it is content, and its height is what it holds")
+	}
+}
+
+// TestFillScalesTheDiagramIntoItsSpace pins the control and the one rule that
+// keeps it from fighting the camera.
+//
+// Mermaid lays a diagram out at whatever size its content wants, so a small
+// diagram in a wide stage sits in a lot of nothing. Fill spends that space. It is
+// a toggle because the answer depends on the stage, and the stage keeps changing.
+func TestFillScalesTheDiagramIntoItsSpace(t *testing.T) {
+	js := string(runtimeJS)
+
+	if !strings.Contains(js, "Player.prototype.fitToStage") {
+		t.Error("nothing computes a scale from the stage, so a diagram smaller than its stage " +
+			"stays small")
+	}
+	if !strings.Contains(js, "this.fillBtn = iconButton('fill'") {
+		t.Error("the rail has no Fill button, so the scaling cannot be asked for")
+	}
+	// Both write zoom and pan. Two things steering one transform is a fight, and
+	// the camera is the one that yields.
+	if !strings.Contains(js, "if (this.follow) this.setFollow(false);") {
+		t.Error("Fill does not turn Cine off; both write the transform and whichever ran last " +
+			"would win each frame")
+	}
+	// Measured at scale 1: reading a scaled box and scaling it again compounds,
+	// so two resizes would walk the zoom away from the truth.
+	if !strings.Contains(js, "this.setTransform();\n\n    var box = this.holder.getBoundingClientRect();") {
+		t.Error("fitToStage does not reset the transform before measuring, so each fit " +
+			"compounds the last one")
+	}
+	// Clamped to the range the wheel obeys, or Fill could reach a scale a reader
+	// cannot reach by hand and then cannot undo.
+	if !strings.Contains(js, "Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, scale))") {
+		t.Error("the fill scale is not clamped to ZOOM_MIN/ZOOM_MAX, so it can leave the range " +
+			"the wheel and the minimap work in")
+	}
+	// Reactive, which is the whole reason it is a toggle rather than a press.
+	if strings.Count(js, "if (self.fill) self.fitToStage();") < 2 {
+		t.Error("Fill does not re-fit on both a resize and a render; held on, it has to answer " +
+			"a stage that has changed under it")
 	}
 }
 

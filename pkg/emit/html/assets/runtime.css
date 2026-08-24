@@ -251,6 +251,16 @@ body.dgm-standalone {
 .dgm-scenario {
   display: flex;
   align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* The picker and its caption travel together, because they hide together when a
+   document has one scenario — and Present, which sits in the same row, must not
+   go with them. */
+.dgm-scenario-pick {
+  display: flex;
+  align-items: center;
   gap: 6px;
   min-width: 0;
 }
@@ -390,6 +400,11 @@ body.dgm-standalone {
    so it survives on its own and this rule has nothing to name. Its caption does
    not survive: an embed's furniture belongs to the page around it. */
 .dgm-inline .dgm-picker-label { display: none; }
+
+/* Present moved into the heading, which inline mode shows — so it is hidden by
+   name here. An embed is a diagram inside somebody's page: it has no business
+   taking the whole screen. */
+.dgm-inline .dgm-present-btn { display: none; }
 
 /* Back and the scenario picker are left to the runtime, which already hides
    each until it has something to offer — Back until the reader has drilled into
@@ -1436,6 +1451,11 @@ body.dgm-standalone {
 /* overflow was hidden, for the radius; auto clips the same way and adds the
    scrollbar a long walkthrough needs once the shell stops the column growing
    past the window. */
+/* `align-self: stretch` against the grid's `align-items: start`: a walkthrough
+   with four steps used to leave the panel floating short of the stage beside it,
+   two boxes of different heights with nothing explaining the difference. Only
+   this item stretches — the storyboard panel next to it is content and is still
+   sized by what it holds. */
 .dgm-steps {
   list-style: none;
   counter-reset: dgm-step;
@@ -1443,6 +1463,7 @@ body.dgm-standalone {
   padding: 0;
   border: 1px solid var(--dgm-border);
   border-radius: 12px;
+  align-self: stretch;
   max-height: 100%;
   overflow: auto;
 }

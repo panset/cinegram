@@ -467,6 +467,10 @@
     // reel (set in build(), where reel is first known, and clamped true by
     // setFollow), toggled by the Cine button everywhere else.
     this.follow = false;
+    // Fill starts off: a diagram is laid out at the size its author's content
+    // implies, and scaling that up is a choice rather than a default. It sits
+    // beside follow because the two write the same transform.
+    this.fill = false;
     this.camOverride = false;
     this.camKeys = null;
     this._camMoved = false;
@@ -630,9 +634,20 @@
     // The whole line is what hides when there is one scenario, rather than its
     // two halves separately: hiding a label and a control inside a flex row
     // leaves the row's gap behind.
+    // The row holds the picker *and* Present, so the two controls a reader is
+    // offered sit together under the title instead of at opposite ends of a bar
+    // as wide as the page — the right-hand one used to hang past the stage's own
+    // edge, over the step list.
+    //
+    // The picker and its caption are wrapped, because only they hide when a
+    // document has one scenario. Present must not: it is the way out of
+    // presenter mode, and a one-scenario document is exactly as presentable as
+    // any other.
     this.scenarioLine = el('div', 'dgm-scenario');
-    this.scenarioLine.appendChild(elText('span', 'dgm-picker-label', 'Scenario'));
-    this.scenarioLine.appendChild(this.picker);
+    this.pickerWrap = el('span', 'dgm-scenario-pick');
+    this.pickerWrap.appendChild(elText('span', 'dgm-picker-label', 'Scenario'));
+    this.pickerWrap.appendChild(this.picker);
+    this.scenarioLine.appendChild(this.pickerWrap);
     heading.appendChild(this.scenarioLine);
 
     bar.appendChild(heading);
@@ -655,10 +670,11 @@
     // Play and Present are the whole bar now — the pair a reader is offered,
     // which is also the silhouette an inline player has always shown. Every
     // other control moved to the rail; see buildRail.
-    this.presentBtn = button('Present', 'dgm-btn', function () {
+    this.presentBtn = button('Present', 'dgm-btn dgm-present-btn', function () {
       self.setPresenter(!self.present);
     });
-    controls.appendChild(this.presentBtn);
+    // Appended to the scenario row rather than the bar's controls; see there.
+    this.scenarioLine.appendChild(this.presentBtn);
 
     bar.appendChild(controls);
     this.root.appendChild(bar);
@@ -743,6 +759,8 @@
     own(self, window, 'resize', function () {
       self.camKeys = null;
       self.mapKeys = null;
+      // Fill is a function of the stage, and the stage has just changed.
+      if (self.fill) self.fitToStage();
       // A layout change is a new context, so a dismissed thumbnail returns:
       // otherwise a rotate to landscape and back would resurrect and then
       // re-hide the panel with no gesture ever made in the new layout.
@@ -1095,6 +1113,21 @@
     // modes, because the reason is what would have to change first.
     rail.appendChild(iconButton('restart', 'Restart', 'dgm-btn dgm-nofoot', function () { self.seek(0); }));
 
+    // Fill scales the drawing to the room it has. Mermaid lays a diagram out at
+    // whatever size its content wants, and a five-actor sequence in a wide stage
+    // then sits small in the middle of a lot of nothing — the reader's screen is
+    // large and the picture is not. This is the one control that spends it.
+    //
+    // A toggle rather than a press, because the answer depends on the size of
+    // the stage and the stage keeps changing: a window resize, the caption
+    // growing by a line, a scenario with a taller diagram. Held on, it re-fits
+    // for each of those; pressed once it would be right until the first of them.
+    this.fillBtn = iconButton('fill', 'Scale the diagram to fill the stage', 'dgm-btn', function () {
+      self.setFill(!self.fill);
+    });
+    this.fillBtn.setAttribute('aria-pressed', 'false');
+    rail.appendChild(this.fillBtn);
+
     // Cine turns the reel's auto-follow camera on anywhere: each step framed
     // and zoomed, reel-style. Off is the default everywhere but a reel — a
     // diagram that fits the screen is best introduced whole — and the toggle
@@ -1158,6 +1191,8 @@
     cine: ['M3.5 7.5h10v9h-10z', 'M13.5 12l7-3.5v7z'],
     // Two sheets, the front one over the back: copy.
     copy: ['M9.5 9.5h10v10h-10z', 'M5.5 14.5H4.5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v1'],
+    // Two corners and two diagonals: push the drawing out to the edges.
+    fill: ['M4 9.5V4h5.5', 'M20 14.5V20h-5.5', 'M4.5 4.5l5 5', 'M19.5 19.5l-5-5'],
     // Four corner brackets: the whole diagram back inside its frame.
     fit: [
       'M4 9.5V6a2 2 0 0 1 2-2h3.5',
@@ -2042,6 +2077,70 @@
       // resetZoom relays out the overlays itself, via applyTransform.
       this.resetZoom();
     }
+  };
+
+  // setFill turns the scaling on and off, and turns Cine off when it goes on.
+  //
+  // Both write zoom and pan, and two things steering one transform is a fight
+  // rather than a feature: the camera frames a step, this frames the diagram, and
+  // whichever ran last would win each frame. Cine is the one that yields, because
+  // it is the more specific intent — a reader who asks to follow each step is
+  // asking for something Fill cannot also be doing.
+  Player.prototype.setFill = function (on) {
+    this.fill = !!on;
+    this.fillBtn.classList.toggle('is-on', this.fill);
+    // Beside the class, as setFollow does: the tint an eye reads and the state a
+    // screen reader hears cannot come apart.
+    this.fillBtn.setAttribute('aria-pressed', this.fill ? 'true' : 'false');
+    if (this.fill) {
+      if (this.follow) this.setFollow(false);
+      this.fitToStage();
+    } else {
+      this.resetZoom();
+    }
+  };
+
+  // fitToStage sets the zoom that makes the drawing fill the stage, and centres
+  // what is left over.
+  //
+  // Measured at scale 1 rather than from the current transform: reading a scaled
+  // box and scaling it again compounds, so two resizes would walk the zoom away
+  // from the truth. The reset-measure-set costs one forced reflow, which is fine
+  // at the rate this runs — a toggle, a resize, a render — and would not be if it
+  // ran per frame.
+  //
+  // Clamped to the same ZOOM_MIN/ZOOM_MAX the wheel obeys, so Fill cannot reach a
+  // scale a reader could not have reached by hand and then could not undo.
+  Player.prototype.fitToStage = function () {
+    if (!this.fill || !this.holder || !this.stage) return;
+
+    this.zoom = 1;
+    this.panX = 0;
+    this.panY = 0;
+    this.setTransform();
+
+    var box = this.holder.getBoundingClientRect();
+    if (!box.width || !box.height) return;
+
+    // The stage's content box: its own padding is furniture, and the right-hand
+    // strip is the rail's reserved lane — scaling into it would put the drawing
+    // under the buttons, which is the thing that padding exists to prevent.
+    var cs = getComputedStyle(this.stage);
+    var availW = this.stage.clientWidth -
+      (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+    var availH = this.stage.clientHeight -
+      (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0);
+    if (availW <= 0 || availH <= 0) return;
+
+    var scale = Math.min(availW / box.width, availH / box.height);
+    scale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, scale));
+
+    this.zoom = scale;
+    // Centre the remainder. transformOrigin is 0 0, so the offset is the whole
+    // slack rather than half of it applied twice.
+    this.panX = Math.max(0, (availW - box.width * scale) / 2);
+    this.panY = Math.max(0, (availH - box.height * scale) / 2);
+    this.applyTransform();
   };
 
   // restingTime is where an idle page sits: the author's poster moment, or the
@@ -3042,8 +3141,8 @@
       ? 'Choose one of ' + scenarios.length + ' scenarios'
       : 'Scenario';
 
-    if (this.scenarioLine) {
-      this.scenarioLine.style.display = scenarios.length > 1 ? '' : 'none';
+    if (this.pickerWrap) {
+      this.pickerWrap.style.display = scenarios.length > 1 ? '' : 'none';
     }
   };
 
@@ -3156,6 +3255,9 @@
         self.holder = holder;
         self.mapClone = null;
         self.mapKeys = null;
+        // A new drawing is a new size, and the old fit was measured against the
+        // holder this one just replaced.
+        if (self.fill) self.fitToStage();
         // The style write alone, not applyTransform: the id→element binds
         // still point into the svg the innerHTML above just detached, and
         // applyTransform would re-run apply() over them — an active flow then
