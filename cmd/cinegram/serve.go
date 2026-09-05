@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -229,17 +230,19 @@ const reloadScript = `<script>
 </script>
 `
 
+// The splice goes through slices.Concat rather than a make with a hand-summed
+// capacity: the sum of two lengths is an unchecked addition on a size the
+// caller controls, and slices.Concat does the same accumulation with an
+// overflow check. It also returns a fresh slice in both branches, so the
+// no-</body> case can no longer write the script into whatever spare capacity
+// the caller's buffer happened to have.
 func injectReload(page []byte) []byte {
 	marker := []byte("</body>")
 	i := bytes.LastIndex(page, marker)
 	if i < 0 {
-		return append(page, []byte(reloadScript)...)
+		return slices.Concat(page, []byte(reloadScript))
 	}
-	out := make([]byte, 0, len(page)+len(reloadScript))
-	out = append(out, page[:i]...)
-	out = append(out, []byte(reloadScript)...)
-	out = append(out, page[i:]...)
-	return out
+	return slices.Concat(page[:i], []byte(reloadScript), page[i:])
 }
 
 // serve runs the server until interrupted. It returns the listener's address so
