@@ -189,3 +189,49 @@ func TestStripComment(t *testing.T) {
 		}
 	}
 }
+
+func TestSplitAmpersand(t *testing.T) {
+	tests := []struct {
+		name  string
+		in    string
+		parts []string
+	}{
+		{name: "single node", in: "F", parts: []string{"F"}},
+		{name: "three nodes", in: "H & G & K", parts: []string{"H ", " G ", " K"}},
+		{name: "no spaces", in: "a&b", parts: []string{"a", "b"}},
+		{
+			name:  "ampersand inside a quoted label is text",
+			in:    `L["Tom & Jerry"]`,
+			parts: []string{`L["Tom & Jerry"]`},
+		},
+		{
+			name:  "ampersand inside an unquoted label is text",
+			in:    "L[Tom & Jerry]",
+			parts: []string{"L[Tom & Jerry]"},
+		},
+		{
+			name:  "split around a labelled node",
+			in:    "a[One] & b[Two]",
+			parts: []string{"a[One] ", " b[Two]"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parts, offs := splitAmpersand(tt.in)
+			if len(parts) != len(tt.parts) {
+				t.Fatalf("splitAmpersand(%q) = %q, want %q", tt.in, parts, tt.parts)
+			}
+			for i := range parts {
+				if parts[i] != tt.parts[i] {
+					t.Errorf("part %d = %q, want %q", i, parts[i], tt.parts[i])
+				}
+				// The offset must actually point at the part, or a diagnostic
+				// would land on the wrong column.
+				if got := tt.in[offs[i] : offs[i]+len(parts[i])]; got != parts[i] {
+					t.Errorf("offset %d points at %q, want %q", i, got, parts[i])
+				}
+			}
+		})
+	}
+}

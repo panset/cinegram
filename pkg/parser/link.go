@@ -253,3 +253,45 @@ func matchPipeLabel(s string, i int) (label string, next int, ok bool) {
 	}
 	return unquote(strings.TrimSpace(s[j : j+k])), j + k + 1, true
 }
+
+// splitAmpersand splits one link segment on Mermaid's `&` shorthand, which
+// names several nodes at a single end of a link — `F --> H & G & K` draws
+// three edges, and `A & B --> C & D` draws four.
+//
+// Bracket depth and quoting are tracked for the same reason splitLinks tracks
+// them: an `&` inside a node label, as in `a["Tom & Jerry"] --> b`, is part of
+// the label and must not split anything.
+//
+// The returned offs are byte offsets of each part within s.
+func splitAmpersand(s string) (parts []string, offs []int) {
+	depth := 0
+	inQuote := false
+	start := 0
+
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case inQuote:
+			if c == '"' {
+				inQuote = false
+			}
+		case c == '"':
+			inQuote = true
+		case c == '[' || c == '(' || c == '{':
+			depth++
+		case c == ']' || c == ')' || c == '}':
+			// Clamp, as splitLinks does: `id>text]` closes a bracket it never
+			// opened and must not push depth negative.
+			if depth > 0 {
+				depth--
+			}
+		case c == '&' && depth == 0:
+			parts = append(parts, s[start:i])
+			offs = append(offs, start)
+			start = i + 1
+		}
+	}
+	parts = append(parts, s[start:])
+	offs = append(offs, start)
+	return parts, offs
+}

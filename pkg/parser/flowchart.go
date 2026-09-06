@@ -187,21 +187,31 @@ func (p flowchartParser) parseGraphLine(line source.Line, code string, b *diag.B
 		shift = 0
 	}
 
+	// Each segment may name several nodes via Mermaid's `&` shorthand, so a
+	// segment parses to a group. `refs` stays the flat reading order that
+	// declaration and emission want; `groups` is what the links join.
+	groups := make([][]ast.NodeRef, 0, len(segs))
 	refs := make([]ast.NodeRef, 0, len(segs))
 	for i, seg := range segs {
-		ref, inner, ok := parseNodeRef(seg)
-		if !ok {
-			pos := line.PosAt(shift + offs[i])
-			if len(links) > 0 {
-				b.ErrorHintf(pos, "every link needs a node on both sides",
-					"missing node beside link operator")
-			} else {
-				b.Errorf(pos, "could not parse node declaration")
+		parts, partOffs := splitAmpersand(seg)
+		group := make([]ast.NodeRef, 0, len(parts))
+		for j, part := range parts {
+			ref, inner, ok := parseNodeRef(part)
+			if !ok {
+				pos := line.PosAt(shift + offs[i] + partOffs[j])
+				if len(links) > 0 {
+					b.ErrorHintf(pos, "every link needs a node on both sides",
+						"missing node beside link operator")
+				} else {
+					b.Errorf(pos, "could not parse node declaration")
+				}
+				return &ast.RawStmt{Text: line.Text, StartPos: line.Start()}
 			}
-			return &ast.RawStmt{Text: line.Text, StartPos: line.Start()}
+			ref.At = line.PosAt(shift + offs[i] + partOffs[j] + inner)
+			group = append(group, ref)
+			refs = append(refs, ref)
 		}
-		ref.At = line.PosAt(shift + offs[i] + inner)
-		refs = append(refs, ref)
+		groups = append(groups, group)
 	}
 
 	for _, ref := range refs {
@@ -221,18 +231,23 @@ func (p flowchartParser) parseGraphLine(line source.Line, code string, b *diag.B
 
 	edges := make([]ast.EdgeRef, 0, len(links))
 	for i, m := range links {
-		from, to := refs[i], refs[i+1]
 		at := line.PosAt(shift + m.start)
-		t.AddEdge(&symbol.Edge{
-			From:  from.ID,
-			To:    to.ID,
-			Label: m.link.Label,
-			Style: string(m.link.Style),
-			Head:  string(m.link.Head),
-			Bidir: m.link.Bidir,
-			At:    at,
-		})
-		edges = append(edges, ast.EdgeRef{From: from.ID, To: to.ID, Link: m.link, At: at})
+		// A link between two `&` groups draws every pairing, so `A & B --> C`
+		// is two edges and `A & B --> C & D` is four — Mermaid's own reading.
+		for _, from := range groups[i] {
+			for _, to := range groups[i+1] {
+				t.AddEdge(&symbol.Edge{
+					From:  from.ID,
+					To:    to.ID,
+					Label: m.link.Label,
+					Style: string(m.link.Style),
+					Head:  string(m.link.Head),
+					Bidir: m.link.Bidir,
+					At:    at,
+				})
+				edges = append(edges, ast.EdgeRef{From: from.ID, To: to.ID, Link: m.link, At: at})
+			}
+		}
 	}
 
 	return &ast.EdgeStmt{Nodes: refs, Edges: edges, Text: line.Text, StartPos: line.Start()}

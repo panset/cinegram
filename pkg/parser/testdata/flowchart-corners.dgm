@@ -1,0 +1,17 @@
+%% Flowchart forms the parser has to model correctly, not merely reprint.
+%% Mermaid's `&` shorthand names several nodes at one end of a link, so a
+%% single line can draw several edges; an `&` inside a label is just text.
+flowchart TB
+  A --> B
+  F --> H & G & K
+  G & K -.-> M
+  L["Tom & Jerry"] --> M
+  P & Q --> R & S
+  wide["a --> b inside a label"] --> A
+
+scenario "corners"
+  step only "walk" {
+    flow F -> K { label: "third of one line" }
+    flow Q -> S { label: "cross product" }
+    flow L -> M { label: "label kept whole" }
+  }

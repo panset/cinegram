@@ -1,0 +1,37 @@
+diagram: flowchart (flowchart TB)
+direction: TB
+
+nodes:
+  A          label="A"                      shape=-         
+  B          label="B"                      shape=-         
+  F          label="F"                      shape=-         
+  H          label="H"                      shape=-         
+  G          label="G"                      shape=-         
+  K          label="K"                      shape=-         
+  M          label="M"                      shape=-         
+  L          label="Tom & Jerry"            shape=rect      
+  P          label="P"                      shape=-         
+  Q          label="Q"                      shape=-         
+  R          label="R"                      shape=-         
+  S          label="S"                      shape=-         
+  wide       label="a --> b inside a label" shape=rect      
+
+edges:
+  e0   A -> B style=normal head=arrow
+  e1   F -> H style=normal head=arrow
+  e2   F -> G style=normal head=arrow
+  e3   F -> K style=normal head=arrow
+  e4   G -> M style=dotted head=arrow
+  e5   K -> M style=dotted head=arrow
+  e6   L -> M style=normal head=arrow
+  e7   P -> R style=normal head=arrow
+  e8   P -> S style=normal head=arrow
+  e9   Q -> R style=normal head=arrow
+  e10  Q -> S style=normal head=arrow
+  e11  wide -> A style=normal head=arrow
+
+scenario "corners"
+  step only "walk"
+    flow F -> K {label="third of one line"}
+    flow Q -> S {label="cross product"}
+    flow L -> M {label="label kept whole"}
