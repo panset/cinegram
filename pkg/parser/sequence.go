@@ -157,6 +157,14 @@ func parseMessage(line source.Line, code string, t *symbol.Table, b *diag.Bag) (
 	}
 	to = strings.TrimSpace(to)
 
+	// Mermaid's activation shorthand prefixes the target with `+` or `-`
+	// (`A->>+B: text` activates B, `B-->>-A: text` deactivates B). The marker
+	// is not part of the participant id: leaving it attached invents a
+	// participant called `+ B` and loses the edge every flow needs.
+	if len(to) > 0 && (to[0] == '+' || to[0] == '-') {
+		to = strings.TrimSpace(to[1:])
+	}
+
 	if from == "" || to == "" {
 		b.ErrorHintf(line.Start(), "write a message as `Client->>Server: text`",
 			"message is missing a participant")

@@ -19,6 +19,8 @@ sequenceDiagram
   A->D: no arrowhead
   A-->D: dotted, no arrowhead
   A->>A: talks to itself
+  A->>+D: activation shorthand
+  D-->>-A: deactivation shorthand
 
   Note right of U: a note with x->y inside it
   activate D
