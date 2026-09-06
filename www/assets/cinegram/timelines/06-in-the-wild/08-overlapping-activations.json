@@ -1,0 +1,179 @@
+{
+  "version": 2,
+  "root": "08-overlapping-activations",
+  "views": [
+    {
+      "id": "08-overlapping-activations",
+      "title": "two questions, answered in order",
+      "diagram": {
+        "type": "sequenceDiagram",
+        "mermaid": "%% Alice fires two questions at John before he answers either, so both of his\n%% activation bars are open at once. The animation plays the four messages in\n%% the order they happened — first question, second question, first answer,\n%% second answer — and a gauge on John counts the open questions live, so the\n%% pairing the static diagram cannot show is simply watched happening.\n%% See mermaid-js/mermaid #1765: https://github.com/mermaid-js/mermaid/issues/1765\n%% ---\n%% This does not fix Mermaid's static rendering — two overlapping bars still\n%% carry no pairing information on the canvas, and the feature request behind\n%% #1765 (labelled activations) is still unmet. What changes is the medium:\n%% a timeline has no geometry to be ambiguous in. Each step names exactly one\n%% message, so \"which answer belongs to which question\" is answered by watch\n%% order, not by bar shape.\n%% ---\n%% `msg:` is load-bearing here. Alice -\u003e John carries two messages (the first\n%% and second question) and John -\u003e Alice carries two more (the first and\n%% second answer); `msg: 1` / `msg: 2` on each pins the flow to the intended\n%% arrow instead of letting the compiler guess. The gauge on John reads the\n%% count of unanswered questions — 1, then 2, then back to 1, then 0 — so\n%% scrubbing to any instant shows exactly how many questions are in flight.\nsequenceDiagram\n  Alice -\u003e\u003e + John: First question\n  Alice -\u003e\u003e + John: Second question\n  John --\u003e\u003e - Alice: First answer\n  John --\u003e\u003e - Alice: Second answer\n\n"
+      },
+      "nodes": [
+        {
+          "id": "Alice",
+          "label": "Alice"
+        },
+        {
+          "id": "John",
+          "label": "John"
+        }
+      ],
+      "groups": [],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "Alice",
+          "to": "John",
+          "label": "First question",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "Alice",
+          "to": "John",
+          "label": "Second question",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "John",
+          "to": "Alice",
+          "label": "First answer",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "John",
+          "to": "Alice",
+          "label": "Second answer",
+          "style": "dotted",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "two questions, answered in order",
+          "duration": 2800,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "ask1",
+              "name": "Alice asks the first question",
+              "desc": "John activates to handle it. Nothing else is pending yet, so this message alone is unambiguous even in Mermaid's static picture.",
+              "start": 0,
+              "end": 700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 700,
+                  "edge": "e0",
+                  "from": "Alice",
+                  "to": "John"
+                },
+                {
+                  "kind": "focus",
+                  "start": 0,
+                  "end": 700,
+                  "target": "John"
+                }
+              ]
+            },
+            {
+              "id": "ask2",
+              "name": "Alice asks a second question before the first is answered",
+              "desc": "John's activation bar stays open and a second one starts alongside it. This is the moment the static diagram loses the thread: two bars are open on the same lifeline, and bar geometry alone cannot say which eventual answer closes which one.",
+              "start": 700,
+              "end": 1400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 700,
+                  "end": 1400,
+                  "edge": "e1",
+                  "from": "Alice",
+                  "to": "John"
+                }
+              ]
+            },
+            {
+              "id": "answer1",
+              "name": "John answers the first question",
+              "desc": "In a still image this reply could plausibly close either open bar; there is no visual marker tying it to one question over the other. Playing it in order removes the guesswork: this is simply the answer to the question asked first.",
+              "start": 1400,
+              "end": 2100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1400,
+                  "end": 2100,
+                  "edge": "e2",
+                  "from": "John",
+                  "to": "Alice"
+                }
+              ]
+            },
+            {
+              "id": "answer2",
+              "name": "John answers the second question, and both activations close",
+              "desc": "The last open bar closes and the gauge returns to zero. The pairing was never encoded in the diagram's geometry — it came entirely from the sequence in which these four steps were watched.",
+              "start": 2100,
+              "end": 2800,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2100,
+                  "end": 2800,
+                  "edge": "e3",
+                  "from": "John",
+                  "to": "Alice"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "gauge",
+              "start": 0,
+              "end": 700,
+              "target": "John",
+              "label": "open questions",
+              "value": "1"
+            },
+            {
+              "kind": "gauge",
+              "start": 700,
+              "end": 1400,
+              "target": "John",
+              "label": "open questions",
+              "value": "2"
+            },
+            {
+              "kind": "gauge",
+              "start": 1400,
+              "end": 2100,
+              "target": "John",
+              "label": "open questions",
+              "value": "1"
+            },
+            {
+              "kind": "gauge",
+              "start": 2100,
+              "end": 2100,
+              "target": "John",
+              "label": "open questions",
+              "value": "0"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

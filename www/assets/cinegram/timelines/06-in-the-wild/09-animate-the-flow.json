@@ -1,0 +1,396 @@
+{
+  "version": 2,
+  "root": "09-animate-the-flow",
+  "views": [
+    {
+      "id": "09-animate-the-flow",
+      "title": "order placed: payment approved",
+      "diagram": {
+        "type": "sequenceDiagram",
+        "mermaid": "%% A single POST /orders call unwinds through a service layer — client,\n%% controller, service, payment gateway, repository — one message at a time,\n%% with the reader holding the scrubber instead of a playback timer deciding\n%% the pace. It answers mermaid-js/zenuml-core #268, \"animate the diagram\":\n%% https://github.com/mermaid-js/zenuml-core/issues/268\n%% ---\n%% The pace is entirely the reader's: there is no autoplay racing ahead of a\n%% `desc` before it has been read, and scrubbing to any millisecond shows\n%% exactly the state that millisecond implies rather than an interpolation\n%% toward it.\n%% ---\n%% The service and the repository trade three same-direction messages over\n%% the life of one order, and the gateway can answer with either of two\n%% replies on the same pair — exactly the case `msg:` exists for, so every\n%% `flow` here says which arrow it means instead of leaving the compiler to\n%% guess from position. The order-state `gauge` on the service — pending,\n%% then authorised, then confirmed — holds across every step in between, so\n%% a scrub landing between two writes still reads the right answer, not a\n%% blank one.\nsequenceDiagram\n  participant C as Client\n  participant Ctrl as OrderController\n  participant Svc as OrderService\n  participant Pay as PaymentGateway\n  participant Repo as OrderRepository\n\n  C-\u003e\u003eCtrl: POST /orders\n  activate Ctrl\n  Ctrl-\u003e\u003eSvc: placeOrder(cart)\n  activate Svc\n  Svc-\u003e\u003eRepo: save(order, status=PENDING)\n  Repo--\u003e\u003eSvc: orderId=4471\n  Svc-\u003e\u003ePay: charge(orderId=4471, amount)\n  activate Pay\n  alt payment approved\n  Pay--\u003e\u003eSvc: approved, authCode=A1\n  Svc-\u003e\u003eRepo: update(orderId=4471, status=CONFIRMED)\n  Repo--\u003e\u003eSvc: ok\n  Svc--\u003e\u003eCtrl: 201 Created (orderId=4471)\n  else payment declined\n  Pay--\u003e\u003eSvc: declined, reason=insufficient_funds\n  Svc-\u003e\u003eRepo: update(orderId=4471, status=FAILED)\n  Repo--\u003e\u003eSvc: ok\n  Svc--\u003e\u003eCtrl: 402 Payment Required\n  end\n  deactivate Pay\n  deactivate Svc\n  Ctrl--\u003e\u003eC: 201 Created (orderId=4471)\n  deactivate Ctrl\n\n"
+      },
+      "nodes": [
+        {
+          "id": "C",
+          "label": "Client",
+          "shape": "actor"
+        },
+        {
+          "id": "Ctrl",
+          "label": "OrderController",
+          "shape": "actor"
+        },
+        {
+          "id": "Svc",
+          "label": "OrderService",
+          "shape": "actor"
+        },
+        {
+          "id": "Pay",
+          "label": "PaymentGateway",
+          "shape": "actor"
+        },
+        {
+          "id": "Repo",
+          "label": "OrderRepository",
+          "shape": "actor"
+        }
+      ],
+      "groups": [],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "C",
+          "to": "Ctrl",
+          "label": "POST /orders",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "Ctrl",
+          "to": "Svc",
+          "label": "placeOrder(cart)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "Svc",
+          "to": "Repo",
+          "label": "save(order, status=PENDING)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "Repo",
+          "to": "Svc",
+          "label": "orderId=4471",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "Svc",
+          "to": "Pay",
+          "label": "charge(orderId=4471, amount)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "Pay",
+          "to": "Svc",
+          "label": "approved, authCode=A1",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e6",
+          "from": "Svc",
+          "to": "Repo",
+          "label": "update(orderId=4471, status=CONFIRMED)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e7",
+          "from": "Repo",
+          "to": "Svc",
+          "label": "ok",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e8",
+          "from": "Svc",
+          "to": "Ctrl",
+          "label": "201 Created (orderId=4471)",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e9",
+          "from": "Pay",
+          "to": "Svc",
+          "label": "declined, reason=insufficient_funds",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e10",
+          "from": "Svc",
+          "to": "Repo",
+          "label": "update(orderId=4471, status=FAILED)",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e11",
+          "from": "Repo",
+          "to": "Svc",
+          "label": "ok",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e12",
+          "from": "Svc",
+          "to": "Ctrl",
+          "label": "402 Payment Required",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e13",
+          "from": "Ctrl",
+          "to": "C",
+          "label": "201 Created (orderId=4471)",
+          "style": "dotted",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "order placed: payment approved",
+          "duration": 5700,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "request",
+              "name": "The client submits the order",
+              "desc": "The client POSTs a new order and lands on the controller, the one layer in this stack that speaks HTTP. Everything downstream of this line only ever sees a plain method call, never a request object.",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e0",
+                  "from": "C",
+                  "to": "Ctrl"
+                },
+                {
+                  "kind": "focus",
+                  "start": 0,
+                  "end": 600,
+                  "target": "Ctrl"
+                }
+              ]
+            },
+            {
+              "id": "dispatch",
+              "name": "The controller delegates to the service",
+              "desc": "The controller does no business logic itself — it calls placeOrder on the service, which owns the order's whole lifecycle from here on. This is the seam a unit test mocks out.",
+              "start": 600,
+              "end": 1200,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1200,
+                  "edge": "e1",
+                  "from": "Ctrl",
+                  "to": "Svc"
+                },
+                {
+                  "kind": "focus",
+                  "start": 600,
+                  "end": 1200,
+                  "target": "Svc"
+                }
+              ]
+            },
+            {
+              "id": "persist",
+              "name": "The service records the order before touching money",
+              "desc": "The order is written as PENDING before the service goes anywhere near a card number, so a crash between here and the payment call still leaves a recoverable row instead of a charge nobody can account for. save() hands back the orderId every later call in this flow will carry.",
+              "start": 1200,
+              "end": 2200,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1200,
+                  "end": 1700,
+                  "edge": "e2",
+                  "from": "Svc",
+                  "to": "Repo"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1700,
+                  "end": 2200,
+                  "edge": "e3",
+                  "from": "Repo",
+                  "to": "Svc",
+                  "style": "response"
+                },
+                {
+                  "kind": "focus",
+                  "start": 1200,
+                  "end": 2200,
+                  "target": "Repo"
+                }
+              ]
+            },
+            {
+              "id": "charge",
+              "name": "The service asks the gateway to charge the card",
+              "desc": "With a durable order on hand, the service calls out to the payment gateway. This is the one hop in the whole request that leaves the process's own trust boundary and can fail for reasons the service does not control.",
+              "start": 2200,
+              "end": 2900,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2200,
+                  "end": 2900,
+                  "edge": "e4",
+                  "from": "Svc",
+                  "to": "Pay"
+                },
+                {
+                  "kind": "focus",
+                  "start": 2200,
+                  "end": 2900,
+                  "target": "Pay"
+                }
+              ]
+            },
+            {
+              "id": "approved",
+              "name": "The gateway approves the charge",
+              "desc": "The gateway returns an authorization code on the same pair a decline would have used — the diagram draws approval and decline as two arms of one decision, not two separate calls.",
+              "start": 2900,
+              "end": 3500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2900,
+                  "end": 3500,
+                  "edge": "e5",
+                  "from": "Pay",
+                  "to": "Svc"
+                },
+                {
+                  "kind": "focus",
+                  "start": 2900,
+                  "end": 3500,
+                  "target": "Svc"
+                }
+              ]
+            },
+            {
+              "id": "confirm",
+              "name": "The service marks the order confirmed",
+              "desc": "The order is written a second time, now as CONFIRMED — the same repository, the same save-shaped call, only the status column changes. This is the row a support engineer greps for when a customer asks whether the order went through.",
+              "start": 3500,
+              "end": 4500,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3500,
+                  "end": 4000,
+                  "edge": "e6",
+                  "from": "Svc",
+                  "to": "Repo"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4000,
+                  "end": 4500,
+                  "edge": "e7",
+                  "from": "Repo",
+                  "to": "Svc",
+                  "style": "response"
+                },
+                {
+                  "kind": "focus",
+                  "start": 3500,
+                  "end": 4500,
+                  "target": "Repo"
+                }
+              ]
+            },
+            {
+              "id": "respond",
+              "name": "The service reports success back up the stack",
+              "desc": "The service returns the order id the client will display, and nothing about the payment or repository calls leaks into this response — the controller only ever sees the outcome.",
+              "start": 4500,
+              "end": 5100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 4500,
+                  "end": 5100,
+                  "edge": "e8",
+                  "from": "Svc",
+                  "to": "Ctrl"
+                },
+                {
+                  "kind": "focus",
+                  "start": 4500,
+                  "end": 5100,
+                  "target": "Ctrl"
+                }
+              ]
+            },
+            {
+              "id": "complete",
+              "name": "The controller replies to the client",
+              "desc": "The controller turns the service's result into the actual 201 response and the request unwinds. Every activation bar opened on the way down has already closed by the time this reaches the client.",
+              "start": 5100,
+              "end": 5700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 5100,
+                  "end": 5700,
+                  "edge": "e13",
+                  "from": "Ctrl",
+                  "to": "C"
+                },
+                {
+                  "kind": "focus",
+                  "start": 5100,
+                  "end": 5700,
+                  "target": "C"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "gauge",
+              "start": 1200,
+              "end": 2900,
+              "target": "Svc",
+              "label": "order state",
+              "value": "pending"
+            },
+            {
+              "kind": "gauge",
+              "start": 2900,
+              "end": 3500,
+              "target": "Svc",
+              "label": "order state",
+              "value": "authorised"
+            },
+            {
+              "kind": "gauge",
+              "start": 3500,
+              "end": 5700,
+              "target": "Svc",
+              "label": "order state",
+              "value": "confirmed"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+%% Alice fires two questions at John before he answers either, so both of his
+%% activation bars are open at once. The animation plays the four messages in
+%% the order they happened — first question, second question, first answer,
+%% second answer — and a gauge on John counts the open questions live, so the
+%% pairing the static diagram cannot show is simply watched happening.
+%% See mermaid-js/mermaid #1765: https://github.com/mermaid-js/mermaid/issues/1765
+%% ---
+%% This does not fix Mermaid's static rendering — two overlapping bars still
+%% carry no pairing information on the canvas, and the feature request behind
+%% #1765 (labelled activations) is still unmet. What changes is the medium:
+%% a timeline has no geometry to be ambiguous in. Each step names exactly one
+%% message, so "which answer belongs to which question" is answered by watch
+%% order, not by bar shape.
+%% ---
+%% `msg:` is load-bearing here. Alice -> John carries two messages (the first
+%% and second question) and John -> Alice carries two more (the first and
+%% second answer); `msg: 1` / `msg: 2` on each pins the flow to the intended
+%% arrow instead of letting the compiler guess. The gauge on John reads the
+%% count of unanswered questions — 1, then 2, then back to 1, then 0 — so
+%% scrubbing to any instant shows exactly how many questions are in flight.
+sequenceDiagram
+    Alice ->> + John: First question
+    Alice ->> + John: Second question
+    John -->> - Alice: First answer
+    John -->> - Alice: Second answer
+
+scenario "two questions, answered in order" { speed: 1.0 }
+
+  step ask1 "Alice asks the first question" {
+    desc: "John activates to handle it. Nothing else is pending yet, so this message alone is unambiguous even in Mermaid's static picture."
+    flow Alice -> John { dur: 700ms, msg: 1 }
+    focus John
+    gauge John { label: "open questions", value: "1" }
+  }
+
+  step ask2 "Alice asks a second question before the first is answered" {
+    desc: "John's activation bar stays open and a second one starts alongside it. This is the moment the static diagram loses the thread: two bars are open on the same lifeline, and bar geometry alone cannot say which eventual answer closes which one."
+    flow Alice -> John { dur: 700ms, msg: 2 }
+    gauge John { label: "open questions", value: "2" }
+  }
+
+  step answer1 "John answers the first question" {
+    desc: "In a still image this reply could plausibly close either open bar; there is no visual marker tying it to one question over the other. Playing it in order removes the guesswork: this is simply the answer to the question asked first."
+    flow John -> Alice { dur: 700ms, msg: 1 }
+    gauge John { label: "open questions", value: "1" }
+  }
+
+  step answer2 "John answers the second question, and both activations close" {
+    desc: "The last open bar closes and the gauge returns to zero. The pairing was never encoded in the diagram's geometry — it came entirely from the sequence in which these four steps were watched."
+    flow John -> Alice { dur: 700ms, msg: 2 }
+    gauge John { label: "open questions", value: "0" }
+    unset John
+  }

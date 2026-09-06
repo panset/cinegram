@@ -26,5 +26,5 @@ one question, four turns · fan out, barrier, synthesise · rag pipeline · laun
 
 ## [in the wild](06-in-the-wild/index.md)
 
-build it up · walk the pipeline · one polling cycle · auth refresh edge cases · claude code tool call
+build it up · walk the pipeline · one polling cycle · auth refresh edge cases · claude code tool call · conference signup flow · escaping the self-loop note hack · two questions, answered in order · order placed: payment approved · replay a finished run
 

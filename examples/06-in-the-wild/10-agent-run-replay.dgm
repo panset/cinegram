@@ -1,0 +1,199 @@
+%% A finished multi-agent run, replayed. A main agent spawns three subagents —
+%% research, design doc, test runner — one of those spawns a subagent of its
+%% own, the test run dies on a fixture database nobody migrated, and the run
+%% recovers and says so. Scrub to any second and every agent shows the context,
+%% tokens and cost it had consumed by then, and how many subagents were alive
+%% at that instant. Drawn for anthropics/claude-code#24537
+%% (https://github.com/anthropics/claude-code/issues/24537), the Agent
+%% Hierarchy Dashboard proposal, which asks for historical replay of a
+%% multi-agent run with transport controls, a timeline scrubber, per-agent
+%% resource numbers, and an interactive HTML export.
+%% ---
+%% Honest scope: this is the replay half, not the dashboard. Cinegram reads no
+%% telemetry and knows nothing about a session that is still running. What it
+%% compiles is a record of a run that already ended — into one self-contained
+%% HTML page with a scrubber, a step list, keyboard transport and narration.
+%% Every number below was written into the `.dgm` by hand from a transcript;
+%% none of it is sampled live, and the page will say the same thing tomorrow.
+%% ---
+%% The per-agent metrics panel is `gauge`. Different gauge labels coexist on
+%% one node, so a single agent carries `context`, `tokens` and `cost` at once,
+%% and each write holds until the next write to the same label — including the
+%% mid-step updates here, where a value lands at the moment the work landed
+%% rather than when the step began. Because those windows are exact, dragging
+%% the scrubber backwards does not merely rewind the animation, it restores the
+%% readings as they stood at that second of the run. `set` badges carry status
+%% (planning / running / failed / passed), `dim` keeps the not-yet-spawned
+%% agents visibly out of play, and the broken query is a `status: fail` flow,
+%% so the ✕ lands on the database that actually broke rather than on the agent
+%% that was only doing as it was told.
+flowchart TB
+  session[(Recorded session)]
+  main[Main agent]
+
+  subgraph spawned[Subagents spawned by the main agent]
+    research[research-auth]
+    design[design-doc]
+    tests[test-runner]
+  end
+
+  scan[codebase-scan]
+  fixtures[(Test fixture DB)]
+  summary[Run summary]
+
+  session --> main
+  main --> research
+  main --> design
+  main --> tests
+  research --> scan
+  tests --> fixtures
+  main --> summary
+
+interact {
+  click tests -> step trace { label: "Why did this agent fail?" }
+}
+
+scenario "replay a finished run" { speed: 1.0 }
+
+  step open "00:00 — the run is already over; this is the record" {
+    desc: "Nothing here is live. A 41-minute session ended at 14:02 and what plays is its transcript, which is why this has a scrubber rather than a refresh rate. At this instant the main agent has read the prompt and has spawned nothing."
+    flow session -> main { label: "replay: 41m, 4 subagents, 1 failure", dur: 700ms }
+    dim spawned, scan, fixtures, summary
+    highlight main { style: active }
+    set main { badge: "planning", state: busy }
+    set session { badge: "ended 14:02", state: ok }
+    gauge session { label: "elapsed", value: "00:00" }
+    gauge session { label: "run cost", value: "$0.04" }
+    gauge main { label: "context", value: "8%" }
+    gauge main { label: "active subagents", value: "0" }
+  }
+
+  step spawn_research "02:10 — the first subagent is spawned" {
+    desc: "The main agent delegates the reading it does not want in its own context window. Two nodes of the tree are now live and their meters move independently from here on."
+    flow main -> research { label: "Task: how does RFC 8628 device flow apply here", dur: 700ms }
+    dim design, tests, scan, fixtures, summary
+    set main { badge: "waiting", state: busy }
+    set research { badge: "running", state: busy }
+    gauge session { label: "elapsed", value: "02:10" }
+    gauge session { label: "run cost", value: "$0.11" }
+    gauge main { label: "context", value: "14%" }
+    gauge main { label: "active subagents", value: "1" }
+    gauge research { label: "context", value: "6%" }
+    gauge research { label: "tokens", value: "5k" }
+    gauge research { label: "cost", value: "$0.03" }
+  }
+
+  step depth2 "05:40 — a subagent spawns a subagent" {
+    desc: "research-auth wants the repository read as well as the spec, so it spawns codebase-scan beneath itself. This is the depth a tree view is for: three agents are alive, and the one you actually prompted is none of the busy ones."
+    flow research -> scan { label: "Task: grep the auth middleware", dur: 700ms }
+    dim design, tests, fixtures, summary
+    highlight research { style: busy }
+    set scan { badge: "running", state: busy }
+    gauge session { label: "elapsed", value: "05:40" }
+    gauge session { label: "run cost", value: "$0.26" }
+    gauge main { label: "active subagents", value: "2" }
+    gauge research { label: "context", value: "22%" }
+    gauge research { label: "tokens", value: "26k" }
+    gauge research { label: "cost", value: "$0.19" }
+    gauge scan { label: "context", value: "9%" }
+    gauge scan { label: "cost", value: "$0.03" }
+  }
+
+  step research_done "09:12 — the branch returns, and its meters stop where they stopped" {
+    desc: "codebase-scan answers its parent and research-auth folds that into one summary for the main agent. Both agents are finished, but nothing clears their gauges: at any later point in the replay you can still read what that branch cost."
+    dur: 2s
+    flow scan -> research { label: "7 files, 2 middlewares", dur: 600ms, style: response }
+    flow research -> main { label: "spec summary + 3 constraints", dur: 700ms, delay: 600ms, style: response }
+    dim design, tests, fixtures, summary
+    set scan { badge: "done", state: ok }
+    set research { badge: "done", state: ok }
+    gauge session { label: "elapsed", value: "09:12" }
+    gauge session { label: "run cost", value: "$0.58" }
+    gauge main { label: "context", value: "21%" }
+    gauge main { label: "active subagents", value: "0", delay: 1300ms }
+    gauge research { label: "context", value: "29%" }
+    gauge research { label: "tokens", value: "41k" }
+    gauge research { label: "cost", value: "$0.34" }
+    gauge scan { label: "context", value: "14%" }
+    gauge scan { label: "cost", value: "$0.08" }
+  }
+
+  step design "12:30 — the expensive one, and the meters move mid-step" {
+    desc: "design-doc writes the whole document in one context and finishes at 18:44, and its meters are the argument for per-agent numbers: 118k tokens and three quarters of a window sit inside a subagent the top-level session never sees. Scrub into the middle of this step and you catch it partway there, because the second set of gauge writes is timed to the moment the doc landed, not to the start of the beat."
+    dur: 2800ms
+    flow main -> design { label: "Task: write docs/oauth-device-flow.md", dur: 700ms }
+    flow design -> main { label: "design doc, 1400 words", dur: 700ms, delay: 1400ms, style: response }
+    dim tests, fixtures, summary
+    set design { badge: "writing", state: busy }
+    set design { badge: "done", state: ok, delay: 2100ms }
+    gauge session { label: "elapsed", value: "12:30" }
+    gauge session { label: "elapsed", value: "18:44", delay: 2100ms }
+    gauge session { label: "run cost", value: "$1.71", delay: 2100ms }
+    gauge main { label: "context", value: "34%", delay: 2100ms }
+    gauge main { label: "active subagents", value: "1" }
+    gauge main { label: "active subagents", value: "0", delay: 2100ms }
+    gauge design { label: "context", value: "11%" }
+    gauge design { label: "cost", value: "$0.09" }
+    gauge design { label: "context", value: "74%", delay: 2100ms }
+    gauge design { label: "tokens", value: "118k", delay: 2100ms }
+    gauge design { label: "cost", value: "$1.06", delay: 2100ms }
+  }
+
+  step tests_fail "21:05 — the test runner dies on a fixture nobody migrated" {
+    desc: "test-runner is spawned, reaches the fixture database and gets an error on its first query: the migration that creates the device-code table was never applied there. The ✕ lands on the database rather than on the agent, because the agent did exactly what it was asked to do."
+    dur: 2200ms
+    flow main -> tests { label: "Task: run the suite against the new routes", dur: 600ms }
+    flow tests -> fixtures { label: "SELECT from oauth_device_codes", dur: 700ms, delay: 700ms, status: fail }
+    dim summary
+    set tests { badge: "running", state: busy }
+    set tests { badge: "failed", state: error, delay: 1400ms }
+    gauge tests { label: "context", value: "4%" }
+    gauge tests { label: "tokens", value: "3k" }
+    gauge tests { label: "cost", value: "$0.02" }
+    gauge session { label: "elapsed", value: "21:05" }
+    gauge session { label: "elapsed", value: "24:18", delay: 1400ms }
+    gauge session { label: "run cost", value: "$1.83", delay: 1400ms }
+    gauge main { label: "active subagents", value: "1" }
+    gauge main { label: "active subagents", value: "0", delay: 1400ms }
+    gauge tests { label: "context", value: "12%", delay: 1400ms }
+    gauge tests { label: "tokens", value: "16k", delay: 1400ms }
+    gauge tests { label: "cost", value: "$0.11", delay: 1400ms }
+  }
+
+  step trace "24:18 — the frame that replay exists for" {
+    desc: "Stop on the failure and the picture holds still: which agent, at which second, on which call, and what it had already spent when it died. Without a record of the run this is the part you rebuild from scrollback, if you still have the scrollback."
+    dur: 2s
+    focus tests
+    note tests "migrated fixtures? never checked\nSELECT ... -> 42P01 undefined_table\nexit 1 after 14 errors" { side: right }
+  }
+
+  step retry "29:40 — the main agent migrates the fixtures and respawns it" {
+    desc: "Recovery is a second attempt by the same agent rather than a new one: the main agent respawns test-runner with the missing migration put in front of the suite, and it passes at 36:50. The cost gauge keeps counting across both attempts, because both attempts are what the run actually paid for."
+    dur: 3s
+    flow main -> tests { label: "respawn: migrate first, then run", dur: 600ms }
+    flow tests -> fixtures { label: "migrate + 214 tests", dur: 700ms, delay: 700ms }
+    flow tests -> main { label: "214 passed, 0 failed", dur: 600ms, delay: 1600ms, style: response }
+    dim summary
+    set tests { badge: "running", state: busy }
+    set tests { badge: "passed", state: ok, delay: 2200ms }
+    gauge session { label: "elapsed", value: "29:40" }
+    gauge session { label: "elapsed", value: "36:50", delay: 2200ms }
+    gauge session { label: "run cost", value: "$2.11", delay: 2200ms }
+    gauge main { label: "active subagents", value: "1" }
+    gauge main { label: "active subagents", value: "0", delay: 2200ms }
+    gauge tests { label: "context", value: "23%", delay: 2200ms }
+    gauge tests { label: "tokens", value: "34k", delay: 2200ms }
+    gauge tests { label: "cost", value: "$0.29", delay: 2200ms }
+  }
+
+  step totals "41:12 — the whole tier, and what it came to" {
+    desc: "One highlight naming the subgraph lights every spawned agent at once, with each one still wearing the readings it ended on. That is the artefact the proposal is asking for under HTML export: a page that can be scrubbed, stepped and read afterwards — not a monitor, because the run it describes has already stopped."
+    highlight spawned
+    flow main -> summary { label: "4 subagents, 1 failure, recovered", dur: 800ms, style: response }
+    set main { badge: "done", state: ok }
+    gauge session { label: "elapsed", value: "41:12" }
+    gauge session { label: "run cost", value: "$2.19" }
+    gauge main { label: "context", value: "47%" }
+    gauge summary { label: "total cost", value: "$2.19" }
+    gauge summary { label: "failures", value: "1, recovered" }
+  }

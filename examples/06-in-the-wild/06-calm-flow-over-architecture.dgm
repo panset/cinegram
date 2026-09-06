@@ -1,0 +1,111 @@
+%% A CALM flow playing over the architecture it runs on. An attendee signs up
+%% for a conference, and the request travels the very nodes and relationships
+%% the architecture declares: an actor, a webclient, a load balancer, an
+%% attendee service, a notification service and an attendee database — the
+%% last four `deployed-in` one Kubernetes cluster. Asked for in
+%% finos/architecture-as-code#2999
+%% (https://github.com/finos/architecture-as-code/issues/2999), which proposes
+%% picking a published flow in CALM Hub and watching it as a live diagram with
+%% play, pause, step and scrub.
+%% ---
+%% Why play the flow *over* the architecture instead of beside it. A detached
+%% sequence diagram redraws the participants as bare columns, so a reader has
+%% to hold two pictures in their head and trust that they still agree. Here
+%% there is one picture: every hop is an edge the architecture already declares
+%% as a `connects` relationship, and `deployed-in` is the cluster box the
+%% traffic enters at the load balancer. A transition that cannot be drawn is a
+%% transition whose relationship does not exist — the diagram checks the flow.
+%% ---
+%% Steps meant to happen together. Cinegram has one timing rule — actions
+%% inside a step start together, steps run one after another — so a pair of
+%% transitions that fire at once is simply one step holding two flows. That is
+%% `commit`: the row is written and the signup event is published on the same
+%% frame. The step before it is the deliberate contrast: `check` wraps its two
+%% flows in a `seq`, so the answer cannot start until the query has landed.
+%% ---
+%% Scrubbing needs standing state, not narration. The pills on the Attendee are
+%% `gauge` readings — the request id and which transition is on screen — and a
+%% gauge holds until it is overwritten, so dropping the playhead anywhere still
+%% says which request this is and where in the flow you are (`4 → 5` reads one
+%% after another, `6 + 7` reads together). `seats left` on the database does
+%% the same for the effect of the write. The per-step `desc:` lines are the
+%% other half: `cinegram narrate` prints them as an ordered list of steps,
+%% which is the fallback view the issue asks for next to the live diagram.
+flowchart TD
+  attendee([Attendee])
+  conference-website[Conference Website]
+
+  subgraph k8s-cluster[Kubernetes Cluster]
+    load-balancer{{Load Balancer}}
+    attendees[Attendee Service]
+    notifications[Notification Service]
+    attendees-store[(Attendee Database)]
+  end
+
+  attendee --> conference-website
+  conference-website --> load-balancer
+  load-balancer --> attendees
+  attendees --> attendees-store
+  attendees --> notifications
+  notifications --> attendee
+
+scenario "conference signup flow" { speed: 1.0 }
+
+  step submit "The attendee submits the signup form" {
+    desc: "A CALM flow begins at an actor, not at a service. The attendee fills in the form the conference website is serving and posts it. Everything after this hop is a relationship the architecture has already declared, which is why the flow can be played over it at all."
+    flow attendee -> conference-website { label: "name, email, ticket type", dur: 700ms }
+    highlight conference-website { style: active }
+    gauge conference-website { label: "request", value: "sig-4c2f" }
+    gauge conference-website { label: "transition", value: "1 of 10" }
+  }
+
+  step post "The website calls the cluster's front door" {
+    desc: "The conference website is a webclient running in the attendee's browser, so this is the first hop that leaves the machine it started on. It arrives at the load balancer, the only node inside the cluster the outside world is allowed to address."
+    flow conference-website -> load-balancer { label: "POST /attendees · HTTPS", dur: 700ms }
+    highlight load-balancer { style: active }
+    gauge conference-website { label: "transition", value: "2 of 10" }
+  }
+
+  step route "Inside the cluster the request is forwarded" {
+    desc: "The four nodes in the box are `deployed-in` the Kubernetes cluster, and in CALM that is a relationship like any other. Focusing the cluster is the diagram saying the same thing the model does: this hop is private and cheap, where the one before it crossed the internet."
+    focus k8s-cluster
+    flow load-balancer -> attendees { label: "POST /attendees · HTTP :8080", dur: 700ms }
+    set attendees { badge: "handling", delay: 700ms }
+    gauge conference-website { label: "transition", value: "3 of 10" }
+  }
+
+  step check "One after another: ask the database, then hear back" {
+    desc: "The service will not register the same email twice, so it asks before it writes. A `seq` makes this pair strictly cause-then-effect inside a single step — the answer cannot begin until the query has landed, which is exactly what the next step is not."
+    seq {
+      flow attendees -> attendees-store { label: "SELECT 1 WHERE email = ?", dur: 600ms }
+      flow attendees-store -> attendees { label: "0 rows · not registered", dur: 600ms, style: response }
+    }
+    gauge attendees-store { label: "seats left", value: "118" }
+    gauge conference-website { label: "transition", value: "4 → 5 of 10" }
+  }
+
+  step commit "Together: the row is written and the event is published" {
+    desc: "These are two transitions of the flow and they are meant to happen at once — the service does not wait for the insert to commit before it publishes. Both flows leave the service on the same frame because every action in a step starts together; the pill reads 6 + 7 for that reason."
+    highlight attendees { style: active }
+    flow attendees -> attendees-store { label: "INSERT attendee A-4c2f", dur: 1s }
+    flow attendees -> notifications { label: "publish signup.created", dur: 1s }
+    gauge attendees-store { label: "seats left", value: "117", delay: 1s }
+    set notifications { badge: "queued", delay: 1s }
+    gauge conference-website { label: "transition", value: "6 + 7 of 10" }
+  }
+
+  step confirm "The 201 walks the same relationships back up" {
+    desc: "A reply is not a new relationship: the response travels the `connects` edges it arrived on, in reverse, and CALM no more needs a second set of arrows for it than the diagram does. The browser has a ticket id while the email has still not been sent."
+    flow attendees -> load-balancer -> conference-website { label: "201 Created · A-4c2f", dur: 1.2s, style: response }
+    note conference-website "You're on the list — ticket A-4c2f" { side: below }
+    set attendees { badge: "" }
+    gauge conference-website { label: "transition", value: "8 → 9 of 10" }
+  }
+
+  step email "The last transition lands back on the actor" {
+    desc: "The notification service works on its own clock, which is the whole point of publishing an event instead of blocking on it. The flow ends where it began, with the attendee — and the Hub can now replay, step or scrub this same sequence against exactly this architecture."
+    flow notifications -> attendee { label: "confirmation email", dur: 900ms }
+    highlight attendee { style: active }
+    set notifications { badge: "sent" }
+    gauge conference-website { label: "transition", value: "10 of 10" }
+  }

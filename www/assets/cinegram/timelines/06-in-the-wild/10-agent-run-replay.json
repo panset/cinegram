@@ -1,0 +1,1134 @@
+{
+  "version": 2,
+  "root": "10-agent-run-replay",
+  "views": [
+    {
+      "id": "10-agent-run-replay",
+      "title": "replay a finished run",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "TB",
+        "mermaid": "%% A finished multi-agent run, replayed. A main agent spawns three subagents —\n%% research, design doc, test runner — one of those spawns a subagent of its\n%% own, the test run dies on a fixture database nobody migrated, and the run\n%% recovers and says so. Scrub to any second and every agent shows the context,\n%% tokens and cost it had consumed by then, and how many subagents were alive\n%% at that instant. Drawn for anthropics/claude-code#24537\n%% (https://github.com/anthropics/claude-code/issues/24537), the Agent\n%% Hierarchy Dashboard proposal, which asks for historical replay of a\n%% multi-agent run with transport controls, a timeline scrubber, per-agent\n%% resource numbers, and an interactive HTML export.\n%% ---\n%% Honest scope: this is the replay half, not the dashboard. Cinegram reads no\n%% telemetry and knows nothing about a session that is still running. What it\n%% compiles is a record of a run that already ended — into one self-contained\n%% HTML page with a scrubber, a step list, keyboard transport and narration.\n%% Every number below was written into the `.dgm` by hand from a transcript;\n%% none of it is sampled live, and the page will say the same thing tomorrow.\n%% ---\n%% The per-agent metrics panel is `gauge`. Different gauge labels coexist on\n%% one node, so a single agent carries `context`, `tokens` and `cost` at once,\n%% and each write holds until the next write to the same label — including the\n%% mid-step updates here, where a value lands at the moment the work landed\n%% rather than when the step began. Because those windows are exact, dragging\n%% the scrubber backwards does not merely rewind the animation, it restores the\n%% readings as they stood at that second of the run. `set` badges carry status\n%% (planning / running / failed / passed), `dim` keeps the not-yet-spawned\n%% agents visibly out of play, and the broken query is a `status: fail` flow,\n%% so the ✕ lands on the database that actually broke rather than on the agent\n%% that was only doing as it was told.\nflowchart TB\n  session[(Recorded session)]\n  main[Main agent]\n  subgraph spawned[Subagents spawned by the main agent]\n    research[research-auth]\n    design[design-doc]\n    tests[test-runner]\n  end\n  scan[codebase-scan]\n  fixtures[(Test fixture DB)]\n  summary[Run summary]\n  session --\u003e main\n  main --\u003e research\n  main --\u003e design\n  main --\u003e tests\n  research --\u003e scan\n  tests --\u003e fixtures\n  main --\u003e summary\n"
+      },
+      "nodes": [
+        {
+          "id": "session",
+          "label": "Recorded session",
+          "shape": "cylinder"
+        },
+        {
+          "id": "main",
+          "label": "Main agent",
+          "shape": "rect"
+        },
+        {
+          "id": "research",
+          "label": "research-auth",
+          "shape": "rect",
+          "group": "spawned"
+        },
+        {
+          "id": "design",
+          "label": "design-doc",
+          "shape": "rect",
+          "group": "spawned"
+        },
+        {
+          "id": "tests",
+          "label": "test-runner",
+          "shape": "rect",
+          "group": "spawned"
+        },
+        {
+          "id": "scan",
+          "label": "codebase-scan",
+          "shape": "rect"
+        },
+        {
+          "id": "fixtures",
+          "label": "Test fixture DB",
+          "shape": "cylinder"
+        },
+        {
+          "id": "summary",
+          "label": "Run summary",
+          "shape": "rect"
+        }
+      ],
+      "groups": [
+        {
+          "id": "spawned",
+          "label": "Subagents spawned by the main agent",
+          "children": [
+            "research",
+            "design",
+            "tests"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "session",
+          "to": "main",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "main",
+          "to": "research",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "main",
+          "to": "design",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "main",
+          "to": "tests",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "research",
+          "to": "scan",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "tests",
+          "to": "fixtures",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e6",
+          "from": "main",
+          "to": "summary",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "replay a finished run",
+          "duration": 14900,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "open",
+              "name": "00:00 — the run is already over; this is the record",
+              "desc": "Nothing here is live. A 41-minute session ended at 14:02 and what plays is its transcript, which is why this has a scrubber rather than a refresh rate. At this instant the main agent has read the prompt and has spawned nothing.",
+              "start": 0,
+              "end": 700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 700,
+                  "edge": "e0",
+                  "from": "session",
+                  "to": "main",
+                  "label": "replay: 41m, 4 subagents, 1 failure"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 700,
+                  "target": "spawned"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 700,
+                  "target": "scan"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 700,
+                  "target": "fixtures"
+                },
+                {
+                  "kind": "dim",
+                  "start": 0,
+                  "end": 700,
+                  "target": "summary"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 700,
+                  "target": "main",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "spawn_research",
+              "name": "02:10 — the first subagent is spawned",
+              "desc": "The main agent delegates the reading it does not want in its own context window. Two nodes of the tree are now live and their meters move independently from here on.",
+              "start": 700,
+              "end": 1400,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 700,
+                  "end": 1400,
+                  "edge": "e1",
+                  "from": "main",
+                  "to": "research",
+                  "label": "Task: how does RFC 8628 device flow apply here"
+                },
+                {
+                  "kind": "dim",
+                  "start": 700,
+                  "end": 1400,
+                  "target": "design"
+                },
+                {
+                  "kind": "dim",
+                  "start": 700,
+                  "end": 1400,
+                  "target": "tests"
+                },
+                {
+                  "kind": "dim",
+                  "start": 700,
+                  "end": 1400,
+                  "target": "scan"
+                },
+                {
+                  "kind": "dim",
+                  "start": 700,
+                  "end": 1400,
+                  "target": "fixtures"
+                },
+                {
+                  "kind": "dim",
+                  "start": 700,
+                  "end": 1400,
+                  "target": "summary"
+                }
+              ]
+            },
+            {
+              "id": "depth2",
+              "name": "05:40 — a subagent spawns a subagent",
+              "desc": "research-auth wants the repository read as well as the spec, so it spawns codebase-scan beneath itself. This is the depth a tree view is for: three agents are alive, and the one you actually prompted is none of the busy ones.",
+              "start": 1400,
+              "end": 2100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1400,
+                  "end": 2100,
+                  "edge": "e4",
+                  "from": "research",
+                  "to": "scan",
+                  "label": "Task: grep the auth middleware"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1400,
+                  "end": 2100,
+                  "target": "design"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1400,
+                  "end": 2100,
+                  "target": "tests"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1400,
+                  "end": 2100,
+                  "target": "fixtures"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1400,
+                  "end": 2100,
+                  "target": "summary"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1400,
+                  "end": 2100,
+                  "target": "research",
+                  "style": "busy"
+                }
+              ]
+            },
+            {
+              "id": "research_done",
+              "name": "09:12 — the branch returns, and its meters stop where they stopped",
+              "desc": "codebase-scan answers its parent and research-auth folds that into one summary for the main agent. Both agents are finished, but nothing clears their gauges: at any later point in the replay you can still read what that branch cost.",
+              "start": 2100,
+              "end": 4100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 2100,
+                  "end": 2700,
+                  "edge": "e4",
+                  "from": "scan",
+                  "to": "research",
+                  "reverse": true,
+                  "label": "7 files, 2 middlewares",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2700,
+                  "end": 3400,
+                  "edge": "e1",
+                  "from": "research",
+                  "to": "main",
+                  "reverse": true,
+                  "label": "spec summary + 3 constraints",
+                  "style": "response"
+                },
+                {
+                  "kind": "dim",
+                  "start": 2100,
+                  "end": 4100,
+                  "target": "design"
+                },
+                {
+                  "kind": "dim",
+                  "start": 2100,
+                  "end": 4100,
+                  "target": "tests"
+                },
+                {
+                  "kind": "dim",
+                  "start": 2100,
+                  "end": 4100,
+                  "target": "fixtures"
+                },
+                {
+                  "kind": "dim",
+                  "start": 2100,
+                  "end": 4100,
+                  "target": "summary"
+                }
+              ]
+            },
+            {
+              "id": "design",
+              "name": "12:30 — the expensive one, and the meters move mid-step",
+              "desc": "design-doc writes the whole document in one context and finishes at 18:44, and its meters are the argument for per-agent numbers: 118k tokens and three quarters of a window sit inside a subagent the top-level session never sees. Scrub into the middle of this step and you catch it partway there, because the second set of gauge writes is timed to the moment the doc landed, not to the start of the beat.",
+              "start": 4100,
+              "end": 6900,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 4100,
+                  "end": 4800,
+                  "edge": "e2",
+                  "from": "main",
+                  "to": "design",
+                  "label": "Task: write docs/oauth-device-flow.md"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5500,
+                  "end": 6200,
+                  "edge": "e2",
+                  "from": "design",
+                  "to": "main",
+                  "reverse": true,
+                  "label": "design doc, 1400 words",
+                  "style": "response"
+                },
+                {
+                  "kind": "dim",
+                  "start": 4100,
+                  "end": 6900,
+                  "target": "tests"
+                },
+                {
+                  "kind": "dim",
+                  "start": 4100,
+                  "end": 6900,
+                  "target": "fixtures"
+                },
+                {
+                  "kind": "dim",
+                  "start": 4100,
+                  "end": 6900,
+                  "target": "summary"
+                }
+              ]
+            },
+            {
+              "id": "tests_fail",
+              "name": "21:05 — the test runner dies on a fixture nobody migrated",
+              "desc": "test-runner is spawned, reaches the fixture database and gets an error on its first query: the migration that creates the device-code table was never applied there. The ✕ lands on the database rather than on the agent, because the agent did exactly what it was asked to do.",
+              "start": 6900,
+              "end": 9100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 6900,
+                  "end": 7500,
+                  "edge": "e3",
+                  "from": "main",
+                  "to": "tests",
+                  "label": "Task: run the suite against the new routes"
+                },
+                {
+                  "kind": "flow",
+                  "start": 7600,
+                  "end": 8300,
+                  "edge": "e5",
+                  "from": "tests",
+                  "to": "fixtures",
+                  "label": "SELECT from oauth_device_codes",
+                  "status": "fail"
+                },
+                {
+                  "kind": "dim",
+                  "start": 6900,
+                  "end": 9100,
+                  "target": "summary"
+                }
+              ]
+            },
+            {
+              "id": "trace",
+              "name": "24:18 — the frame that replay exists for",
+              "desc": "Stop on the failure and the picture holds still: which agent, at which second, on which call, and what it had already spent when it died. Without a record of the run this is the part you rebuild from scrollback, if you still have the scrollback.",
+              "start": 9100,
+              "end": 11100,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 9100,
+                  "end": 11100,
+                  "target": "tests"
+                },
+                {
+                  "kind": "note",
+                  "start": 9100,
+                  "end": 11100,
+                  "target": "tests",
+                  "text": "migrated fixtures? never checked\nSELECT ... -\u003e 42P01 undefined_table\nexit 1 after 14 errors",
+                  "side": "right"
+                }
+              ]
+            },
+            {
+              "id": "retry",
+              "name": "29:40 — the main agent migrates the fixtures and respawns it",
+              "desc": "Recovery is a second attempt by the same agent rather than a new one: the main agent respawns test-runner with the missing migration put in front of the suite, and it passes at 36:50. The cost gauge keeps counting across both attempts, because both attempts are what the run actually paid for.",
+              "start": 11100,
+              "end": 14100,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 11100,
+                  "end": 11700,
+                  "edge": "e3",
+                  "from": "main",
+                  "to": "tests",
+                  "label": "respawn: migrate first, then run"
+                },
+                {
+                  "kind": "flow",
+                  "start": 11800,
+                  "end": 12500,
+                  "edge": "e5",
+                  "from": "tests",
+                  "to": "fixtures",
+                  "label": "migrate + 214 tests"
+                },
+                {
+                  "kind": "flow",
+                  "start": 12700,
+                  "end": 13300,
+                  "edge": "e3",
+                  "from": "tests",
+                  "to": "main",
+                  "reverse": true,
+                  "label": "214 passed, 0 failed",
+                  "style": "response"
+                },
+                {
+                  "kind": "dim",
+                  "start": 11100,
+                  "end": 14100,
+                  "target": "summary"
+                }
+              ]
+            },
+            {
+              "id": "totals",
+              "name": "41:12 — the whole tier, and what it came to",
+              "desc": "One highlight naming the subgraph lights every spawned agent at once, with each one still wearing the readings it ended on. That is the artefact the proposal is asking for under HTML export: a page that can be scrubbed, stepped and read afterwards — not a monitor, because the run it describes has already stopped.",
+              "start": 14100,
+              "end": 14900,
+              "tracks": [
+                {
+                  "kind": "highlight",
+                  "start": 14100,
+                  "end": 14900,
+                  "target": "spawned"
+                },
+                {
+                  "kind": "flow",
+                  "start": 14100,
+                  "end": 14900,
+                  "edge": "e6",
+                  "from": "main",
+                  "to": "summary",
+                  "label": "4 subagents, 1 failure, recovered",
+                  "style": "response"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 0,
+              "end": 700,
+              "target": "main",
+              "label": "planning",
+              "value": "busy"
+            },
+            {
+              "kind": "set",
+              "start": 0,
+              "end": 14900,
+              "target": "session",
+              "label": "ended 14:02",
+              "value": "ok"
+            },
+            {
+              "kind": "gauge",
+              "start": 0,
+              "end": 700,
+              "target": "session",
+              "label": "elapsed",
+              "value": "00:00"
+            },
+            {
+              "kind": "gauge",
+              "start": 0,
+              "end": 700,
+              "target": "session",
+              "label": "run cost",
+              "value": "$0.04"
+            },
+            {
+              "kind": "gauge",
+              "start": 0,
+              "end": 700,
+              "target": "main",
+              "label": "context",
+              "value": "8%"
+            },
+            {
+              "kind": "gauge",
+              "start": 0,
+              "end": 700,
+              "target": "main",
+              "label": "active subagents",
+              "value": "0"
+            },
+            {
+              "kind": "set",
+              "start": 700,
+              "end": 14100,
+              "target": "main",
+              "label": "waiting",
+              "value": "busy"
+            },
+            {
+              "kind": "set",
+              "start": 700,
+              "end": 2100,
+              "target": "research",
+              "label": "running",
+              "value": "busy"
+            },
+            {
+              "kind": "gauge",
+              "start": 700,
+              "end": 1400,
+              "target": "session",
+              "label": "elapsed",
+              "value": "02:10"
+            },
+            {
+              "kind": "gauge",
+              "start": 700,
+              "end": 1400,
+              "target": "session",
+              "label": "run cost",
+              "value": "$0.11"
+            },
+            {
+              "kind": "gauge",
+              "start": 700,
+              "end": 2100,
+              "target": "main",
+              "label": "context",
+              "value": "14%"
+            },
+            {
+              "kind": "gauge",
+              "start": 700,
+              "end": 1400,
+              "target": "main",
+              "label": "active subagents",
+              "value": "1"
+            },
+            {
+              "kind": "gauge",
+              "start": 700,
+              "end": 1400,
+              "target": "research",
+              "label": "context",
+              "value": "6%"
+            },
+            {
+              "kind": "gauge",
+              "start": 700,
+              "end": 1400,
+              "target": "research",
+              "label": "tokens",
+              "value": "5k"
+            },
+            {
+              "kind": "gauge",
+              "start": 700,
+              "end": 1400,
+              "target": "research",
+              "label": "cost",
+              "value": "$0.03"
+            },
+            {
+              "kind": "set",
+              "start": 1400,
+              "end": 2100,
+              "target": "scan",
+              "label": "running",
+              "value": "busy"
+            },
+            {
+              "kind": "gauge",
+              "start": 1400,
+              "end": 2100,
+              "target": "session",
+              "label": "elapsed",
+              "value": "05:40"
+            },
+            {
+              "kind": "gauge",
+              "start": 1400,
+              "end": 2100,
+              "target": "session",
+              "label": "run cost",
+              "value": "$0.26"
+            },
+            {
+              "kind": "gauge",
+              "start": 1400,
+              "end": 3400,
+              "target": "main",
+              "label": "active subagents",
+              "value": "2"
+            },
+            {
+              "kind": "gauge",
+              "start": 1400,
+              "end": 2100,
+              "target": "research",
+              "label": "context",
+              "value": "22%"
+            },
+            {
+              "kind": "gauge",
+              "start": 1400,
+              "end": 2100,
+              "target": "research",
+              "label": "tokens",
+              "value": "26k"
+            },
+            {
+              "kind": "gauge",
+              "start": 1400,
+              "end": 2100,
+              "target": "research",
+              "label": "cost",
+              "value": "$0.19"
+            },
+            {
+              "kind": "gauge",
+              "start": 1400,
+              "end": 2100,
+              "target": "scan",
+              "label": "context",
+              "value": "9%"
+            },
+            {
+              "kind": "gauge",
+              "start": 1400,
+              "end": 2100,
+              "target": "scan",
+              "label": "cost",
+              "value": "$0.03"
+            },
+            {
+              "kind": "set",
+              "start": 2100,
+              "end": 14900,
+              "target": "scan",
+              "label": "done",
+              "value": "ok"
+            },
+            {
+              "kind": "set",
+              "start": 2100,
+              "end": 14900,
+              "target": "research",
+              "label": "done",
+              "value": "ok"
+            },
+            {
+              "kind": "gauge",
+              "start": 2100,
+              "end": 4100,
+              "target": "session",
+              "label": "elapsed",
+              "value": "09:12"
+            },
+            {
+              "kind": "gauge",
+              "start": 2100,
+              "end": 6200,
+              "target": "session",
+              "label": "run cost",
+              "value": "$0.58"
+            },
+            {
+              "kind": "gauge",
+              "start": 2100,
+              "end": 6200,
+              "target": "main",
+              "label": "context",
+              "value": "21%"
+            },
+            {
+              "kind": "gauge",
+              "start": 3400,
+              "end": 4100,
+              "target": "main",
+              "label": "active subagents",
+              "value": "0"
+            },
+            {
+              "kind": "gauge",
+              "start": 2100,
+              "end": 14900,
+              "target": "research",
+              "label": "context",
+              "value": "29%"
+            },
+            {
+              "kind": "gauge",
+              "start": 2100,
+              "end": 14900,
+              "target": "research",
+              "label": "tokens",
+              "value": "41k"
+            },
+            {
+              "kind": "gauge",
+              "start": 2100,
+              "end": 14900,
+              "target": "research",
+              "label": "cost",
+              "value": "$0.34"
+            },
+            {
+              "kind": "gauge",
+              "start": 2100,
+              "end": 14900,
+              "target": "scan",
+              "label": "context",
+              "value": "14%"
+            },
+            {
+              "kind": "gauge",
+              "start": 2100,
+              "end": 14900,
+              "target": "scan",
+              "label": "cost",
+              "value": "$0.08"
+            },
+            {
+              "kind": "set",
+              "start": 4100,
+              "end": 6200,
+              "target": "design",
+              "label": "writing",
+              "value": "busy"
+            },
+            {
+              "kind": "set",
+              "start": 6200,
+              "end": 14900,
+              "target": "design",
+              "label": "done",
+              "value": "ok"
+            },
+            {
+              "kind": "gauge",
+              "start": 4100,
+              "end": 6200,
+              "target": "session",
+              "label": "elapsed",
+              "value": "12:30"
+            },
+            {
+              "kind": "gauge",
+              "start": 6200,
+              "end": 6900,
+              "target": "session",
+              "label": "elapsed",
+              "value": "18:44"
+            },
+            {
+              "kind": "gauge",
+              "start": 6200,
+              "end": 8300,
+              "target": "session",
+              "label": "run cost",
+              "value": "$1.71"
+            },
+            {
+              "kind": "gauge",
+              "start": 6200,
+              "end": 14100,
+              "target": "main",
+              "label": "context",
+              "value": "34%"
+            },
+            {
+              "kind": "gauge",
+              "start": 4100,
+              "end": 6200,
+              "target": "main",
+              "label": "active subagents",
+              "value": "1"
+            },
+            {
+              "kind": "gauge",
+              "start": 6200,
+              "end": 6900,
+              "target": "main",
+              "label": "active subagents",
+              "value": "0"
+            },
+            {
+              "kind": "gauge",
+              "start": 4100,
+              "end": 6200,
+              "target": "design",
+              "label": "context",
+              "value": "11%"
+            },
+            {
+              "kind": "gauge",
+              "start": 4100,
+              "end": 6200,
+              "target": "design",
+              "label": "cost",
+              "value": "$0.09"
+            },
+            {
+              "kind": "gauge",
+              "start": 6200,
+              "end": 14900,
+              "target": "design",
+              "label": "context",
+              "value": "74%"
+            },
+            {
+              "kind": "gauge",
+              "start": 6200,
+              "end": 14900,
+              "target": "design",
+              "label": "tokens",
+              "value": "118k"
+            },
+            {
+              "kind": "gauge",
+              "start": 6200,
+              "end": 14900,
+              "target": "design",
+              "label": "cost",
+              "value": "$1.06"
+            },
+            {
+              "kind": "set",
+              "start": 6900,
+              "end": 8300,
+              "target": "tests",
+              "label": "running",
+              "value": "busy"
+            },
+            {
+              "kind": "set",
+              "start": 8300,
+              "end": 11100,
+              "target": "tests",
+              "label": "failed",
+              "value": "error"
+            },
+            {
+              "kind": "gauge",
+              "start": 6900,
+              "end": 8300,
+              "target": "tests",
+              "label": "context",
+              "value": "4%"
+            },
+            {
+              "kind": "gauge",
+              "start": 6900,
+              "end": 8300,
+              "target": "tests",
+              "label": "tokens",
+              "value": "3k"
+            },
+            {
+              "kind": "gauge",
+              "start": 6900,
+              "end": 8300,
+              "target": "tests",
+              "label": "cost",
+              "value": "$0.02"
+            },
+            {
+              "kind": "gauge",
+              "start": 6900,
+              "end": 8300,
+              "target": "session",
+              "label": "elapsed",
+              "value": "21:05"
+            },
+            {
+              "kind": "gauge",
+              "start": 8300,
+              "end": 11100,
+              "target": "session",
+              "label": "elapsed",
+              "value": "24:18"
+            },
+            {
+              "kind": "gauge",
+              "start": 8300,
+              "end": 13300,
+              "target": "session",
+              "label": "run cost",
+              "value": "$1.83"
+            },
+            {
+              "kind": "gauge",
+              "start": 6900,
+              "end": 8300,
+              "target": "main",
+              "label": "active subagents",
+              "value": "1"
+            },
+            {
+              "kind": "gauge",
+              "start": 8300,
+              "end": 11100,
+              "target": "main",
+              "label": "active subagents",
+              "value": "0"
+            },
+            {
+              "kind": "gauge",
+              "start": 8300,
+              "end": 13300,
+              "target": "tests",
+              "label": "context",
+              "value": "12%"
+            },
+            {
+              "kind": "gauge",
+              "start": 8300,
+              "end": 13300,
+              "target": "tests",
+              "label": "tokens",
+              "value": "16k"
+            },
+            {
+              "kind": "gauge",
+              "start": 8300,
+              "end": 13300,
+              "target": "tests",
+              "label": "cost",
+              "value": "$0.11"
+            },
+            {
+              "kind": "set",
+              "start": 11100,
+              "end": 13300,
+              "target": "tests",
+              "label": "running",
+              "value": "busy"
+            },
+            {
+              "kind": "set",
+              "start": 13300,
+              "end": 14900,
+              "target": "tests",
+              "label": "passed",
+              "value": "ok"
+            },
+            {
+              "kind": "gauge",
+              "start": 11100,
+              "end": 13300,
+              "target": "session",
+              "label": "elapsed",
+              "value": "29:40"
+            },
+            {
+              "kind": "gauge",
+              "start": 13300,
+              "end": 14100,
+              "target": "session",
+              "label": "elapsed",
+              "value": "36:50"
+            },
+            {
+              "kind": "gauge",
+              "start": 13300,
+              "end": 14100,
+              "target": "session",
+              "label": "run cost",
+              "value": "$2.11"
+            },
+            {
+              "kind": "gauge",
+              "start": 11100,
+              "end": 13300,
+              "target": "main",
+              "label": "active subagents",
+              "value": "1"
+            },
+            {
+              "kind": "gauge",
+              "start": 13300,
+              "end": 14900,
+              "target": "main",
+              "label": "active subagents",
+              "value": "0"
+            },
+            {
+              "kind": "gauge",
+              "start": 13300,
+              "end": 14900,
+              "target": "tests",
+              "label": "context",
+              "value": "23%"
+            },
+            {
+              "kind": "gauge",
+              "start": 13300,
+              "end": 14900,
+              "target": "tests",
+              "label": "tokens",
+              "value": "34k"
+            },
+            {
+              "kind": "gauge",
+              "start": 13300,
+              "end": 14900,
+              "target": "tests",
+              "label": "cost",
+              "value": "$0.29"
+            },
+            {
+              "kind": "set",
+              "start": 14100,
+              "end": 14900,
+              "target": "main",
+              "label": "done",
+              "value": "ok"
+            },
+            {
+              "kind": "gauge",
+              "start": 14100,
+              "end": 14900,
+              "target": "session",
+              "label": "elapsed",
+              "value": "41:12"
+            },
+            {
+              "kind": "gauge",
+              "start": 14100,
+              "end": 14900,
+              "target": "session",
+              "label": "run cost",
+              "value": "$2.19"
+            },
+            {
+              "kind": "gauge",
+              "start": 14100,
+              "end": 14900,
+              "target": "main",
+              "label": "context",
+              "value": "47%"
+            },
+            {
+              "kind": "gauge",
+              "start": 14100,
+              "end": 14900,
+              "target": "summary",
+              "label": "total cost",
+              "value": "$2.19"
+            },
+            {
+              "kind": "gauge",
+              "start": 14100,
+              "end": 14900,
+              "target": "summary",
+              "label": "failures",
+              "value": "1, recovered"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "source": "tests",
+          "kind": "step",
+          "step": "trace",
+          "label": "Why did this agent fail?"
+        }
+      ]
+    }
+  ]
+}

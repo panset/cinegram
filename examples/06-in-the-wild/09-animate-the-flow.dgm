@@ -1,0 +1,108 @@
+%% A single POST /orders call unwinds through a service layer — client,
+%% controller, service, payment gateway, repository — one message at a time,
+%% with the reader holding the scrubber instead of a playback timer deciding
+%% the pace. It answers mermaid-js/zenuml-core #268, "animate the diagram":
+%% https://github.com/mermaid-js/zenuml-core/issues/268
+%% ---
+%% The pace is entirely the reader's: there is no autoplay racing ahead of a
+%% `desc` before it has been read, and scrubbing to any millisecond shows
+%% exactly the state that millisecond implies rather than an interpolation
+%% toward it.
+%% ---
+%% The service and the repository trade three same-direction messages over
+%% the life of one order, and the gateway can answer with either of two
+%% replies on the same pair — exactly the case `msg:` exists for, so every
+%% `flow` here says which arrow it means instead of leaving the compiler to
+%% guess from position. The order-state `gauge` on the service — pending,
+%% then authorised, then confirmed — holds across every step in between, so
+%% a scrub landing between two writes still reads the right answer, not a
+%% blank one.
+sequenceDiagram
+  participant C as Client
+  participant Ctrl as OrderController
+  participant Svc as OrderService
+  participant Pay as PaymentGateway
+  participant Repo as OrderRepository
+
+  C->>Ctrl: POST /orders
+  activate Ctrl
+  Ctrl->>Svc: placeOrder(cart)
+  activate Svc
+  Svc->>Repo: save(order, status=PENDING)
+  Repo-->>Svc: orderId=4471
+  Svc->>Pay: charge(orderId=4471, amount)
+  activate Pay
+  alt payment approved
+    Pay-->>Svc: approved, authCode=A1
+    Svc->>Repo: update(orderId=4471, status=CONFIRMED)
+    Repo-->>Svc: ok
+    Svc-->>Ctrl: 201 Created (orderId=4471)
+  else payment declined
+    Pay-->>Svc: declined, reason=insufficient_funds
+    Svc->>Repo: update(orderId=4471, status=FAILED)
+    Repo-->>Svc: ok
+    Svc-->>Ctrl: 402 Payment Required
+  end
+  deactivate Pay
+  deactivate Svc
+  Ctrl-->>C: 201 Created (orderId=4471)
+  deactivate Ctrl
+
+scenario "order placed: payment approved" { speed: 1.0 }
+
+  step request "The client submits the order" {
+    desc: "The client POSTs a new order and lands on the controller, the one layer in this stack that speaks HTTP. Everything downstream of this line only ever sees a plain method call, never a request object."
+    flow C -> Ctrl { dur: 600ms }
+    focus Ctrl
+  }
+
+  step dispatch "The controller delegates to the service" {
+    desc: "The controller does no business logic itself — it calls placeOrder on the service, which owns the order's whole lifecycle from here on. This is the seam a unit test mocks out."
+    flow Ctrl -> Svc { dur: 600ms }
+    focus Svc
+  }
+
+  step persist "The service records the order before touching money" {
+    desc: "The order is written as PENDING before the service goes anywhere near a card number, so a crash between here and the payment call still leaves a recoverable row instead of a charge nobody can account for. save() hands back the orderId every later call in this flow will carry."
+    seq {
+      flow Svc -> Repo { dur: 500ms, msg: 1 }
+      flow Repo -> Svc { dur: 500ms, style: response, msg: 1 }
+    }
+    gauge Svc { label: "order state", value: "pending" }
+    focus Repo
+  }
+
+  step charge "The service asks the gateway to charge the card" {
+    desc: "With a durable order on hand, the service calls out to the payment gateway. This is the one hop in the whole request that leaves the process's own trust boundary and can fail for reasons the service does not control."
+    flow Svc -> Pay { dur: 700ms }
+    focus Pay
+  }
+
+  step approved "The gateway approves the charge" {
+    desc: "The gateway returns an authorization code on the same pair a decline would have used — the diagram draws approval and decline as two arms of one decision, not two separate calls."
+    flow Pay -> Svc { dur: 600ms, msg: 1 }
+    gauge Svc { label: "order state", value: "authorised" }
+    focus Svc
+  }
+
+  step confirm "The service marks the order confirmed" {
+    desc: "The order is written a second time, now as CONFIRMED — the same repository, the same save-shaped call, only the status column changes. This is the row a support engineer greps for when a customer asks whether the order went through."
+    seq {
+      flow Svc -> Repo { dur: 500ms, msg: 2 }
+      flow Repo -> Svc { dur: 500ms, style: response, msg: 2 }
+    }
+    gauge Svc { label: "order state", value: "confirmed" }
+    focus Repo
+  }
+
+  step respond "The service reports success back up the stack" {
+    desc: "The service returns the order id the client will display, and nothing about the payment or repository calls leaks into this response — the controller only ever sees the outcome."
+    flow Svc -> Ctrl { dur: 600ms, msg: 1 }
+    focus Ctrl
+  }
+
+  step complete "The controller replies to the client" {
+    desc: "The controller turns the service's result into the actual 201 response and the request unwinds. Every activation bar opened on the way down has already closed by the time this reaches the client."
+    flow Ctrl -> C { dur: 600ms }
+    focus C
+  }

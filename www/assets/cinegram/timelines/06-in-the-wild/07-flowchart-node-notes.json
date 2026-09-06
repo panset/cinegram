@@ -1,0 +1,369 @@
+{
+  "version": 2,
+  "root": "07-flowchart-node-notes",
+  "views": [
+    {
+      "id": "07-flowchart-node-notes",
+      "title": "escaping the self-loop note hack",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "TB",
+        "mermaid": "%% Mermaid has no way to attach a note to a flowchart node — only sequence\n%% diagrams get `note right of X`. mermaid-js/mermaid#2712\n%% (https://github.com/mermaid-js/mermaid/issues/2712) and its much older,\n%% much bigger sibling #821 (https://github.com/mermaid-js/mermaid/issues/821,\n%% open since 2019, 150 thumbs-up) both ask for it. The workaround people\n%% reach for — drawn verbatim in #2712 — is a fake self-loop edge that carries\n%% the note text, hidden afterwards with `linkStyle`. Its own author lists the\n%% cost: the fake edges are \"hard to compute the number of ... when there are\n%% many edges\", they \"seriously affect the layout\", and they are \"very not\n%% convenient to distinguish\" from the real ones.\n%% ---\n%% This is their own diagram, node for node and real-edge for real-edge, with\n%% the two fake self-loops and the `linkStyle` line that hid them deleted —\n%% nothing else touched. The two texts those self-loops carried come back as\n%% `note A` and `note F` instead: real Mermaid callouts, not phantom edges.\n%% The diagram half below is plain, honest Mermaid again — paste it into\n%% Mermaid's own live editor and every edge you see is an edge that means\n%% something.\n%% ---\n%% Their `F --\u003e H \u0026 G \u0026 K` and `G \u0026 K -.-\u003e M` shorthand is kept exactly as\n%% written. Mermaid reads one such line as several edges, and so does this:\n%% the flows below travel `F -\u003e K` and `G -\u003e M` individually even though\n%% neither pair was ever written on a line of its own.\n%% ---\n%% The last step also puts a `note` on M, a node that never had a self-loop in\n%% the original at all: the technique isn't a patch bolted onto the two nodes\n%% that got hacked around, it works on any node.\ngraph TB\n  A --\u003e |\"Description2:A how to B\"| B --\u003e C\n  B --\u003e D\n  D -.-\u003e F\n  C --\u003e |\"Description2:C how to F\"| F\n  F --\u003e H \u0026 G \u0026 K\n  H --\u003e M\n  G \u0026 K -.-\u003e M\n"
+      },
+      "nodes": [
+        {
+          "id": "A",
+          "label": "A"
+        },
+        {
+          "id": "B",
+          "label": "B"
+        },
+        {
+          "id": "C",
+          "label": "C"
+        },
+        {
+          "id": "D",
+          "label": "D"
+        },
+        {
+          "id": "F",
+          "label": "F"
+        },
+        {
+          "id": "H",
+          "label": "H"
+        },
+        {
+          "id": "G",
+          "label": "G"
+        },
+        {
+          "id": "K",
+          "label": "K"
+        },
+        {
+          "id": "M",
+          "label": "M"
+        }
+      ],
+      "groups": [],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "A",
+          "to": "B",
+          "label": "Description2:A how to B",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "B",
+          "to": "C",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "B",
+          "to": "D",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "D",
+          "to": "F",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "C",
+          "to": "F",
+          "label": "Description2:C how to F",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "F",
+          "to": "H",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e6",
+          "from": "F",
+          "to": "G",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e7",
+          "from": "F",
+          "to": "K",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e8",
+          "from": "H",
+          "to": "M",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e9",
+          "from": "G",
+          "to": "M",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e10",
+          "from": "K",
+          "to": "M",
+          "style": "dotted",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "escaping the self-loop note hack",
+          "duration": 4600,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "a-note",
+              "name": "A carries its own note, not a phantom edge",
+              "desc": "In the asker's original this was `A ---|\"Description1:Properties of A\"|A` — a self-loop hidden by a `linkStyle` line further down. Here it is a `note` on A instead: the same text, with no invisible edge for a reader, or a layout engine, to trip over.",
+              "start": 0,
+              "end": 800,
+              "tracks": [
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 800,
+                  "target": "A"
+                },
+                {
+                  "kind": "note",
+                  "start": 0,
+                  "end": 800,
+                  "target": "A",
+                  "text": "Description1:Properties of A",
+                  "side": "left"
+                }
+              ]
+            },
+            {
+              "id": "handoff",
+              "name": "The two real, labelled edges do their job unchanged",
+              "desc": "A to B to C is exactly the asker's Mermaid, labels included: \"Description2:A how to B\" is baked into the diagram itself. That is why the flow below carries no label of its own — repeating the same text on the moving packet would just say it twice.",
+              "start": 800,
+              "end": 1700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 800,
+                  "end": 1250,
+                  "edge": "e0",
+                  "from": "A",
+                  "to": "B"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1250,
+                  "end": 1700,
+                  "edge": "e1",
+                  "from": "B",
+                  "to": "C"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 800,
+                  "end": 1700,
+                  "target": "B"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 800,
+                  "end": 1700,
+                  "target": "C"
+                }
+              ]
+            },
+            {
+              "id": "converge-f",
+              "name": "C, and B's dotted detour through D, both land on F",
+              "desc": "F is where the honest half of the graph rejoins itself: a straight arrow from C carrying its own Mermaid label, and a dotted, unlabelled detour through D. Neither one ever needed a fake edge to explain what it was doing.",
+              "start": 1700,
+              "end": 2600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1700,
+                  "end": 2400,
+                  "edge": "e4",
+                  "from": "C",
+                  "to": "F"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1700,
+                  "end": 2150,
+                  "edge": "e2",
+                  "from": "B",
+                  "to": "D",
+                  "label": "Description3:B how to F, via D"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2150,
+                  "end": 2600,
+                  "edge": "e3",
+                  "from": "D",
+                  "to": "F",
+                  "label": "Description3:B how to F, via D"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1700,
+                  "end": 2600,
+                  "target": "F"
+                }
+              ]
+            },
+            {
+              "id": "f-note",
+              "name": "F carried the same trick, and gets the same fix",
+              "desc": "The asker's second self-loop, `F ---|\"Description1:Properties of F\"|F`, is retired exactly the way A's was. Two nodes, two notes, zero phantom edges — that is the entire technique this example exists to show.",
+              "start": 2600,
+              "end": 3400,
+              "tracks": [
+                {
+                  "kind": "note",
+                  "start": 2600,
+                  "end": 3400,
+                  "target": "F",
+                  "text": "Description1:Properties of F",
+                  "side": "right"
+                }
+              ]
+            },
+            {
+              "id": "fanout",
+              "name": "F --\u003e H \u0026 G \u0026 K becomes three edges you can actually count",
+              "desc": "This line is the asker's other complaint made literal: `\u0026` collapsed three destinations into a shorthand that is \"hard to compute the number of\" by eye. Expanded, F -\u003e H, F -\u003e G and F -\u003e K are three ordinary edges — countable, individually labelled, and each animating on its own track.",
+              "start": 3400,
+              "end": 4000,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 3400,
+                  "end": 4000,
+                  "edge": "e5",
+                  "from": "F",
+                  "to": "H",
+                  "label": "Description5:F how to H"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3400,
+                  "end": 4000,
+                  "edge": "e6",
+                  "from": "F",
+                  "to": "G",
+                  "label": "Description6:F how to G"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3400,
+                  "end": 4000,
+                  "edge": "e7",
+                  "from": "F",
+                  "to": "K",
+                  "label": "Description7:F how to K"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 3400,
+                  "end": 4000,
+                  "target": "H"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 3400,
+                  "end": 4000,
+                  "target": "G"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 3400,
+                  "end": 4000,
+                  "target": "K"
+                }
+              ]
+            },
+            {
+              "id": "join",
+              "name": "H, G and K all reconverge on M",
+              "desc": "M was never part of the original self-loop hack — it has no history of standing in for a fake edge's target — but it gets a `note` here anyway, to show the technique is not limited to the two nodes the asker patched around.",
+              "start": 4000,
+              "end": 4600,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 4000,
+                  "end": 4600,
+                  "edge": "e8",
+                  "from": "H",
+                  "to": "M",
+                  "label": "Description8:H how to M"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4000,
+                  "end": 4600,
+                  "edge": "e9",
+                  "from": "G",
+                  "to": "M",
+                  "label": "Description9:G how to M"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4000,
+                  "end": 4600,
+                  "edge": "e10",
+                  "from": "K",
+                  "to": "M",
+                  "label": "Description10:K how to M"
+                },
+                {
+                  "kind": "note",
+                  "start": 4000,
+                  "end": 4600,
+                  "target": "M",
+                  "text": "reached from three independent branches",
+                  "side": "below"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 4000,
+                  "end": 4600,
+                  "target": "M"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
