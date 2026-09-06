@@ -8,7 +8,7 @@
       "diagram": {
         "type": "flowchart",
         "direction": "TD",
-        "mermaid": "%% A CALM flow playing over the architecture it runs on. An attendee signs up\n%% for a conference, and the request travels the very nodes and relationships\n%% the architecture declares: an actor, a webclient, a load balancer, an\n%% attendee service, a notification service and an attendee database — the\n%% last four `deployed-in` one Kubernetes cluster. Asked for in\n%% finos/architecture-as-code#2999\n%% (https://github.com/finos/architecture-as-code/issues/2999), which proposes\n%% picking a published flow in CALM Hub and watching it as a live diagram with\n%% play, pause, step and scrub.\n%% ---\n%% Why play the flow *over* the architecture instead of beside it. A detached\n%% sequence diagram redraws the participants as bare columns, so a reader has\n%% to hold two pictures in their head and trust that they still agree. Here\n%% there is one picture: every hop is an edge the architecture already declares\n%% as a `connects` relationship, and `deployed-in` is the cluster box the\n%% traffic enters at the load balancer. A transition that cannot be drawn is a\n%% transition whose relationship does not exist — the diagram checks the flow.\n%% ---\n%% Steps meant to happen together. Cinegram has one timing rule — actions\n%% inside a step start together, steps run one after another — so a pair of\n%% transitions that fire at once is simply one step holding two flows. That is\n%% `commit`: the row is written and the signup event is published on the same\n%% frame. The step before it is the deliberate contrast: `check` wraps its two\n%% flows in a `seq`, so the answer cannot start until the query has landed.\n%% ---\n%% Scrubbing needs standing state, not narration. The pills on the Attendee are\n%% `gauge` readings — the request id and which transition is on screen — and a\n%% gauge holds until it is overwritten, so dropping the playhead anywhere still\n%% says which request this is and where in the flow you are (`4 → 5` reads one\n%% after another, `6 + 7` reads together). `seats left` on the database does\n%% the same for the effect of the write. The per-step `desc:` lines are the\n%% other half: `cinegram narrate` prints them as an ordered list of steps,\n%% which is the fallback view the issue asks for next to the live diagram.\nflowchart TD\n  attendee([Attendee])\n  conference-website[Conference Website]\n  subgraph k8s-cluster[Kubernetes Cluster]\n    load-balancer{{Load Balancer}}\n    attendees[Attendee Service]\n    notifications[Notification Service]\n    attendees-store[(Attendee Database)]\n  end\n  attendee --\u003e conference-website\n  conference-website --\u003e load-balancer\n  load-balancer --\u003e attendees\n  attendees --\u003e attendees-store\n  attendees --\u003e notifications\n  notifications --\u003e attendee\n"
+        "mermaid": "%% A CALM flow playing over the architecture it runs on: an attendee signs up\n%% for a conference — the worked example CALM itself uses — and the request\n%% travels the very nodes and relationships that architecture declares: an\n%% actor, a webclient, a load balancer, an attendee service, a notification\n%% service and an attendee database, the last four `deployed-in` one Kubernetes\n%% cluster. Asked for in finos/architecture-as-code#2999\n%% (https://github.com/finos/architecture-as-code/issues/2999), which proposes\n%% picking a published flow in CALM Hub and watching it as a live diagram with\n%% play, pause, step and scrub.\n%% ---\n%% Why play the flow *over* the architecture instead of beside it. A detached\n%% sequence diagram redraws the participants as bare columns, so a reader has\n%% to hold two pictures in their head and trust that they still agree. Here\n%% there is one picture: every hop is an edge the architecture already declares\n%% as a `connects` relationship, and `deployed-in` is the cluster box the\n%% traffic enters at the load balancer. A transition that cannot be drawn is a\n%% transition whose relationship does not exist — the diagram checks the flow.\n%% ---\n%% Steps meant to happen together. Cinegram has one timing rule — actions\n%% inside a step start together, steps run one after another — so a pair of\n%% transitions that fire at once is simply one step holding two flows. That is\n%% `commit`: the row is written and the signup event is published on the same\n%% frame. The step before it is the deliberate contrast: `check` wraps its two\n%% flows in a `seq`, so the answer cannot start until the query has landed.\n%% ---\n%% Scrubbing needs standing state, not narration. The two pills on the website\n%% are `gauge` readings — the request id, and which transition is on screen —\n%% and a gauge holds until it is overwritten, so dropping the playhead anywhere\n%% still says which request this is and where in the flow you are (`4 → 5`\n%% reads one after another, `6 + 7` reads together). `seats left` on the\n%% database is the same trick for the effect of the write, with a `delay:` so\n%% that the count drops exactly when the INSERT lands rather than when it sets\n%% off: gauge windows are exact, so a scrub can never show a write that has not\n%% happened yet. The per-step `desc:` lines are the other half of the state —\n%% `cinegram narrate` prints them as an ordered list of steps, which is the\n%% fallback view the issue asks for beside the live diagram.\nflowchart TD\n  attendee([Attendee])\n  conference-website[Conference Website]\n  subgraph k8s-cluster[Kubernetes Cluster]\n    load-balancer{{Load Balancer}}\n    attendees[Attendee Service]\n    notifications[Notification Service]\n    attendees-store[(Attendee Database)]\n  end\n  attendee --\u003e conference-website\n  conference-website --\u003e load-balancer\n  load-balancer --\u003e attendees\n  attendees --\u003e attendees-store\n  attendees --\u003e notifications\n  notifications --\u003e attendee\n"
       },
       "nodes": [
         {
@@ -106,7 +106,7 @@
         {
           "id": "s0",
           "name": "conference signup flow",
-          "duration": 6200,
+          "duration": 6400,
           "speed": 1,
           "loop": false,
           "autoplay": false,
@@ -219,19 +219,19 @@
               "name": "Together: the row is written and the event is published",
               "desc": "These are two transitions of the flow and they are meant to happen at once — the service does not wait for the insert to commit before it publishes. Both flows leave the service on the same frame because every action in a step starts together; the pill reads 6 + 7 for that reason.",
               "start": 3300,
-              "end": 4100,
+              "end": 4300,
               "tracks": [
                 {
                   "kind": "highlight",
                   "start": 3300,
-                  "end": 4100,
+                  "end": 4300,
                   "target": "attendees",
                   "style": "active"
                 },
                 {
                   "kind": "flow",
                   "start": 3300,
-                  "end": 4100,
+                  "end": 4300,
                   "edge": "e3",
                   "from": "attendees",
                   "to": "attendees-store",
@@ -240,7 +240,7 @@
                 {
                   "kind": "flow",
                   "start": 3300,
-                  "end": 4100,
+                  "end": 4300,
                   "edge": "e4",
                   "from": "attendees",
                   "to": "notifications",
@@ -252,13 +252,13 @@
               "id": "confirm",
               "name": "The 201 walks the same relationships back up",
               "desc": "A reply is not a new relationship: the response travels the `connects` edges it arrived on, in reverse, and CALM no more needs a second set of arrows for it than the diagram does. The browser has a ticket id while the email has still not been sent.",
-              "start": 4100,
-              "end": 5300,
+              "start": 4300,
+              "end": 5500,
               "tracks": [
                 {
                   "kind": "flow",
-                  "start": 4100,
-                  "end": 4700,
+                  "start": 4300,
+                  "end": 4900,
                   "edge": "e2",
                   "from": "attendees",
                   "to": "load-balancer",
@@ -268,8 +268,8 @@
                 },
                 {
                   "kind": "flow",
-                  "start": 4700,
-                  "end": 5300,
+                  "start": 4900,
+                  "end": 5500,
                   "edge": "e1",
                   "from": "load-balancer",
                   "to": "conference-website",
@@ -279,8 +279,8 @@
                 },
                 {
                   "kind": "note",
-                  "start": 4100,
-                  "end": 5300,
+                  "start": 4300,
+                  "end": 5500,
                   "target": "conference-website",
                   "text": "You're on the list — ticket A-4c2f",
                   "side": "below"
@@ -291,13 +291,13 @@
               "id": "email",
               "name": "The last transition lands back on the actor",
               "desc": "The notification service works on its own clock, which is the whole point of publishing an event instead of blocking on it. The flow ends where it began, with the attendee — and the Hub can now replay, step or scrub this same sequence against exactly this architecture.",
-              "start": 5300,
-              "end": 6200,
+              "start": 5500,
+              "end": 6400,
               "tracks": [
                 {
                   "kind": "flow",
-                  "start": 5300,
-                  "end": 6200,
+                  "start": 5500,
+                  "end": 6400,
                   "edge": "e5",
                   "from": "notifications",
                   "to": "attendee",
@@ -305,8 +305,8 @@
                 },
                 {
                   "kind": "highlight",
-                  "start": 5300,
-                  "end": 6200,
+                  "start": 5500,
+                  "end": 6400,
                   "target": "attendee",
                   "style": "active"
                 }
@@ -317,7 +317,7 @@
             {
               "kind": "gauge",
               "start": 0,
-              "end": 6200,
+              "end": 6400,
               "target": "conference-website",
               "label": "request",
               "value": "sig-4c2f"
@@ -340,8 +340,8 @@
             },
             {
               "kind": "set",
-              "start": 1400,
-              "end": 4100,
+              "start": 2100,
+              "end": 4300,
               "target": "attendees",
               "label": "handling"
             },
@@ -356,7 +356,7 @@
             {
               "kind": "gauge",
               "start": 2100,
-              "end": 3300,
+              "end": 4300,
               "target": "attendees-store",
               "label": "seats left",
               "value": "118"
@@ -371,46 +371,46 @@
             },
             {
               "kind": "gauge",
-              "start": 3300,
-              "end": 6200,
+              "start": 4300,
+              "end": 6400,
               "target": "attendees-store",
               "label": "seats left",
               "value": "117"
             },
             {
               "kind": "set",
-              "start": 3300,
-              "end": 5300,
+              "start": 4300,
+              "end": 5500,
               "target": "notifications",
               "label": "queued"
             },
             {
               "kind": "gauge",
               "start": 3300,
-              "end": 4100,
+              "end": 4300,
               "target": "conference-website",
               "label": "transition",
               "value": "6 + 7 of 10"
             },
             {
               "kind": "gauge",
-              "start": 4100,
-              "end": 5300,
+              "start": 4300,
+              "end": 5500,
               "target": "conference-website",
               "label": "transition",
               "value": "8 → 9 of 10"
             },
             {
               "kind": "set",
-              "start": 5300,
-              "end": 6200,
+              "start": 5500,
+              "end": 6400,
               "target": "notifications",
               "label": "sent"
             },
             {
               "kind": "gauge",
-              "start": 5300,
-              "end": 6200,
+              "start": 5500,
+              "end": 6400,
               "target": "conference-website",
               "label": "transition",
               "value": "10 of 10"

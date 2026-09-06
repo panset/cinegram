@@ -24,7 +24,7 @@ What actually happens when Claude Code runs a single tool call, end to end: one 
 
 ## [conference signup flow](06-calm-flow-over-architecture.md)
 
-A CALM flow playing over the architecture it runs on. An attendee signs up for a conference, and the request travels the very nodes and relationships the architecture declares: an actor, a webclient, a load balancer, an attendee service, a notification service and an attendee database — the last four `deployed-in` one Kubernetes cluster. Asked for in finos/architecture-as-code#2999 (https://github.com/finos/architecture-as-code/issues/2999), which proposes picking a published flow in CALM Hub and watching it as a live diagram with play, pause, step and scrub.
+A CALM flow playing over the architecture it runs on: an attendee signs up for a conference — the worked example CALM itself uses — and the request travels the very nodes and relationships that architecture declares: an actor, a webclient, a load balancer, an attendee service, a notification service and an attendee database, the last four `deployed-in` one Kubernetes cluster. Asked for in finos/architecture-as-code#2999 (https://github.com/finos/architecture-as-code/issues/2999), which proposes picking a published flow in CALM Hub and watching it as a live diagram with play, pause, step and scrub.
 
 ## [escaping the self-loop note hack](07-flowchart-node-notes.md)
 

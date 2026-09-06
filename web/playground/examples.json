@@ -137,5 +137,35 @@
     "title": "One Claude Code tool call",
     "entry": "06-in-the-wild/05-claude-code-tool-call.dgm",
     "files": ["06-in-the-wild/05-claude-code-tool-call.dgm"]
+  },
+  {
+    "id": "calm-flow-over-architecture",
+    "title": "A CALM flow over its architecture",
+    "entry": "06-in-the-wild/06-calm-flow-over-architecture.dgm",
+    "files": ["06-in-the-wild/06-calm-flow-over-architecture.dgm"]
+  },
+  {
+    "id": "flowchart-node-notes",
+    "title": "Notes on flowchart nodes",
+    "entry": "06-in-the-wild/07-flowchart-node-notes.dgm",
+    "files": ["06-in-the-wild/07-flowchart-node-notes.dgm"]
+  },
+  {
+    "id": "overlapping-activations",
+    "title": "Overlapping activations, in order",
+    "entry": "06-in-the-wild/08-overlapping-activations.dgm",
+    "files": ["06-in-the-wild/08-overlapping-activations.dgm"]
+  },
+  {
+    "id": "animate-the-flow",
+    "title": "An order placed, step by step",
+    "entry": "06-in-the-wild/09-animate-the-flow.dgm",
+    "files": ["06-in-the-wild/09-animate-the-flow.dgm"]
+  },
+  {
+    "id": "agent-run-replay",
+    "title": "Replaying a multi-agent run",
+    "entry": "06-in-the-wild/10-agent-run-replay.dgm",
+    "files": ["06-in-the-wild/10-agent-run-replay.dgm"]
   }
 ]
