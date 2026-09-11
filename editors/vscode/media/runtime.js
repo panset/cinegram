@@ -603,34 +603,61 @@
     // sideways as the trail grows.
     this.backBtn = button('← Back', 'dgm-btn dgm-back', function () { self.back(); });
     this.backBtn.style.display = 'none';
-    heading.appendChild(this.backBtn);
+
+    // The heading is two lines now. A scenario name is a sentence — "happy path:
+    // access token expires, refresh, retry" — and a control on the title's own
+    // row had to be capped to fit beside it, which truncated the very thing a
+    // reader opens the menu to read. Underneath, at caption size, it has the
+    // width of the page.
+    var titleRow = el('div', 'dgm-heading-row');
+    titleRow.appendChild(this.backBtn);
     this.title = el('div', 'dgm-title');
-    heading.appendChild(this.title);
+    titleRow.appendChild(this.title);
     this.crumb = el('div', 'dgm-crumb');
-    heading.appendChild(this.crumb);
-    bar.appendChild(heading);
+    titleRow.appendChild(this.crumb);
+    heading.appendChild(titleRow);
 
-    var controls = el('div', 'dgm-controls');
-
-    // The scenario picker is rebuilt per view, since each view brings its
-    // own scenarios. It stays in the DOM and hides when there is nothing to
-    // choose between.
-    this.picker = el('select', 'dgm-select');
+    // Built here rather than with the bar's other controls, because the line
+    // below adopts it and a child has to exist before its parent asks for it.
+    this.picker = el('select', 'dgm-select dgm-picker');
     this.picker.addEventListener('change', function () {
       self.selectScenario(parseInt(self.picker.value, 10));
       // Only here: a pick is the one scenario change the address does not
       // already know about. See syncHash.
       self.syncHash();
     });
-    controls.appendChild(this.picker);
 
-    // `dgm-authoring` marks the controls that belong to building a diagram
+    // The whole line is what hides when there is one scenario, rather than its
+    // two halves separately: hiding a label and a control inside a flex row
+    // leaves the row's gap behind.
+    // The row holds the picker *and* Present, so the two controls a reader is
+    // offered sit together under the title instead of at opposite ends of a bar
+    // as wide as the page — the right-hand one used to hang past the stage's own
+    // edge, over the step list.
+    //
+    // The picker and its caption are wrapped, because only they hide when a
+    // document has one scenario. Present must not: it is the way out of
+    // presenter mode, and a one-scenario document is exactly as presentable as
+    // any other.
+    this.scenarioLine = el('div', 'dgm-scenario');
+    this.pickerWrap = el('span', 'dgm-scenario-pick');
+    this.pickerWrap.appendChild(elText('span', 'dgm-picker-label', 'Scenario'));
+    this.pickerWrap.appendChild(this.picker);
+    this.scenarioLine.appendChild(this.pickerWrap);
+    heading.appendChild(this.scenarioLine);
+
+    bar.appendChild(heading);
+
+    var controls = el('div', 'dgm-controls');
+
+    // Play used to stand here. It is transport, so it moved next to the scrub
+    // it drives — see the foot in build(). Nothing was lost by the move: the
+    // two modes that hide the foot were already the two that hid Play, since it
+    // carried `dgm-authoring` and a presenter advances a beat at a time with
+    // Space rather than running the whole thing.
+    //
+    // `dgm-authoring` still marks the controls that belong to building a diagram
     // rather than showing one; presenter mode hides exactly that set.
-    // dgm-play names the one control no mode can do without: inline strips the
-    // bar down to it by name rather than by position, so adding a button here
-    // later cannot quietly change what a document shows.
-    this.playBtn = button('Play', 'dgm-btn dgm-btn-primary dgm-authoring dgm-play', function () { self.toggle(); });
-    controls.appendChild(this.playBtn);
 
     // Presenter mode is a toggle rather than a link, so leaving it does not
     // reload and lose the moment the presenter had reached. It doubles as the
@@ -639,10 +666,11 @@
     // Play and Present are the whole bar now — the pair a reader is offered,
     // which is also the silhouette an inline player has always shown. Every
     // other control moved to the rail; see buildRail.
-    this.presentBtn = button('Present', 'dgm-btn', function () {
+    this.presentBtn = button('Present', 'dgm-btn dgm-present-btn', function () {
       self.setPresenter(!self.present);
     });
-    controls.appendChild(this.presentBtn);
+    // Appended to the scenario row rather than the bar's controls; see there.
+    this.scenarioLine.appendChild(this.presentBtn);
 
     bar.appendChild(controls);
     this.root.appendChild(bar);
@@ -807,6 +835,53 @@
 
     var foot = el('div', 'dgm-foot');
 
+    // Transport, at the timeline it moves. Previous and next step are the arrow
+    // keys made visible — onKey has read them since the beginning, and a reader
+    // who never finds a keyboard shortcut was navigating by dragging the scrub
+    // and guessing where the beats were.
+    //
+    // `dgm-play` stays on the play control wherever it lives: pkg/embedkit and
+    // the plans refer to it by name, and it is still the one control no mode
+    // that has a transport at all can do without.
+    var transport = el('div', 'dgm-transport');
+    transport.appendChild(iconButton('prev', 'Previous step', 'dgm-btn dgm-tbtn', function () {
+      self.nextStep(-1);
+    }));
+    this.playBtn = iconButton('play', 'Play', 'dgm-btn dgm-tbtn dgm-tbtn-primary dgm-play', function () {
+      self.toggle();
+    });
+    transport.appendChild(this.playBtn);
+    transport.appendChild(iconButton('next', 'Next step', 'dgm-btn dgm-tbtn', function () {
+      self.nextStep(1);
+    }));
+
+    // Speed is transport too, and it was two keystrokes away in the settings
+    // sheet. It sits here rather than in the rail — where it used to be — for
+    // the reason it left: its label is its own value, so the control is as wide
+    // as "0.25x" and a vertical column had to widen for it. A horizontal row
+    // whose scrub flexes has the width to spare.
+    //
+    // It stays one control rather than gaining a twin, because the rate is
+    // remembered per origin, not per diagram: two views of one stored preference
+    // is two things to keep honest. syncSpeed is still its only writer.
+    this.speedSel = el('select', 'dgm-select dgm-foot-speed');
+    for (var si = 0; si < SPEED_PRESETS.length; si++) {
+      var sopt = document.createElement('option');
+      sopt.value = String(SPEED_PRESETS[si]);
+      sopt.textContent = speedLabel(SPEED_PRESETS[si]);
+      this.speedSel.appendChild(sopt);
+    }
+    this.speedSel.title = 'Playback speed';
+    this.speedSel.addEventListener('change', function () {
+      self.setSpeed(parseFloat(self.speedSel.value));
+    });
+    transport.appendChild(this.speedSel);
+    // Written once from whatever this.speed already is; adoptScenarioSpeed
+    // writes it again the moment a scenario has an opinion.
+    this.syncSpeed();
+
+    foot.appendChild(transport);
+
     var track = el('div', 'dgm-scrub-wrap');
     this.scrub = document.createElement('input');
     this.scrub.type = 'range';
@@ -951,7 +1026,20 @@
     if (deep.t !== undefined) {
       var ms = parseInt(deep.t, 10);
       if (!isNaN(ms)) {
-        this.time = Math.max(0, ms);
+        // Clamped at both ends, exactly as seek does it — a hash can carry any
+        // `t=` at all, from a hand-edited link or from `frame --at 30s` on an
+        // eighteen-second scenario. Only the low end was clamped here, so a
+        // time past the end read `30.0s / 18.0s` on the clock while the
+        // scrubber, bounded by its own max, sat at the end: the disagreement
+        // seek's own comment warns about. The two paths that answer the same
+        // `t=` now answer it alike — this one on load, applyHash on a
+        // hashchange, which goes through seek and was always clamped.
+        //
+        // Not seek itself: this runs before the first render, on purpose, so a
+        // deep link's scenario is the one that gets built. seek would apply a
+        // frame against a diagram that does not exist yet.
+        var max = this.scenario().duration || 0;
+        this.time = Math.min(max, Math.max(0, ms));
         this.pendingAutoplay = false;
       }
     } else {
@@ -1059,7 +1147,7 @@
     this.shareBtn.appendChild(this.shareNote);
     rail.appendChild(this.shareBtn);
 
-    this.helpBtn = iconButton('help', 'Settings and shortcuts', 'dgm-btn', function () { self.toggleHelp(); });
+    this.helpBtn = iconButton('help', 'Shortcuts', 'dgm-btn', function () { self.toggleHelp(); });
     rail.appendChild(this.helpBtn);
 
     return rail;
@@ -1102,6 +1190,17 @@
       'M20 14.5V18a2 2 0 0 1-2 2h-3.5',
       'M9.5 20H6a2 2 0 0 1-2-2v-3.5'
     ],
+    // The transport, in the shapes every player has used since a tape deck: a
+    // triangle, two bars, and each with a wall to stop against.
+    //
+    // These four are *filled* — see FILLED below. Every other glyph here is a
+    // line drawing, which is right for a camera or a question mark and wrong for
+    // these: a hollow triangle at 16px reads as an arrowhead pointing somewhere,
+    // not as Play. Transport controls have been solid since tape.
+    play: ['M8.5 5.5v13l11-6.5z'],
+    pause: ['M9 5.5h3.1v13H9z', 'M13.9 5.5H17v13h-3.1z'],
+    prev: ['M17 5.5v13l-9.5-6.5z', 'M6 5.5h2.1v13H6z'],
+    next: ['M7 5.5v13l9.5-6.5z', 'M15.9 5.5H18v13h-2.1z'],
     help: ['M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z', 'M9.3 9.4a2.8 2.8 0 0 1 5.5.9c0 1.9-2.7 2.3-2.7 4.1', 'M12 17.6v.01'],
     // The two theme states, named for the state each *is* rather than the one
     // a press goes to: a sun for light, a moon for dark.
@@ -1111,8 +1210,17 @@
       'M5.6 5.6l1.5 1.5', 'M16.9 16.9l1.5 1.5',
       'M18.4 5.6l-1.5 1.5', 'M7.1 16.9l-1.5 1.5'
     ],
-    'theme-dark': ['M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z']
+    'theme-dark': ['M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z'],
+    // A display, for the state that is neither side but whatever the machine is
+    // set to. A half-shaded disc would say it more literally and cannot be drawn
+    // here: every glyph is stroke on `fill: none`, so a shaded half has nothing
+    // to shade it with.
+    'theme-system': ['M3.5 5.5h17v10.5h-17z', 'M12 16v3.5', 'M9 19.5h6']
   };
+
+  // The glyphs drawn as solids rather than strokes. A set rather than a second
+  // ICONS table, because everything else about drawing them is identical.
+  var FILLED = { play: 1, pause: 1, prev: 1, next: 1 };
 
   function icon(name) {
     var svg = document.createElementNS(SVG_NS, 'svg');
@@ -1123,11 +1231,16 @@
     // focusable=false is for the browsers that made an inline svg a tab stop.
     svg.setAttribute('aria-hidden', 'true');
     svg.setAttribute('focusable', 'false');
-    svg.setAttribute('fill', 'none');
-    svg.setAttribute('stroke', 'currentColor');
-    svg.setAttribute('stroke-width', '1.7');
-    svg.setAttribute('stroke-linecap', 'round');
-    svg.setAttribute('stroke-linejoin', 'round');
+    if (FILLED[name]) {
+      svg.setAttribute('fill', 'currentColor');
+      svg.setAttribute('stroke', 'none');
+    } else {
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '1.7');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
+    }
     var d = ICONS[name] || [];
     for (var i = 0; i < d.length; i++) {
       var p = document.createElementNS(SVG_NS, 'path');
@@ -1157,30 +1270,44 @@
   // builds, the playground — and a control implemented three times is a
   // control that works on two of them.
   //
-  // Two states: a press flips light to dark and back, and that is the whole
-  // vocabulary. A page nobody has pressed carries no data-theme at all, so
-  // runtime.css's prefers-color-scheme rules answer for it — a fresh reader
-  // opens in whatever the system is showing, and an OS switch moves the page
-  // with no script in the way. That is the state every page starts in.
+  // Three states, and the third one is not new — it is the state every page has
+  // always started in, finally reachable. A page carrying no data-theme lets
+  // runtime.css's prefers-color-scheme rules answer, so a fresh reader opens in
+  // whatever the system is showing and an OS switch moves the page with no
+  // script in the way. What was missing was any way back to it: once a side was
+  // pinned, following the system again meant clearing localStorage by hand.
   //
-  // The first press ends the following. It stores a side, and from then on
-  // this browser shows that side whatever the system does. The trade is
-  // deliberate rather than overlooked: a reader who asked for dark meant dark,
-  // including at sunrise. It does mean the glyph can outlive the system it was
-  // drawn from, which is why drawing goes through the *effective* theme below
-  // rather than the stored one, and why the control watches the media query
-  // itself for as long as nothing is stored.
+  // A pinned side still means pinned — a reader who asked for dark meant dark,
+  // including at sunrise. Letting go is now a press rather than an impossibility.
+  //
+  // The cycle is derived rather than fixed, so that no press is invisible.
+  // Following → the side you are *not* seeing; that side → the side you were;
+  // and that → following again. On a dark machine: system, light, dark, system.
+  // On a light one: system, dark, light, system. Both are three steps and only
+  // the last is a no-op on screen, which it has to be — releasing the pin when
+  // the machine already agrees cannot look like anything.
+  //
+  // A pinned glyph can outlive the system it was drawn from, which is why
+  // drawing goes through the *effective* theme below rather than the stored one,
+  // and why the control watches the media query itself for as long as nothing is
+  // pinned.
 
   // The one storage key, unchanged from the rail button so a reader who chose
   // dark keeps dark, and the same key the boot script in pkg/emit/html reads
-  // before the first paint. Only 'light' and 'dark' are ever written to it.
+  // before the first paint.
+  //
+  // 'system' is written to it as well now, and writing it is safe for the reason
+  // it looks unsafe: neither reader has a branch for it. The boot script sets the
+  // attribute for 'light' and 'dark' and removes it for anything else; themeChoice
+  // returns those two and null for anything else. Both collapse every other
+  // string to "follow the system" by omission, so there is no second resolution
+  // to disagree with the first.
   var THEME_KEY = 'dgm.theme';
 
-  // themeChoice is the side the reader picked, or null while they have picked
-  // none. Anything else in the key reads as null — a value some other page
-  // wrote, or a stale one from a build that had a third state — which is
-  // exactly how the boot script treats it, so the attribute and the glyph
-  // agree from the very first frame.
+  // themeChoice is the side the reader pinned, or null while they are following
+  // the system. Anything else in the key reads as null — 'system', or a value
+  // some other page wrote — which is exactly how the boot script treats it, so
+  // the attribute and the glyph agree from the very first frame.
   function themeChoice() {
     var v = prefGet(THEME_KEY);
     return v === 'light' || v === 'dark' ? v : null;
@@ -1201,7 +1328,24 @@
   // day without the control noticing.
   function chooseTheme(state) {
     prefSet(THEME_KEY, state);
-    document.documentElement.setAttribute('data-theme', state);
+    // Following the system is the *absence* of the attribute, not a value of
+    // it: the stylesheet keys its palettes off `[data-theme]` and a
+    // `data-theme="system"` would match neither, leaving a page with no palette
+    // at all.
+    if (state === 'system') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', state);
+  }
+
+  // nextTheme is the cycle, computed from what is on screen rather than listed,
+  // so that the first press off "following" always changes something. See the
+  // note above the storage key for the two orders this produces.
+  function nextTheme() {
+    var pinned = themeChoice();
+    var system = systemDark() ? 'dark' : 'light';
+    var other = system === 'dark' ? 'light' : 'dark';
+    if (!pinned) return other;
+    if (pinned === other) return system;
+    return 'system';
   }
 
   // drawThemeToggle draws the state the page is *in* and names the action the
@@ -1210,8 +1354,16 @@
   // own; the accessible name says it instead, and aria-live on the button
   // means the new state is announced rather than only shown.
   function drawThemeToggle(btn) {
-    var state = effectiveTheme();
-    var label = 'Theme: ' + state + ' — click for ' + (state === 'dark' ? 'light' : 'dark');
+    var pinned = themeChoice();
+    var showing = effectiveTheme();
+    // Following the system draws the display rather than the palette, because
+    // the palette is not the state: a sun on a page that follows a light machine
+    // would say "light" and be wrong the moment the machine changed. The name
+    // carries what it resolves to, which the glyph then does not have to.
+    var state = pinned || 'system';
+    var label = pinned
+      ? 'Theme: ' + pinned + ' — click for ' + nextTheme()
+      : 'Theme: system (' + showing + ') — click for ' + nextTheme();
     btn.title = label;
     btn.setAttribute('aria-label', label);
     btn.innerHTML = '';
@@ -1253,7 +1405,7 @@
     if (btn.dgmThemeWired) return btn;
     btn.dgmThemeWired = true;
     btn.addEventListener('click', function () {
-      chooseTheme(effectiveTheme() === 'dark' ? 'light' : 'dark');
+      chooseTheme(nextTheme());
       drawThemeToggle(btn);
     });
     drawThemeToggle(btn);
@@ -1345,27 +1497,43 @@
     }
   };
 
-  // SPEED_PRESETS is the sheet's speed menu. Five rates, coarse on purpose:
-  // this is a reader asking for slower or faster, not an author timing a beat
-  // — `speed:` in the scenario is for that, and outranks this.
-  var SPEED_PRESETS = [0.25, 0.5, 1, 1.5, 2];
+  // SPEED_PRESETS is the speed menu. The five middle rates were the whole list
+  // when this was a button in the rail, and the list was short for a reason the
+  // comment there gave: it was "reachable only by cycling forwards through five
+  // rates — four clicks to get from 2x back to 0.25x". Coarseness was a property
+  // of *cycling*, and nobody cycles a <select>.
+  //
+  // So the ends are open now, because the material stopped being hand-authored
+  // explainers where 0.25x to 2x is plenty. `cinegram trace` replays measured
+  // time: a trace is 8ms or it is four minutes, and both want watching. 0.1x and
+  // 10x are the rates those need.
+  //
+  // Purely additive — the original five are all still here, in place — because
+  // the chosen rate is remembered across every cinegram this browser opens, and
+  // dropping 1.5x would have quietly moved somebody's saved preference.
+  var SPEED_PRESETS = [0.1, 0.25, 0.5, 1, 1.5, 2, 4, 10];
 
-  // The sheet is settings *and* shortcuts. It was a read-only list, and speed
-  // was a button in the rail: a preference, persisted across every diagram on
-  // the origin, sitting in the narrowest and most contested column on the page,
-  // hidden from presenters by dgm-authoring, and reachable only by cycling
-  // forwards through five rates — four clicks to get from 2x back to 0.25x.
-  // Somewhere a reader opens deliberately is where a preference belongs, and
-  // once there is one such place there is somewhere for the next one to go.
+  // The sheet is shortcuts, and for a while it was settings too.
+  //
+  // Speed came here from the rail, which was right at the time: the rail is the
+  // narrowest column on the page and a control whose label is its own value had
+  // to widen it, four clicks stood between 2x and 0.25x, and dgm-authoring hid
+  // it from presenters. Somewhere a reader opens deliberately was better than
+  // that.
+  //
+  // It has since moved on to the foot, beside the transport it belongs to, where
+  // the width objection does not apply and it is one click rather than three.
+  // The sheet is a list again. If a real setting turns up — one that is neither
+  // transport nor page chrome — this is still where it goes.
   Player.prototype.buildHelp = function () {
     var self = this;
     var box = el('div', 'dgm-help');
     box.setAttribute('role', 'dialog');
-    box.setAttribute('aria-label', 'Settings and shortcuts');
+    box.setAttribute('aria-label', 'Shortcuts');
     box.style.display = 'none';
 
     var panel = el('div', 'dgm-help-panel');
-    panel.appendChild(elText('div', 'dgm-help-title', 'Settings and shortcuts'));
+    panel.appendChild(elText('div', 'dgm-help-title', 'Shortcuts'));
 
     // With reduced motion there is no autoplay, so stepping is not a fallback
     // — it is how the diagram is meant to be read. Say so where it is useful.
@@ -1374,31 +1542,6 @@
         'Your system asks for reduced motion, so playback does not start on its own. ' +
         'Step through with the arrow keys.'));
     }
-
-    panel.appendChild(elText('div', 'dgm-help-section', 'Playback'));
-
-    // A <label> wrapping the control rather than a `for`/id pair: one document
-    // can hold several players, ids have to be unique across it, and the pair
-    // would need a counter nothing else in this file needs. Wrapping asks for
-    // no id at all.
-    var speedRow = el('label', 'dgm-help-row');
-    speedRow.appendChild(elText('span', '', 'Speed'));
-    this.speedSel = el('select', 'dgm-select dgm-help-speed');
-    for (var i = 0; i < SPEED_PRESETS.length; i++) {
-      var opt = document.createElement('option');
-      opt.value = String(SPEED_PRESETS[i]);
-      opt.textContent = speedLabel(SPEED_PRESETS[i]);
-      this.speedSel.appendChild(opt);
-    }
-    this.speedSel.addEventListener('change', function () {
-      self.setSpeed(parseFloat(self.speedSel.value));
-    });
-    speedRow.appendChild(this.speedSel);
-    panel.appendChild(speedRow);
-    // The menu exists before any scenario has been adopted, so it is written
-    // once from whatever this.speed already is; adoptScenarioSpeed writes it
-    // again the moment a scenario has an opinion.
-    this.syncSpeed();
 
     panel.appendChild(elText('div', 'dgm-help-section', 'Shortcuts'));
 
@@ -2915,7 +3058,18 @@
       self.picker.appendChild(o);
     });
     this.picker.value = String(this.scenarioIndex);
-    this.picker.style.display = scenarios.length > 1 ? '' : 'none';
+
+    // A <select> with `appearance: none` and no arrow of its own reads as a text
+    // field, so what it is has to be said rather than drawn. The count goes in
+    // because "one of three" is the fact that makes it worth opening.
+    this.picker.setAttribute('aria-label', 'Scenario');
+    this.picker.title = scenarios.length > 1
+      ? 'Choose one of ' + scenarios.length + ' scenarios'
+      : 'Scenario';
+
+    if (this.pickerWrap) {
+      this.pickerWrap.style.display = scenarios.length > 1 ? '' : 'none';
+    }
   };
 
   Player.prototype.selectScenario = function (i) {
@@ -3448,18 +3602,33 @@
     this.play();
   };
 
+  // syncPlay swaps the glyph and the accessible name together.
+  //
+  // Together, because they are the same fact: an icon button's label *is* its
+  // name to a screen reader, and the old text button could set both by writing
+  // one string. Writing textContent now would delete the glyph, which is the
+  // trap this method exists to close.
+  Player.prototype.syncPlay = function () {
+    if (!this.playBtn) return;
+    var label = this.playing ? 'Pause' : 'Play';
+    this.playBtn.innerHTML = '';
+    this.playBtn.appendChild(icon(this.playing ? 'pause' : 'play'));
+    this.playBtn.title = label;
+    this.playBtn.setAttribute('aria-label', label);
+  };
+
   Player.prototype.play = function () {
     var sc = this.scenario();
     if (this.time >= sc.duration) this.time = 0;
     this.playing = true;
-    this.playBtn.textContent = 'Pause';
+    this.syncPlay();
     this.lastFrame = 0;
     this.loopFrame();
   };
 
   Player.prototype.pause = function () {
     this.playing = false;
-    this.playBtn.textContent = 'Play';
+    this.syncPlay();
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = null;
   };
@@ -3735,13 +3904,12 @@
     }
 
     sel.value = String(this.speed);
-    // The rate is deliberately no longer part of the accessible name. The
-    // button this replaced had to carry it, because its label *was* the rate
-    // and "1x" read out of context is a number attached to nothing; a select
-    // announces its own value, so repeating it in the name would have a screen
-    // reader say the rate twice and re-announce the control on every change.
-    // What the name has to supply is the word the visible "Speed" leaves to its
-    // heading.
+    // The rate is deliberately not part of the accessible name: a select
+    // announces its own value, so repeating it would have a screen reader say
+    // the rate twice and re-announce the control on every change. What the name
+    // supplies is what the rate is *of* — and in the foot it is the whole name,
+    // since there is no "Speed" heading beside it any more. The visible title
+    // says the same thing to a mouse.
     sel.setAttribute('aria-label', 'Playback speed');
   };
 

@@ -147,7 +147,7 @@ suggestion rather than a silent no-op.
 | `badge`, `state` | `set` | Pill text, and a standing `dgm-state-<name>` class. |
 | `label`, `value` | `gauge` | What the reading is called and what it currently says. Both required. |
 | `desc` | step | Prose narration for the step. Shown in the caption; `\n` works. |
-| `speed` | scenario | Initial playback rate, e.g. `1.5`. The player starts here; the reader can change it in the settings sheet. |
+| `speed` | scenario | Initial playback rate, e.g. `1.5`. The player starts here; the reader can change it in the transport. |
 | `loop` | scenario | Restart at the end. |
 | `autoplay` | scenario | Start playing once the diagram has rendered. Defaults to **false** — a page opens at rest — and is skipped when the system asks for reduced motion. |
 | `poster` | scenario | The moment the page rests at before anyone presses play, e.g. `1600ms`. Defaults to the start. A shared link's `t=` wins over it. |
@@ -967,6 +967,12 @@ here is reachable only through MCP.
 
 ### Driving the player
 
+Play, previous step, next step and the speed menu sit at the left of the
+timeline, which is what they all move; everything that is not transport —
+Present, and the tool rail beside the stage — stays where it was. The two step
+buttons are the arrow keys made visible, for a reader who never went looking for
+a keyboard shortcut.
+
 Press `?` in the page for this list.
 
 | Key | Does |
@@ -977,7 +983,7 @@ Press `?` in the page for this list.
 | `1`–`9` | Jump to step *n* |
 | Click stage | In presenter mode, advance one step |
 | `Esc` | Leave presenter mode, back out of a drilled-in view, or close the help |
-| `?` | Show or hide the settings and shortcuts sheet |
+| `?` | Show or hide the shortcuts sheet |
 
 Scroll to zoom the stage — anchored on the cursor, so the thing you are
 pointing at stays put — drag to pan, and a double-click puts the framing back.
@@ -997,17 +1003,34 @@ Theme and speed persist in `localStorage`. The theme control is page chrome
 rather than a diagram tool — top right on a page `cinegram preview` writes, in
 the header of a `cinegram site` page, beside the other buttons in the playground
 — because dark and light describe the page, and every player on it follows the
-`data-theme` the control writes. It is a **light ⇄ dark** flip. Until you press
-it a page has no theme of its own and simply shows whichever your OS is set to,
-following it live through `prefers-color-scheme` with no script in the way; the
-first press picks a side and keeps it, on that page and every other cinegram
-page in that browser. Inside VS Code there is no control at all: the editor's
-theme is the answer, and the preview follows it live.
+`data-theme` the control writes. It cycles **light → dark → system**.
 
-Speed is a setting rather than a tool, so it lives in the sheet `?` and the
-rail's last button open — settings above, shortcuts below. The menu offers
-`0.25 → 0.5 → 1 → 1.5 → 2`, and a scenario that declares a rate of its own that
-is not on that list shows it there too, for as long as it is the rate in effect.
+`system` is where every page starts, and it is not a value of `data-theme` but the
+absence of one: the stylesheet's `prefers-color-scheme` rules answer instead, so
+an OS switch moves the page live with no script in the way. Pinning a side keeps
+it, on that page and every other cinegram page in that browser — a reader who
+asked for dark meant dark, sunrise included — and a third press lets go again,
+which previously meant clearing `localStorage` by hand.
+
+The cycle is derived from what is on screen rather than fixed, so no press is
+invisible: from `system` it moves to the side you are *not* seeing. On a dark
+machine that reads system → light → dark → system; on a light one, system → dark
+→ light → system.
+
+Inside VS Code there is no control at all: the editor's theme is the answer, and
+the preview follows it live.
+
+Speed sits in the transport, beside Play, because that is what it is: the rate
+the clock runs at. The menu offers
+`0.1 → 0.25 → 0.5 → 1 → 1.5 → 2 → 4 → 10`, and a scenario that declares a rate of
+its own that is not on that list shows it there too, for as long as it is the
+rate in effect.
+
+The ends are open because the material is no longer only hand-authored
+explainers, where 0.25x to 2x is plenty. `cinegram trace` replays measured time,
+and a trace is either eight milliseconds or four minutes — both want watching.
+The list was short when this was a button you cycled one way through; a menu has
+no such reason to be.
 
 The remembered speed is scoped the other way from the theme: it is one key for
 every diagram on the origin, so a scenario that declares its own `speed` keeps

@@ -1,0 +1,1595 @@
+{
+  "version": 2,
+  "root": "05-anomaly-detection",
+  "views": [
+    {
+      "id": "05-anomaly-detection",
+      "diagram": {
+        "type": "sequenceDiagram",
+        "mermaid": "%% A production anomaly detector, drawn once and walked through twice: the\n%% thirty-second inference window that scores five thousand events, and the\n%% retraining run its drift check sets off days later. Two scenarios over one\n%% diagram, which is the point — the same system at two time scales, and the\n%% labels a human writes in the first are the training data for the second.\n%% ---\n%% Scenario one is a single window: hydrate features, score with two models,\n%% ask whether \"high\" is actually unusual for a Monday, suppress what is\n%% already known, page a human on what is left, and feed their verdict back\n%% into the store the next window will read. Forty-one candidate anomalies\n%% become three pages, and the thirty-eight that did not page anyone are the\n%% whole engineering problem.\n%% ---\n%% Scenario two picks up the retrain ticket that window filed: point-in-time\n%% correctness, eight hundred positives in four million rows, PR-AUC rather\n%% than accuracy, and three places where a person has to say yes. Nothing in it\n%% refits itself automatically, which is deliberate — a detector that retrains\n%% the moment its inputs move will learn that the new anomaly is normal.\n%% ---\n%% It is also the largest example here on purpose: sixty messages do not stay\n%% legible scaled into a stage, so this is the one to read with Cine on, which\n%% frames each step rather than the whole drawing.\nsequenceDiagram\n  participant Stream\n  participant Features\n  participant Model\n  participant Baseline\n  participant Alerts\n  participant Analyst\n  participant Trainer\n  participant Registry\n  Stream-\u003e\u003eStream: 1. 30s window closes — 5,120 events\n  Stream-\u003e\u003eFeatures: 2. hydrate entity features\n  Features-\u003e\u003eFeatures: 3. cache lookup — 94% hit\n  Features-\u003e\u003eFeatures: 4. backfill 307 cold entities\n  Features-\u003e\u003eStream: 5. feature vectors ready\n  Stream-\u003e\u003eModel: 6. score 5,120 vectors\n  Model-\u003e\u003eModel: 7. autoencoder reconstruction error\n  Model-\u003e\u003eModel: 8. isolation forest score\n  Model-\u003e\u003eModel: 9. blend into one anomaly score\n  Model-\u003e\u003eStream: 10. scores returned\n  Stream-\u003e\u003eBaseline: 11. 41 above static threshold\n  Baseline-\u003e\u003eBaseline: 12. compare against seasonal band\n  Baseline-\u003e\u003eBaseline: 13. 29 explained by the Monday peak\n  Baseline-\u003e\u003eBaseline: 14. 12 unexplained by season\n  Baseline-\u003e\u003eAlerts: 15. 12 candidate anomalies\n  Alerts-\u003e\u003eAlerts: 16. group by entity + signature\n  Alerts-\u003e\u003eAlerts: 17. suppress 7 — open incident\n  Alerts-\u003e\u003eAlerts: 18. rate-limit 2 — flapping entity\n  Alerts-\u003e\u003eAnalyst: 19. page on 3 anomalies\n  Analyst-\u003e\u003eAlerts: 20. acknowledge\n  Analyst-\u003e\u003eModel: 21. why this one?\n  Model-\u003e\u003eFeatures: 22. fetch contributing features\n  Features-\u003e\u003eModel: 23. 6 feature attributions\n  Model-\u003e\u003eAnalyst: 24. attributions + nearest normal\n  Analyst-\u003e\u003eAnalyst: 25. confirm 2, dismiss 1\n  Analyst-\u003e\u003eAlerts: 26. label the outcomes\n  Alerts-\u003e\u003eFeatures: 27. write labels to the store\n  Features-\u003e\u003eBaseline: 28. widen the seasonal band\n  Baseline-\u003e\u003eBaseline: 29. drift check on the score distribution\n  Baseline-\u003e\u003eModel: 30. PSI 0.27 — distribution has moved\n  Model-\u003e\u003eModel: 31. flag the model for retraining\n  Model-\u003e\u003eAlerts: 32. open a retrain ticket\n  Alerts-\u003e\u003eAnalyst: 33. retrain queued for review\n  Analyst-\u003e\u003eStream: 34. resume the window\n  Alerts-\u003e\u003eTrainer: 35. retrain ticket approved\n  Trainer-\u003e\u003eFeatures: 36. request 90 days of labelled history\n  Features-\u003e\u003eFeatures: 37. assemble 4.1M rows, 812 labels\n  Features-\u003e\u003eFeatures: 38. point-in-time correctness check\n  Features-\u003e\u003eTrainer: 39. training set + held-out month\n  Trainer-\u003e\u003eTrainer: 40. rebalance — 812 positives in 4.1M\n  Trainer-\u003e\u003eTrainer: 41. fit autoencoder — 12 epochs\n  Trainer-\u003e\u003eTrainer: 42. fit isolation forest\n  Trainer-\u003e\u003eTrainer: 43. sweep the blend weight\n  Trainer-\u003e\u003eBaseline: 44. recompute seasonal bands\n  Baseline-\u003e\u003eTrainer: 45. bands for 7 day-parts\n  Trainer-\u003e\u003eTrainer: 46. holdout PR-AUC 0.71 vs 0.63\n  Trainer-\u003e\u003eRegistry: 47. register candidate v14\n  Registry-\u003e\u003eRegistry: 48. record data + code + params\n  Registry-\u003e\u003eAnalyst: 49. v14 ready for review\n  Analyst-\u003e\u003eRegistry: 50. compare against v13\n  Registry-\u003e\u003eAnalyst: 51. 812 labels replayed, 41 disagreements\n  Analyst-\u003e\u003eAnalyst: 52. read the disagreements\n  Analyst-\u003e\u003eRegistry: 53. approve for shadow\n  Registry-\u003e\u003eModel: 54. deploy v14 in shadow\n  Model-\u003e\u003eModel: 55. score both, serve v13\n  Model-\u003e\u003eRegistry: 56. 48h shadow agreement 0.94\n  Registry-\u003e\u003eAnalyst: 57. promote v14?\n  Analyst-\u003e\u003eRegistry: 58. promote\n  Registry-\u003e\u003eModel: 59. v14 is serving\n  Model-\u003e\u003eStream: 60. new thresholds live\n\n"
+      },
+      "nodes": [
+        {
+          "id": "Stream",
+          "label": "Stream",
+          "shape": "actor"
+        },
+        {
+          "id": "Features",
+          "label": "Features",
+          "shape": "actor"
+        },
+        {
+          "id": "Model",
+          "label": "Model",
+          "shape": "actor"
+        },
+        {
+          "id": "Baseline",
+          "label": "Baseline",
+          "shape": "actor"
+        },
+        {
+          "id": "Alerts",
+          "label": "Alerts",
+          "shape": "actor"
+        },
+        {
+          "id": "Analyst",
+          "label": "Analyst",
+          "shape": "actor"
+        },
+        {
+          "id": "Trainer",
+          "label": "Trainer",
+          "shape": "actor"
+        },
+        {
+          "id": "Registry",
+          "label": "Registry",
+          "shape": "actor"
+        }
+      ],
+      "groups": [],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "Stream",
+          "to": "Stream",
+          "label": "1. 30s window closes — 5,120 events",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "Stream",
+          "to": "Features",
+          "label": "2. hydrate entity features",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "Features",
+          "to": "Features",
+          "label": "3. cache lookup — 94% hit",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "Features",
+          "to": "Features",
+          "label": "4. backfill 307 cold entities",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "Features",
+          "to": "Stream",
+          "label": "5. feature vectors ready",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "Stream",
+          "to": "Model",
+          "label": "6. score 5,120 vectors",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e6",
+          "from": "Model",
+          "to": "Model",
+          "label": "7. autoencoder reconstruction error",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e7",
+          "from": "Model",
+          "to": "Model",
+          "label": "8. isolation forest score",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e8",
+          "from": "Model",
+          "to": "Model",
+          "label": "9. blend into one anomaly score",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e9",
+          "from": "Model",
+          "to": "Stream",
+          "label": "10. scores returned",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e10",
+          "from": "Stream",
+          "to": "Baseline",
+          "label": "11. 41 above static threshold",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e11",
+          "from": "Baseline",
+          "to": "Baseline",
+          "label": "12. compare against seasonal band",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e12",
+          "from": "Baseline",
+          "to": "Baseline",
+          "label": "13. 29 explained by the Monday peak",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e13",
+          "from": "Baseline",
+          "to": "Baseline",
+          "label": "14. 12 unexplained by season",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e14",
+          "from": "Baseline",
+          "to": "Alerts",
+          "label": "15. 12 candidate anomalies",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e15",
+          "from": "Alerts",
+          "to": "Alerts",
+          "label": "16. group by entity + signature",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e16",
+          "from": "Alerts",
+          "to": "Alerts",
+          "label": "17. suppress 7 — open incident",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e17",
+          "from": "Alerts",
+          "to": "Alerts",
+          "label": "18. rate-limit 2 — flapping entity",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e18",
+          "from": "Alerts",
+          "to": "Analyst",
+          "label": "19. page on 3 anomalies",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e19",
+          "from": "Analyst",
+          "to": "Alerts",
+          "label": "20. acknowledge",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e20",
+          "from": "Analyst",
+          "to": "Model",
+          "label": "21. why this one?",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e21",
+          "from": "Model",
+          "to": "Features",
+          "label": "22. fetch contributing features",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e22",
+          "from": "Features",
+          "to": "Model",
+          "label": "23. 6 feature attributions",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e23",
+          "from": "Model",
+          "to": "Analyst",
+          "label": "24. attributions + nearest normal",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e24",
+          "from": "Analyst",
+          "to": "Analyst",
+          "label": "25. confirm 2, dismiss 1",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e25",
+          "from": "Analyst",
+          "to": "Alerts",
+          "label": "26. label the outcomes",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e26",
+          "from": "Alerts",
+          "to": "Features",
+          "label": "27. write labels to the store",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e27",
+          "from": "Features",
+          "to": "Baseline",
+          "label": "28. widen the seasonal band",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e28",
+          "from": "Baseline",
+          "to": "Baseline",
+          "label": "29. drift check on the score distribution",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e29",
+          "from": "Baseline",
+          "to": "Model",
+          "label": "30. PSI 0.27 — distribution has moved",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e30",
+          "from": "Model",
+          "to": "Model",
+          "label": "31. flag the model for retraining",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e31",
+          "from": "Model",
+          "to": "Alerts",
+          "label": "32. open a retrain ticket",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e32",
+          "from": "Alerts",
+          "to": "Analyst",
+          "label": "33. retrain queued for review",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e33",
+          "from": "Analyst",
+          "to": "Stream",
+          "label": "34. resume the window",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e34",
+          "from": "Alerts",
+          "to": "Trainer",
+          "label": "35. retrain ticket approved",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e35",
+          "from": "Trainer",
+          "to": "Features",
+          "label": "36. request 90 days of labelled history",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e36",
+          "from": "Features",
+          "to": "Features",
+          "label": "37. assemble 4.1M rows, 812 labels",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e37",
+          "from": "Features",
+          "to": "Features",
+          "label": "38. point-in-time correctness check",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e38",
+          "from": "Features",
+          "to": "Trainer",
+          "label": "39. training set + held-out month",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e39",
+          "from": "Trainer",
+          "to": "Trainer",
+          "label": "40. rebalance — 812 positives in 4.1M",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e40",
+          "from": "Trainer",
+          "to": "Trainer",
+          "label": "41. fit autoencoder — 12 epochs",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e41",
+          "from": "Trainer",
+          "to": "Trainer",
+          "label": "42. fit isolation forest",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e42",
+          "from": "Trainer",
+          "to": "Trainer",
+          "label": "43. sweep the blend weight",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e43",
+          "from": "Trainer",
+          "to": "Baseline",
+          "label": "44. recompute seasonal bands",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e44",
+          "from": "Baseline",
+          "to": "Trainer",
+          "label": "45. bands for 7 day-parts",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e45",
+          "from": "Trainer",
+          "to": "Trainer",
+          "label": "46. holdout PR-AUC 0.71 vs 0.63",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e46",
+          "from": "Trainer",
+          "to": "Registry",
+          "label": "47. register candidate v14",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e47",
+          "from": "Registry",
+          "to": "Registry",
+          "label": "48. record data + code + params",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e48",
+          "from": "Registry",
+          "to": "Analyst",
+          "label": "49. v14 ready for review",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e49",
+          "from": "Analyst",
+          "to": "Registry",
+          "label": "50. compare against v13",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e50",
+          "from": "Registry",
+          "to": "Analyst",
+          "label": "51. 812 labels replayed, 41 disagreements",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e51",
+          "from": "Analyst",
+          "to": "Analyst",
+          "label": "52. read the disagreements",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e52",
+          "from": "Analyst",
+          "to": "Registry",
+          "label": "53. approve for shadow",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e53",
+          "from": "Registry",
+          "to": "Model",
+          "label": "54. deploy v14 in shadow",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e54",
+          "from": "Model",
+          "to": "Model",
+          "label": "55. score both, serve v13",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e55",
+          "from": "Model",
+          "to": "Registry",
+          "label": "56. 48h shadow agreement 0.94",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e56",
+          "from": "Registry",
+          "to": "Analyst",
+          "label": "57. promote v14?",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e57",
+          "from": "Analyst",
+          "to": "Registry",
+          "label": "58. promote",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e58",
+          "from": "Registry",
+          "to": "Model",
+          "label": "59. v14 is serving",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e59",
+          "from": "Model",
+          "to": "Stream",
+          "label": "60. new thresholds live",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "one inference window",
+          "duration": 19250,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "arrive",
+              "name": "The window closes, and the features are not all there",
+              "desc": "Nothing here is asked for; a window of five thousand events simply ends and the pipeline has to say something about it. The first move is not the model, it is the feature store: a score is only as current as the numbers behind it. Most entities are warm in cache, and the three hundred that are not have to be fetched before anything can be scored — which is why the slowest part of inference is often not inference.",
+              "start": 0,
+              "end": 2950,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 0,
+                  "end": 2950,
+                  "target": "Features"
+                },
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 500,
+                  "edge": "e0",
+                  "from": "Stream",
+                  "to": "Stream"
+                },
+                {
+                  "kind": "flow",
+                  "start": 500,
+                  "end": 1100,
+                  "edge": "e1",
+                  "from": "Stream",
+                  "to": "Features"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1100,
+                  "end": 1550,
+                  "edge": "e2",
+                  "from": "Features",
+                  "to": "Features"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1550,
+                  "end": 2450,
+                  "edge": "e3",
+                  "from": "Features",
+                  "to": "Features"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2450,
+                  "end": 2950,
+                  "edge": "e4",
+                  "from": "Features",
+                  "to": "Stream",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "score",
+              "name": "Two models, because one model is a guess",
+              "desc": "Both models answer the same question and neither is trusted alone. The autoencoder asks how badly it fails to rebuild this record from what it learned normal looks like; the isolation forest asks how few splits it takes to cut this record away from the rest. They disagree in different directions, and the blend is what gets a number.",
+              "start": 2950,
+              "end": 5950,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 2950,
+                  "end": 5950,
+                  "target": "Model"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2950,
+                  "end": 3550,
+                  "edge": "e5",
+                  "from": "Stream",
+                  "to": "Model"
+                },
+                {
+                  "kind": "flow",
+                  "start": 3550,
+                  "end": 4250,
+                  "edge": "e6",
+                  "from": "Model",
+                  "to": "Model"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4250,
+                  "end": 4950,
+                  "edge": "e7",
+                  "from": "Model",
+                  "to": "Model"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4950,
+                  "end": 5450,
+                  "edge": "e8",
+                  "from": "Model",
+                  "to": "Model"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5450,
+                  "end": 5950,
+                  "edge": "e9",
+                  "from": "Model",
+                  "to": "Stream",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "baseline",
+              "name": "Forty-one high scores, twenty-nine of them a Monday",
+              "desc": "This is the step that decides whether the system is usable. A raw threshold on a raw score fires on every payday, every deploy and every Monday morning, and a pipeline that pages on all of them gets muted inside a week. So each candidate is compared against what this entity normally does at this hour on this day, and most of the spike turns out to be the week starting.",
+              "start": 5950,
+              "end": 8300,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 5950,
+                  "end": 8300,
+                  "target": "Baseline"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5950,
+                  "end": 6500,
+                  "edge": "e10",
+                  "from": "Stream",
+                  "to": "Baseline"
+                },
+                {
+                  "kind": "flow",
+                  "start": 6500,
+                  "end": 7200,
+                  "edge": "e11",
+                  "from": "Baseline",
+                  "to": "Baseline"
+                },
+                {
+                  "kind": "flow",
+                  "start": 7200,
+                  "end": 7800,
+                  "edge": "e12",
+                  "from": "Baseline",
+                  "to": "Baseline"
+                },
+                {
+                  "kind": "flow",
+                  "start": 7800,
+                  "end": 8300,
+                  "edge": "e13",
+                  "from": "Baseline",
+                  "to": "Baseline"
+                }
+              ]
+            },
+            {
+              "id": "page",
+              "name": "Twelve candidates, three pages",
+              "desc": "Twelve is still too many, and most of them are not news. Alerts groups by entity and signature so one failing dependency is one alert rather than nine, drops what an already-open incident covers, and rate-limits the entity that has flapped all morning. Three anomalies reach a person, and the nine that did not are the reason this step exists.",
+              "start": 8300,
+              "end": 11000,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 8300,
+                  "end": 11000,
+                  "target": "Alerts"
+                },
+                {
+                  "kind": "flow",
+                  "start": 8300,
+                  "end": 8800,
+                  "edge": "e14",
+                  "from": "Baseline",
+                  "to": "Alerts"
+                },
+                {
+                  "kind": "flow",
+                  "start": 8800,
+                  "end": 9350,
+                  "edge": "e15",
+                  "from": "Alerts",
+                  "to": "Alerts"
+                },
+                {
+                  "kind": "flow",
+                  "start": 9350,
+                  "end": 9900,
+                  "edge": "e16",
+                  "from": "Alerts",
+                  "to": "Alerts"
+                },
+                {
+                  "kind": "flow",
+                  "start": 9900,
+                  "end": 10400,
+                  "edge": "e17",
+                  "from": "Alerts",
+                  "to": "Alerts"
+                },
+                {
+                  "kind": "flow",
+                  "start": 10400,
+                  "end": 11000,
+                  "edge": "e18",
+                  "from": "Alerts",
+                  "to": "Analyst"
+                }
+              ]
+            },
+            {
+              "id": "explain",
+              "name": "The first question a human asks is why",
+              "desc": "A score on its own is unactionable: nobody can confirm or dismiss 0.94. So the analyst asks the model to show its work, and gets back the handful of features that moved the score and the nearest record the model considers normal. The comparison is what makes a verdict possible — not the number, the difference.",
+              "start": 11000,
+              "end": 13600,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 11000,
+                  "end": 13600,
+                  "target": "Analyst"
+                },
+                {
+                  "kind": "flow",
+                  "start": 11000,
+                  "end": 11400,
+                  "edge": "e19",
+                  "from": "Analyst",
+                  "to": "Alerts"
+                },
+                {
+                  "kind": "flow",
+                  "start": 11400,
+                  "end": 11900,
+                  "edge": "e20",
+                  "from": "Analyst",
+                  "to": "Model"
+                },
+                {
+                  "kind": "flow",
+                  "start": 11900,
+                  "end": 12450,
+                  "edge": "e21",
+                  "from": "Model",
+                  "to": "Features"
+                },
+                {
+                  "kind": "flow",
+                  "start": 12450,
+                  "end": 13000,
+                  "edge": "e22",
+                  "from": "Features",
+                  "to": "Model",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 13000,
+                  "end": 13600,
+                  "edge": "e23",
+                  "from": "Model",
+                  "to": "Analyst",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "label",
+              "name": "The verdict is training data",
+              "desc": "Two confirmed and one dismissed is not just today's outcome, it is three labels — and labels are the scarcest thing an anomaly detector ever gets, because by definition almost nothing is an anomaly. They go back to the store the next window will read, and the dismissed one widens the seasonal band so the same normal Monday does not page anybody again.",
+              "start": 13600,
+              "end": 15900,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 13600,
+                  "end": 15900,
+                  "target": "Features"
+                },
+                {
+                  "kind": "flow",
+                  "start": 13600,
+                  "end": 14300,
+                  "edge": "e24",
+                  "from": "Analyst",
+                  "to": "Analyst"
+                },
+                {
+                  "kind": "flow",
+                  "start": 14300,
+                  "end": 14800,
+                  "edge": "e25",
+                  "from": "Analyst",
+                  "to": "Alerts"
+                },
+                {
+                  "kind": "flow",
+                  "start": 14800,
+                  "end": 15350,
+                  "edge": "e26",
+                  "from": "Alerts",
+                  "to": "Features"
+                },
+                {
+                  "kind": "flow",
+                  "start": 15350,
+                  "end": 15900,
+                  "edge": "e27",
+                  "from": "Features",
+                  "to": "Baseline"
+                }
+              ]
+            },
+            {
+              "id": "drift",
+              "name": "The scores themselves have moved",
+              "desc": "Separately from any single anomaly, the shape of the whole score distribution is being watched. A population stability index of 0.27 says the model is now seeing a different world from the one it was fitted on — nothing has failed, but its thresholds are calibrated against a distribution that no longer holds. That is a retraining decision, and it is filed rather than acted on.",
+              "start": 15900,
+              "end": 18150,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 15900,
+                  "end": 18150,
+                  "target": "Baseline"
+                },
+                {
+                  "kind": "flow",
+                  "start": 15900,
+                  "end": 16600,
+                  "edge": "e28",
+                  "from": "Baseline",
+                  "to": "Baseline"
+                },
+                {
+                  "kind": "flow",
+                  "start": 16600,
+                  "end": 17150,
+                  "edge": "e29",
+                  "from": "Baseline",
+                  "to": "Model"
+                },
+                {
+                  "kind": "flow",
+                  "start": 17150,
+                  "end": 17650,
+                  "edge": "e30",
+                  "from": "Model",
+                  "to": "Model"
+                },
+                {
+                  "kind": "flow",
+                  "start": 17650,
+                  "end": 18150,
+                  "edge": "e31",
+                  "from": "Model",
+                  "to": "Alerts"
+                }
+              ]
+            },
+            {
+              "id": "resume",
+              "name": "And then it happens again in thirty seconds",
+              "desc": "The retrain goes to a queue a human will look at, and the window reopens. Nothing about this cycle was triggered by a request; the whole flow above runs twice a minute whether or not anything is wrong, and the work of the pipeline is almost entirely deciding what not to say.",
+              "start": 18150,
+              "end": 19250,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 18150,
+                  "end": 19250,
+                  "target": "Stream"
+                },
+                {
+                  "kind": "flow",
+                  "start": 18150,
+                  "end": 18650,
+                  "edge": "e32",
+                  "from": "Alerts",
+                  "to": "Analyst"
+                },
+                {
+                  "kind": "flow",
+                  "start": 18650,
+                  "end": 19250,
+                  "edge": "e33",
+                  "from": "Analyst",
+                  "to": "Stream"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 0,
+              "end": 18150,
+              "target": "Stream",
+              "label": "5,120",
+              "value": "active"
+            },
+            {
+              "kind": "set",
+              "start": 2950,
+              "end": 15900,
+              "target": "Model",
+              "label": "scoring",
+              "value": "active"
+            },
+            {
+              "kind": "set",
+              "start": 5950,
+              "end": 19250,
+              "target": "Baseline",
+              "label": "41 → 12",
+              "value": "active"
+            },
+            {
+              "kind": "set",
+              "start": 8300,
+              "end": 19250,
+              "target": "Alerts",
+              "label": "12 → 3",
+              "value": "active"
+            },
+            {
+              "kind": "set",
+              "start": 11000,
+              "end": 19250,
+              "target": "Analyst",
+              "label": "triage",
+              "value": "active"
+            },
+            {
+              "kind": "set",
+              "start": 15900,
+              "end": 19250,
+              "target": "Model",
+              "label": "PSI 0.27",
+              "value": "warn"
+            },
+            {
+              "kind": "set",
+              "start": 18150,
+              "end": 19250,
+              "target": "Stream",
+              "label": "next window",
+              "value": "active"
+            }
+          ]
+        },
+        {
+          "id": "s1",
+          "name": "the retraining run",
+          "duration": 18000,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "approve",
+              "name": "Somebody agrees to retrain",
+              "desc": "Drift filed a ticket; it did not retrain anything. That gap is deliberate — a detector that refits itself the moment its inputs move will happily learn that the new anomaly is normal, and the failure is silent. So the run starts with a person saying yes.",
+              "start": 0,
+              "end": 600,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 0,
+                  "end": 600,
+                  "target": "Trainer"
+                },
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 600,
+                  "edge": "e34",
+                  "from": "Alerts",
+                  "to": "Trainer"
+                }
+              ]
+            },
+            {
+              "id": "assemble",
+              "name": "Ninety days, and only eight hundred labels",
+              "desc": "The training set is assembled from the same store inference reads, which is the point of having one: the features a model learns from are the features it will be given. Four million rows carry eight hundred and twelve labels between them — every one of them an analyst's verdict from a window like the one before.",
+              "start": 600,
+              "end": 3300,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 600,
+                  "end": 3300,
+                  "target": "Features"
+                },
+                {
+                  "kind": "flow",
+                  "start": 600,
+                  "end": 1200,
+                  "edge": "e35",
+                  "from": "Trainer",
+                  "to": "Features"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1200,
+                  "end": 1900,
+                  "edge": "e36",
+                  "from": "Features",
+                  "to": "Features"
+                },
+                {
+                  "kind": "flow",
+                  "start": 1900,
+                  "end": 2700,
+                  "edge": "e37",
+                  "from": "Features",
+                  "to": "Features"
+                },
+                {
+                  "kind": "flow",
+                  "start": 2700,
+                  "end": 3300,
+                  "edge": "e38",
+                  "from": "Features",
+                  "to": "Trainer",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "pit",
+              "name": "The check that keeps the score honest",
+              "desc": "Point-in-time correctness is the step everyone skips once. If a training row is built from feature values as they look today rather than as they looked at the moment of the event, the model learns from the future and scores beautifully in the lab, then falls over in production. The holdout is a whole month, kept aside untouched.",
+              "start": 3300,
+              "end": 4100,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 3300,
+                  "end": 4100,
+                  "target": "Features"
+                }
+              ]
+            },
+            {
+              "id": "rebalance",
+              "name": "Eight hundred positives in four million rows",
+              "desc": "This is what makes anomaly detection its own problem rather than a classification problem. At two ten-thousandths of a percent, a model that answers 'normal' every time is 99.98% accurate and completely useless, so the loss has to be reweighted before any fitting starts.",
+              "start": 4100,
+              "end": 4900,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 4100,
+                  "end": 4900,
+                  "target": "Trainer"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4100,
+                  "end": 4900,
+                  "edge": "e39",
+                  "from": "Trainer",
+                  "to": "Trainer"
+                }
+              ]
+            },
+            {
+              "id": "autoencoder",
+              "name": "Teach one model what normal looks like",
+              "desc": "The autoencoder never sees a label. It is trained only to compress and rebuild ordinary traffic, and its anomaly score is how badly it fails on a record — the reasoning being that whatever it cannot reconstruct is unlike anything it was shown.",
+              "start": 4900,
+              "end": 5800,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 4900,
+                  "end": 5800,
+                  "target": "Trainer"
+                },
+                {
+                  "kind": "flow",
+                  "start": 4900,
+                  "end": 5800,
+                  "edge": "e40",
+                  "from": "Trainer",
+                  "to": "Trainer"
+                }
+              ]
+            },
+            {
+              "id": "forest",
+              "name": "And teach the other one to cut things off",
+              "desc": "The isolation forest comes at it from the opposite direction: it splits the data at random and asks how few cuts it takes to isolate a record. Outliers fall out early. It is cheap, it needs no notion of normal, and it catches the plainly-strange the autoencoder can sometimes rebuild too well.",
+              "start": 5800,
+              "end": 6500,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 5800,
+                  "end": 6500,
+                  "target": "Trainer"
+                },
+                {
+                  "kind": "flow",
+                  "start": 5800,
+                  "end": 6500,
+                  "edge": "e41",
+                  "from": "Trainer",
+                  "to": "Trainer"
+                }
+              ]
+            },
+            {
+              "id": "blend",
+              "name": "One weight, swept rather than chosen",
+              "desc": "The two scores have to become one number, and the weight between them is the only knob a human would otherwise pick by feel. It is swept against the holdout instead — the eight hundred labels are worth more spent here, calibrating, than they would be as extra training rows.",
+              "start": 6500,
+              "end": 7200,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 6500,
+                  "end": 7200,
+                  "target": "Trainer"
+                },
+                {
+                  "kind": "flow",
+                  "start": 6500,
+                  "end": 7200,
+                  "edge": "e42",
+                  "from": "Trainer",
+                  "to": "Trainer"
+                }
+              ]
+            },
+            {
+              "id": "bands",
+              "name": "Recompute what normal means for a Tuesday",
+              "desc": "The seasonal bands are refitted alongside the models, because they are half the system: the inference window threw away twenty-nine of forty-one candidates on this basis. Seven day-parts, each with its own idea of a normal range.",
+              "start": 7200,
+              "end": 8400,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 7200,
+                  "end": 8400,
+                  "target": "Baseline"
+                },
+                {
+                  "kind": "flow",
+                  "start": 7200,
+                  "end": 7800,
+                  "edge": "e43",
+                  "from": "Trainer",
+                  "to": "Baseline"
+                },
+                {
+                  "kind": "flow",
+                  "start": 7800,
+                  "end": 8400,
+                  "edge": "e44",
+                  "from": "Baseline",
+                  "to": "Trainer",
+                  "style": "response"
+                }
+              ]
+            },
+            {
+              "id": "holdout",
+              "name": "0.71 against 0.63, and not accuracy",
+              "desc": "Precision-recall area, not accuracy and not ROC — with a positive rate this low, ROC flatters everything and accuracy is meaningless. 0.71 against the incumbent's 0.63 is the whole case for replacing a model that is currently working.",
+              "start": 8400,
+              "end": 9100,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 8400,
+                  "end": 9100,
+                  "target": "Trainer"
+                },
+                {
+                  "kind": "flow",
+                  "start": 8400,
+                  "end": 9100,
+                  "edge": "e45",
+                  "from": "Trainer",
+                  "to": "Trainer"
+                }
+              ]
+            },
+            {
+              "id": "register",
+              "name": "Register it, with everything needed to rebuild it",
+              "desc": "The candidate is not a file, it is a file plus the data window, the code revision and the parameters that produced it. Six months from now the only useful question about v14 will be what it was trained on, and nobody will remember.",
+              "start": 9100,
+              "end": 10400,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 9100,
+                  "end": 10400,
+                  "target": "Registry"
+                },
+                {
+                  "kind": "flow",
+                  "start": 9100,
+                  "end": 9700,
+                  "edge": "e46",
+                  "from": "Trainer",
+                  "to": "Registry"
+                },
+                {
+                  "kind": "flow",
+                  "start": 9700,
+                  "end": 10400,
+                  "edge": "e47",
+                  "from": "Registry",
+                  "to": "Registry"
+                }
+              ]
+            },
+            {
+              "id": "review",
+              "name": "A better number is not yet a decision",
+              "desc": "v14 goes to the analyst who has been triaging the pages, not to a deployment. A model that scores better in aggregate can still be worse at the handful of things that actually matter, and the person who reads the alerts is the only one who knows which those are.",
+              "start": 10400,
+              "end": 11500,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 10400,
+                  "end": 11500,
+                  "target": "Analyst"
+                },
+                {
+                  "kind": "flow",
+                  "start": 10400,
+                  "end": 11000,
+                  "edge": "e48",
+                  "from": "Registry",
+                  "to": "Analyst"
+                },
+                {
+                  "kind": "flow",
+                  "start": 11000,
+                  "end": 11500,
+                  "edge": "e49",
+                  "from": "Analyst",
+                  "to": "Registry"
+                }
+              ]
+            },
+            {
+              "id": "disagree",
+              "name": "Forty-one disagreements are the actual review",
+              "desc": "Both models are replayed over every labelled record and the aggregate is set aside; what gets read is the forty-one cases where they disagree. That is a morning's work and it is the only part of this run that cannot be automated — the aggregate says v14 is better, the disagreements say whether it is better at the right things.",
+              "start": 11500,
+              "end": 13100,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 11500,
+                  "end": 13100,
+                  "target": "Analyst"
+                },
+                {
+                  "kind": "flow",
+                  "start": 11500,
+                  "end": 12200,
+                  "edge": "e50",
+                  "from": "Registry",
+                  "to": "Analyst",
+                  "style": "response"
+                },
+                {
+                  "kind": "flow",
+                  "start": 12200,
+                  "end": 13100,
+                  "edge": "e51",
+                  "from": "Analyst",
+                  "to": "Analyst"
+                }
+              ]
+            },
+            {
+              "id": "shadow",
+              "name": "Serve the old one, score with both",
+              "desc": "Approval buys a shadow deployment, not traffic. v14 scores every window beside v13 and nobody is paged on its output; the pipeline behaves exactly as it did yesterday while the new model builds a record in production conditions no holdout reproduces.",
+              "start": 13100,
+              "end": 15000,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 13100,
+                  "end": 15000,
+                  "target": "Model"
+                },
+                {
+                  "kind": "flow",
+                  "start": 13100,
+                  "end": 13600,
+                  "edge": "e52",
+                  "from": "Analyst",
+                  "to": "Registry"
+                },
+                {
+                  "kind": "flow",
+                  "start": 13600,
+                  "end": 14200,
+                  "edge": "e53",
+                  "from": "Registry",
+                  "to": "Model"
+                },
+                {
+                  "kind": "flow",
+                  "start": 14200,
+                  "end": 15000,
+                  "edge": "e54",
+                  "from": "Model",
+                  "to": "Model"
+                }
+              ]
+            },
+            {
+              "id": "agreement",
+              "name": "Two days of agreeing, and where it did not",
+              "desc": "0.94 agreement over forty-eight hours is not a pass mark on its own — it is the six per cent that gets looked at, because that is where v14 would have changed what a human saw. Shadowing is the only test that runs against the traffic the model will actually meet.",
+              "start": 15000,
+              "end": 16200,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 15000,
+                  "end": 16200,
+                  "target": "Registry"
+                },
+                {
+                  "kind": "flow",
+                  "start": 15000,
+                  "end": 15600,
+                  "edge": "e55",
+                  "from": "Model",
+                  "to": "Registry"
+                },
+                {
+                  "kind": "flow",
+                  "start": 15600,
+                  "end": 16200,
+                  "edge": "e56",
+                  "from": "Registry",
+                  "to": "Analyst"
+                }
+              ]
+            },
+            {
+              "id": "promote",
+              "name": "Promote, on a person's word",
+              "desc": "The last gate is a human again, and by design: every automatic step in this run was reversible and this one is not. What follows is a live change to what the on-call gets woken for.",
+              "start": 16200,
+              "end": 17300,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 16200,
+                  "end": 17300,
+                  "target": "Analyst"
+                },
+                {
+                  "kind": "flow",
+                  "start": 16200,
+                  "end": 16700,
+                  "edge": "e57",
+                  "from": "Analyst",
+                  "to": "Registry"
+                },
+                {
+                  "kind": "flow",
+                  "start": 16700,
+                  "end": 17300,
+                  "edge": "e58",
+                  "from": "Registry",
+                  "to": "Model"
+                }
+              ]
+            },
+            {
+              "id": "live",
+              "name": "New thresholds, and the loop closes",
+              "desc": "v14 is serving, its bands are live, and the next window will be scored against them. Which means the pipeline is back at the top of the other scenario — and the labels an analyst writes tonight are the training data for whatever replaces v14.",
+              "start": 17300,
+              "end": 18000,
+              "tracks": [
+                {
+                  "kind": "focus",
+                  "start": 17300,
+                  "end": 18000,
+                  "target": "Stream"
+                },
+                {
+                  "kind": "flow",
+                  "start": 17300,
+                  "end": 18000,
+                  "edge": "e59",
+                  "from": "Model",
+                  "to": "Stream"
+                }
+              ]
+            }
+          ],
+          "persistent": [
+            {
+              "kind": "set",
+              "start": 0,
+              "end": 4100,
+              "target": "Trainer",
+              "label": "queued",
+              "value": "active"
+            },
+            {
+              "kind": "set",
+              "start": 600,
+              "end": 3300,
+              "target": "Features",
+              "label": "4.1M rows",
+              "value": "active"
+            },
+            {
+              "kind": "set",
+              "start": 3300,
+              "end": 18000,
+              "target": "Features",
+              "label": "point-in-time",
+              "value": "active"
+            },
+            {
+              "kind": "set",
+              "start": 4100,
+              "end": 4900,
+              "target": "Trainer",
+              "label": "0.02%",
+              "value": "warn"
+            },
+            {
+              "kind": "set",
+              "start": 4900,
+              "end": 5800,
+              "target": "Trainer",
+              "label": "12 epochs",
+              "value": "active"
+            },
+            {
+              "kind": "set",
+              "start": 5800,
+              "end": 8400,
+              "target": "Trainer",
+              "label": "fitting",
+              "value": "active"
+            },
+            {
+              "kind": "set",
+              "start": 7200,
+              "end": 18000,
+              "target": "Baseline",
+              "label": "7 day-parts",
+              "value": "active"
+            },
+            {
+              "kind": "set",
+              "start": 8400,
+              "end": 18000,
+              "target": "Trainer",
+              "label": "PR-AUC 0.71",
+              "value": "active"
+            },
+            {
+              "kind": "set",
+              "start": 9100,
+              "end": 15000,
+              "target": "Registry",
+              "label": "v14",
+              "value": "active"
+            },
+            {
+              "kind": "set",
+              "start": 10400,
+              "end": 11500,
+              "target": "Analyst",
+              "label": "review",
+              "value": "active"
+            },
+            {
+              "kind": "set",
+              "start": 11500,
+              "end": 16200,
+              "target": "Analyst",
+              "label": "41 cases",
+              "value": "warn"
+            },
+            {
+              "kind": "set",
+              "start": 13100,
+              "end": 17300,
+              "target": "Model",
+              "label": "v13 + v14",
+              "value": "active"
+            },
+            {
+              "kind": "set",
+              "start": 15000,
+              "end": 18000,
+              "target": "Registry",
+              "label": "0.94",
+              "value": "active"
+            },
+            {
+              "kind": "set",
+              "start": 16200,
+              "end": 18000,
+              "target": "Analyst",
+              "label": "promote",
+              "value": "active"
+            },
+            {
+              "kind": "set",
+              "start": 17300,
+              "end": 18000,
+              "target": "Model",
+              "label": "v14",
+              "value": "done"
+            },
+            {
+              "kind": "set",
+              "start": 17300,
+              "end": 18000,
+              "target": "Stream",
+              "label": "live",
+              "value": "active"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

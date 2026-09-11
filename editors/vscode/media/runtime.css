@@ -229,11 +229,66 @@ body.dgm-standalone {
   flex-wrap: wrap;
 }
 
+/* Two rows: the title, and the scenario under it. Column rather than a wider
+   bar, because the alternative was capping the picker to fit beside the title —
+   and a menu whose closed state is truncated hides the one thing it exists to
+   show. */
 .dgm-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dgm-heading-row {
   display: flex;
   align-items: baseline;
   gap: 10px;
   min-width: 0;
+}
+
+.dgm-scenario {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* The picker and its caption travel together, because they hide together when a
+   document has one scenario — and Present, which sits in the same row, must not
+   go with them. */
+.dgm-scenario-pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* One row, one size. Present arrived here at the bar's 13px and stood a couple of
+   pixels taller than the picker beside it, which reads as two controls that were
+   not meant to be together.
+
+   `line-height` as well as `font-size`, because a <select> and a <button> do not
+   agree on their intrinsic height from a font size alone — one lays its text out
+   as a form control and the other as a box — and matching them by eye is a fight
+   that resumes at every zoom level. Pinned, the arithmetic is the same on both:
+   16px of line, 3px above and below, and a 1px border each side.
+
+   Vertical padding only. The horizontal is each control's own business: the
+   picker's right side is the chevron's room, and stealing it would put the arrow
+   on top of the text. */
+.dgm-scenario .dgm-btn,
+.dgm-scenario .dgm-select {
+  font-size: 12px;
+  line-height: 16px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.dgm-present-btn {
+  padding-left: 10px;
+  padding-right: 10px;
 }
 
 .dgm-title {
@@ -264,18 +319,62 @@ body.dgm-standalone {
   flex-wrap: wrap;
 }
 
+/* Buttons and menus share their skin. `background-color` rather than the
+   `background` shorthand, because the chevron below is a background-image and the
+   shorthand would reset it — which is how a button and a menu came to share an
+   arrow neither of them should have had. */
 .dgm-btn,
 .dgm-select {
   appearance: none;
   border: 1px solid var(--dgm-border);
-  background: var(--dgm-panel);
+  background-color: var(--dgm-panel);
   color: var(--dgm-fg);
   border-radius: 7px;
   padding: 6px 12px;
   font: inherit;
   font-size: 13px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+/* And only a menu gets the arrow. `appearance: none` takes the platform's one off
+   along with its styling, and for a long time nothing put one back — which left
+   every <select> here looking exactly like a text field, the scenario picker most
+   of all. It is the affordance that says "there are others": without it a reader
+   has no way to know the walkthrough on screen is one of three.
+
+   Two gradients rather than a background-image, so it is drawn in `currentColor`
+   and needs no second copy for the dark palette. The right-hand padding is the
+   arrow's room, not decoration. */
+.dgm-select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: right 13px center, right 9px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 26px;
+}
+
+/* Caption size, and wide enough for a sentence: on its own row the picker has the
+   page's width, so the cap is a backstop against a pathological name rather than
+   the everyday case. `ch` so it tracks the reader's own font size. The ellipsis
+   stays for when the backstop is reached. */
+.dgm-picker {
+  padding-left: 8px;
+  padding-right: 24px;
+  background-position: right 11px center, right 7px center;
+  max-width: 56ch;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The word the picker cannot say itself. Muted because it is a caption, not a
+   control, and it disappears with the picker when there is only one scenario. */
+.dgm-picker-label {
+  font-size: 12px;
+  color: var(--dgm-muted);
 }
 
 .dgm-btn:hover,
@@ -322,8 +421,16 @@ body.dgm-standalone {
 .dgm-inline .dgm-bar { display: flex; }
 .dgm-inline .dgm-title { display: none; }
 .dgm-inline .dgm-controls > * { display: none; }
-.dgm-inline .dgm-controls > .dgm-play,
-.dgm-inline .dgm-controls > .dgm-select { display: inline-block; }
+/* The picker used to be restored here, when it lived in the bar's controls. It
+   is under the title now, inside .dgm-heading, which inline mode already shows —
+   so it survives on its own and this rule has nothing to name. Its caption does
+   not survive: an embed's furniture belongs to the page around it. */
+.dgm-inline .dgm-picker-label { display: none; }
+
+/* Present moved into the heading, which inline mode shows — so it is hidden by
+   name here. An embed is a diagram inside somebody's page: it has no business
+   taking the whole screen. */
+.dgm-inline .dgm-present-btn { display: none; }
 
 /* Back and the scenario picker are left to the runtime, which already hides
    each until it has something to offer — Back until the reader has drilled into
@@ -363,12 +470,11 @@ body.dgm-standalone {
    button, or this would stop being true — see the note there. */
 .dgm-present .dgm-authoring { display: none; }
 
-/* Except in a document, where inline mode has already restored Play at
-   `.dgm-inline .dgm-controls > .dgm-play` (0,3,0) and outranks the (0,2,0)
-   rule above — leaving a continuous-run button in the one mode built to
-   advance a beat at a time. Both rules are right on their own; this states
-   which wins where they meet. */
-.dgm-inline.dgm-present .dgm-controls > .dgm-authoring { display: none; }
+/* There was an exception here, for a document: inline mode restored Play in the
+   bar at a higher specificity than the rule above, which left a continuous-run
+   button in the one mode built to advance a beat at a time, so a third rule
+   arbitrated. Play is transport and now lives in the foot, so the bar has
+   nothing to restore and the conflict has no parties. */
 
 /* dgm-nofoot is the mirror image of dgm-authoring, and the pair is why both are
    classes rather than lists of buttons: authoring names what a presentation
@@ -614,19 +720,6 @@ body.dgm-standalone {
   /* No top margin: everything that can stand above this carries its own bottom
      one, so the spacing is owned in one direction throughout the panel. */
   margin: 0 0 8px;
-}
-
-/* A <label> wrapping its control, which is why this is a flex row rather than a
-   grid like the shortcut list: the name goes left, the control right, and the
-   whole row is the click target that focuses it. */
-.dgm-help-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0 0 14px;
-  font-size: 13px;
-  cursor: pointer;
 }
 
 .dgm-help-list {
@@ -1384,6 +1477,11 @@ body.dgm-standalone {
 /* overflow was hidden, for the radius; auto clips the same way and adds the
    scrollbar a long walkthrough needs once the shell stops the column growing
    past the window. */
+/* `align-self: stretch` against the grid's `align-items: start`: a walkthrough
+   with four steps used to leave the panel floating short of the stage beside it,
+   two boxes of different heights with nothing explaining the difference. Only
+   this item stretches — the storyboard panel next to it is content and is still
+   sized by what it holds. */
 .dgm-steps {
   list-style: none;
   counter-reset: dgm-step;
@@ -1391,6 +1489,7 @@ body.dgm-standalone {
   padding: 0;
   border: 1px solid var(--dgm-border);
   border-radius: 12px;
+  align-self: stretch;
   max-height: 100%;
   overflow: auto;
 }
@@ -1511,6 +1610,44 @@ body.dgm-standalone {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* The transport sits at the left of the foot, before the scrub it drives.
+   `flex: none` so the cluster keeps its size and the scrub absorbs the rest of
+   the row — a transport that grew with the window would push the timeline into
+   a sliver on a wide screen. */
+.dgm-transport {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Sized by padding rather than a fixed box, exactly as the rail's buttons are:
+   a 16px glyph in 6px of padding and a 1px border is 30px, which matches the
+   scrub's own height without either being told the other's number. */
+.dgm-tbtn {
+  padding: 6px;
+  line-height: 0;
+  border-radius: 4px;
+}
+
+/* Tighter than the scenario picker: this one holds "0.25x", not the name of a
+   walkthrough, so the padding that suits a sentence wastes the row here. `em`
+   for the width so a reader who has scaled their text keeps a box that fits. */
+.dgm-foot-speed {
+  /* Same reasoning as .dgm-select's padding, at this control's scale: the
+     right-hand room is the chevron's. */
+  padding: 5px 22px 5px 8px;
+  background-position: right 9px center, right 5px center;
+  font-size: 12px;
+  min-width: 5.5em;
+}
+
+/* Play is the one a reader reaches for without looking, so it is the only one
+   tinted. The other two are navigation and read as quiet until hovered. */
+.dgm-tbtn-primary {
+  color: var(--dgm-accent, currentColor);
 }
 
 .dgm-scrub-wrap {

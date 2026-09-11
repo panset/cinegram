@@ -248,40 +248,56 @@ func TestTheRailDoesNotOwnTheTheme(t *testing.T) {
 
 // TestTheThemeControlIsLightAndDark pins the control's whole vocabulary.
 //
-// A press flips the palette on screen, and that is all it can do. A page nobody
-// has pressed it on carries no data-theme at all, so runtime.css's
-// prefers-color-scheme rules answer for it and an OS switch moves the page
-// live — the state every reader arrives in, and the reason there is no third
-// button state to reach it with. The first press ends that following for good,
-// which is deliberate: a reader who asked for dark meant dark, sunrise
-// included.
-func TestTheThemeControlIsLightAndDark(t *testing.T) {
+// A press moves through three: the side you are not seeing, the side you were,
+// and following the system again. Following is the state every reader arrives in
+// — no data-theme at all, so runtime.css's prefers-color-scheme rules answer and
+// an OS switch moves the page live — and it used to be unreachable once a side
+// was pinned, which made clearing localStorage the only way back to it. A pinned
+// side still means pinned: a reader who asked for dark meant dark, sunrise
+// included. Letting go is now a press.
+func TestTheThemeControlCyclesThroughSystem(t *testing.T) {
 	js := string(runtimeJS)
 
-	// Only a side is ever stored. A third value in the key would be a state the
-	// boot script and the control each have to resolve for themselves, and
-	// nothing makes two resolutions of one string agree.
-	if strings.Contains(js, "'system'") {
-		t.Error("runtime.js still names a 'system' theme state; the control writes 'light' or " +
-			"'dark', and no stored value at all is what following the system is")
+	// Following the system is the *absence* of the attribute. A
+	// `data-theme="system"` would match neither palette in the stylesheet and
+	// leave the page with none, so the write has to be a removal.
+	if !strings.Contains(js, "if (state === 'system') document.documentElement.removeAttribute('data-theme');") {
+		t.Error("chooseTheme does not remove data-theme for 'system'; stamping the word would " +
+			"match neither palette and leave the page unstyled")
 	}
-	if strings.Contains(ThemeBootScript(), "'system'") {
-		t.Error("the boot script still tests for a stored 'system'; nothing writes that value " +
-			"any more, and an unrecognised one already falls through to removing the attribute")
-	}
-	if strings.Contains(js, "'theme-system'") {
-		t.Error("the half-shaded system glyph is still in ICONS with nothing left to draw it")
+	if !strings.Contains(js, "'theme-system'") {
+		t.Error("ICONS has no glyph for the system state, so the control cannot show which of " +
+			"three it is in")
 	}
 
-	// The flip is computed from what the reader can see, not from what is
-	// stored. On a page still following the system nothing is stored, so a flip
-	// read off storage has no side to reverse — the first press would pin a
-	// palette by luck, and half the time pin the one already on screen, which
-	// looks exactly like a button that does nothing.
-	if !strings.Contains(js, "chooseTheme(effectiveTheme() === 'dark' ? 'light' : 'dark');") {
-		t.Error("the control's press does not flip the effective theme; the stored choice is " +
-			"absent on a page that is following the system, and it is the palette on screen " +
-			"that a press is understood to reverse")
+	// The one thing that made a third state look dangerous, held to: both
+	// readers collapse every value that is not a side to "follow the system", so
+	// there is no second resolution of 'system' to disagree with the first. The
+	// boot script must keep testing for the two sides only.
+	if !strings.Contains(ThemeBootScript(), "if (t === 'light' || t === 'dark')") {
+		t.Error("the boot script no longer tests for exactly the two sides; it and themeChoice " +
+			"agree about 'system' only by both treating anything else as following the system")
+	}
+	if !strings.Contains(js, "return v === 'light' || v === 'dark' ? v : null;") {
+		t.Error("themeChoice no longer reads a stored 'system' as null, so the attribute the " +
+			"boot script removed and the glyph the control draws can now disagree")
+	}
+
+	// The cycle is derived from what is on screen, not a fixed list. A fixed
+	// order would send the first press from "following" to whichever side came
+	// first, which half the time is the side already showing — a button that
+	// looks like it does nothing.
+	if !strings.Contains(js, "chooseTheme(nextTheme());") {
+		t.Error("the control's press does not go through nextTheme, so the cycle is no longer " +
+			"computed from the palette on screen")
+	}
+	if !strings.Contains(js, "if (!pinned) return other;") {
+		t.Error("nextTheme does not leave 'following' for the side that is not showing; the " +
+			"first press would then pin the palette already on screen half the time")
+	}
+	if !strings.Contains(js, "return 'system';") {
+		t.Error("nextTheme never returns to 'system', which is the whole point: a pinned side " +
+			"was otherwise a dead end short of clearing localStorage")
 	}
 	if !strings.Contains(js, "return themeChoice() || (systemDark() ? 'dark' : 'light');") {
 		t.Error("nothing resolves the effective theme from the stored choice and the system; " +
@@ -489,14 +505,197 @@ func TestTheRailCollapseIsGone(t *testing.T) {
 	}
 }
 
-// TestSpeedLivesInTheSettingsSheet pins where playback speed went.
+// TestASelectLooksLikeOneAndTheScenarioPickerSaysSo pins the affordance.
 //
-// Speed is a preference — one localStorage key for every cinegram this browser
-// opens — and it sat in the rail, which is the narrowest and most contested
-// space on the page, hidden from presenters by dgm-authoring, and reachable
-// only by cycling forwards through five rates. The help overlay was a read-only
-// list with nowhere for a setting to live. Putting one in the other fixes both.
-func TestSpeedLivesInTheSettingsSheet(t *testing.T) {
+// `appearance: none` takes the platform's arrow off along with its styling, and
+// for a long time nothing put one back: every <select> here rendered as a
+// bordered box indistinguishable from a text input. On the scenario picker that
+// was not cosmetic — the control is the only thing telling a reader the
+// walkthrough on screen is one of several, and with no arrow it told them
+// nothing. A diagram with three scenarios read as a diagram with one.
+func TestASelectLooksLikeOneAndTheScenarioPickerSaysSo(t *testing.T) {
+	js, css := string(runtimeJS), string(runtimeCSS)
+
+	// The skin is shared with .dgm-btn; the arrow is not, and the two have to stay
+	// in separate rules. Folding the chevron into the shared one put an arrow on
+	// every button on the page, Present included.
+	skin := ruleBody(t, css, ".dgm-btn,\n.dgm-select {")
+	if !strings.Contains(skin, "appearance: none") {
+		t.Error("the shared button/menu rule no longer sets appearance: none, so a <select> is " +
+			"the platform's control again and the arrow below fights it")
+	}
+	if strings.Contains(skin, "linear-gradient(") {
+		t.Error("the chevron is in the rule .dgm-btn shares, so every button on the page draws " +
+			"a dropdown arrow it cannot open")
+	}
+	// The `background` shorthand resets background-image, which is how the arrow
+	// would go missing again without anybody editing the arrow.
+	if strings.Contains(skin, "background:") {
+		t.Error("the shared rule uses the background shorthand, which resets the chevron's " +
+			"background-image; set background-color instead")
+	}
+
+	// The arrow itself, asserted on its declarations rather than through ruleBody:
+	// both rules' selectors contain the text ".dgm-select {", so an anchor on that
+	// finds whichever comes first and cannot tell them apart.
+	//
+	// Two gradients rather than a background-image, so the arrow is drawn in
+	// currentColor and one declaration serves both palettes.
+	for _, decl := range []string{
+		"linear-gradient(45deg, transparent 50%, currentColor 50%)",
+		"linear-gradient(135deg, currentColor 50%, transparent 50%)",
+		"padding-right: 26px",
+	} {
+		if !strings.Contains(css, decl) {
+			t.Errorf("runtime.css is missing %q; without the arrow a select with "+
+				"appearance: none is a text field to look at", decl)
+		}
+	}
+
+	// Under the title at caption size, with a backstop rather than a cap: a
+	// scenario name is a sentence, and capping it to fit beside the title
+	// truncated the one thing the menu exists to show.
+	picker := ruleBody(t, css, ".dgm-picker {")
+	for _, want := range []string{"max-width", "text-overflow: ellipsis"} {
+		if !strings.Contains(picker, want) {
+			t.Errorf("the scenario picker does not set %s. Rule reads:\n%s", want, picker)
+		}
+	}
+	// The row sizes both of its controls, and pins line-height as well as
+	// font-size: a select and a button do not agree on their intrinsic height from
+	// a font size alone, which is how Present came to stand taller than the picker
+	// beside it.
+	row := ruleBody(t, css, ".dgm-scenario .dgm-btn,\n.dgm-scenario .dgm-select {")
+	for _, want := range []string{"font-size: 12px", "line-height: 16px", "padding-top", "padding-bottom"} {
+		if !strings.Contains(row, want) {
+			t.Errorf("the scenario row does not set %s, so its picker and its Present button "+
+				"are sized apart. Rule reads:\n%s", want, row)
+		}
+	}
+	// Vertical only: the picker's right-hand padding is the chevron's room.
+	if strings.Contains(row, "padding:") {
+		t.Error("the scenario row sets padding wholesale, which takes the chevron's room from " +
+			"the picker and puts the arrow on top of the text")
+	}
+	if !strings.Contains(css, ".dgm-heading-row {") {
+		t.Error("the heading is not two rows, so the scenario has nowhere to sit but beside " +
+			"the title, where it has to be truncated to fit")
+	}
+
+	// And it says what it is, since the arrow alone does not name it.
+	if !strings.Contains(js, "this.picker.setAttribute('aria-label', 'Scenario');") {
+		t.Error("the scenario picker has no accessible name; a screen reader announces an " +
+			"unnamed select, and the option text alone does not say what choosing does")
+	}
+	if !strings.Contains(js, "'Choose one of ' + scenarios.length + ' scenarios'") {
+		t.Error("the picker's title does not say how many there are, which is the fact that " +
+			"makes it worth opening")
+	}
+	// The picker and its caption hide together and nothing else goes with them.
+	// Wrapping them is what keeps Present — which shares the row — on a page with
+	// one scenario, and Present is the way out of presenter mode.
+	if !strings.Contains(js, "this.pickerWrap.style.display = scenarios.length > 1 ? '' : 'none';") {
+		t.Error("the picker and its caption do not hide together when there is one scenario, " +
+			"so a document with one captions a control that is not on the page")
+	}
+	if !strings.Contains(js, "this.scenarioLine.appendChild(this.presentBtn);") {
+		t.Error("Present is not in the scenario row; it sat at the far end of a bar as wide as " +
+			"the page, hanging past the stage's own edge over the step list")
+	}
+	if strings.Contains(js, "this.pickerWrap.appendChild(this.presentBtn)") {
+		t.Error("Present is inside the wrapper that hides with the picker, so a document with " +
+			"one scenario has no way out of presenter mode")
+	}
+	// The heading is shown in inline mode, so Present has to be hidden by name
+	// there — an embed is a diagram inside somebody's page and has no business
+	// taking the whole screen.
+	if !strings.Contains(css, ".dgm-inline .dgm-present-btn") {
+		t.Error("inline mode does not hide Present, which now lives in the heading that inline " +
+			"mode shows")
+	}
+}
+
+// TestTheStepListReachesTheStage pins the two boxes being one height.
+//
+// .dgm-body sets `align-items: start`, which is right for the storyboard panel —
+// content, sized by what it holds — and wrong for the step list, which is
+// furniture beside the stage. A four-step walkthrough left the panel floating
+// short of the diagram next to it, two boxes of different heights with nothing
+// explaining the difference.
+func TestTheStepListReachesTheStage(t *testing.T) {
+	css := string(runtimeCSS)
+
+	steps := ruleBody(t, css, ".dgm-steps {")
+	if !strings.Contains(steps, "align-self: stretch") {
+		t.Errorf("the step list does not stretch, so it stops short of the stage whenever the "+
+			"walkthrough has few steps. Rule reads:\n%s", steps)
+	}
+	// And it still scrolls rather than growing the row, or a thirty-step
+	// walkthrough would stretch the stage to match it instead.
+	if !strings.Contains(steps, "overflow: auto") {
+		t.Error("the step list no longer scrolls; stretching it without that lets a long " +
+			"walkthrough set the height of the stage beside it")
+	}
+	body := ruleBody(t, css, ".dgm-body {")
+	if !strings.Contains(body, "align-items: start") {
+		t.Error(".dgm-body no longer starts its items, so the storyboard panel stretches too — " +
+			"it is content, and its height is what it holds")
+	}
+}
+
+// TestTransportSitsAtTheTimeline pins the cluster that moves the clock.
+//
+// Play used to stand in the top bar while the scrub it drives sat at the bottom,
+// which asked a reader to operate one thing from two places. Previous and next
+// step are the arrow keys made visible: onKey has read them from the beginning,
+// and a reader who never went looking for a shortcut was dragging the scrub and
+// guessing where the beats were.
+func TestTransportSitsAtTheTimeline(t *testing.T) {
+	js, css := string(runtimeJS), string(runtimeCSS)
+
+	if !strings.Contains(js, "el('div', 'dgm-transport')") {
+		t.Error("runtime.js builds no transport cluster, so Play is back to being a bar away " +
+			"from the timeline it drives")
+	}
+	for _, label := range []string{"'Previous step'", "'Next step'"} {
+		if !strings.Contains(js, label) {
+			t.Errorf("the transport has no %s button; the arrow keys stay the only way to "+
+				"walk the beats, which is the thing this cluster exists to surface", label)
+		}
+	}
+	// The glyph is the whole control, so the label cannot be written as text:
+	// textContent would delete the icon. syncPlay writes both together.
+	if strings.Contains(js, "this.playBtn.textContent") {
+		t.Error("something writes playBtn.textContent; the play control is an icon button now " +
+			"and that would delete its glyph — see syncPlay")
+	}
+	if !strings.Contains(js, "Player.prototype.syncPlay") {
+		t.Error("syncPlay is gone, so nothing keeps the play glyph and its accessible name in " +
+			"step with whether the clock is running")
+	}
+	// Play left the bar, so the rule that used to restore it there restores
+	// nothing, and the third rule that arbitrated between them has no parties.
+	if strings.Contains(css, ".dgm-inline .dgm-controls > .dgm-play") {
+		t.Error("runtime.css still restores a bar Play for inline mode; the control is in the " +
+			"foot, which inline shows, so the rule and the conflict it caused are both dead")
+	}
+	if !strings.Contains(css, ".dgm-transport {") {
+		t.Error("runtime.css does not style .dgm-transport, so the cluster is unspaced buttons " +
+			"crowding the scrub")
+	}
+}
+
+// TestSpeedLivesInTheTransport pins where playback speed went, and the invariant
+// underneath every move it has made: a reader can always change the rate, and
+// exactly one control writes the key that remembers it.
+//
+// It began as a button in the rail, cycling one way through five rates. It moved
+// to the settings sheet, because the rail is the narrowest space on the page, a
+// control whose label is its own value has to widen it, and dgm-authoring hid it
+// from presenters. It now sits in the foot beside the transport it belongs to,
+// where a horizontal row has the width the column did not and it is one click
+// instead of three.
+func TestSpeedLivesInTheTransport(t *testing.T) {
 	js, css := string(runtimeJS), string(runtimeCSS)
 
 	for _, gone := range []string{"speedBtn", "cycleSpeed"} {
@@ -505,23 +704,48 @@ func TestSpeedLivesInTheSettingsSheet(t *testing.T) {
 				"what the sheet's menu replaces, and two writers of dgm.speed is one too many", gone)
 		}
 	}
-	if !strings.Contains(js, "el('select', 'dgm-select dgm-help-speed')") {
-		t.Error("the sheet builds no speed menu; with the rail button gone there is then no " +
+	if !strings.Contains(js, "el('select', 'dgm-select dgm-foot-speed')") {
+		t.Error("the foot builds no speed menu; with the rail button gone there is then no " +
 			"way at all for a reader to change the playback rate")
+	}
+	// One writer, because the rate is remembered per origin rather than per
+	// diagram: a second menu would be a second view of one stored preference.
+	if n := strings.Count(js, "self.setSpeed(parseFloat("); n != 1 {
+		t.Errorf("runtime.js has %d speed menus, want exactly 1: the rate is a preference and "+
+			"two controls for it are two things to keep honest", n)
+	}
+	// The ends are open because the material stopped being hand-authored
+	// explainers: `cinegram trace` replays measured time, and a trace is 8ms or
+	// four minutes. Coarseness was a property of cycling, and this is a select.
+	for _, rate := range []string{"0.1", "10"} {
+		if !strings.Contains(js, "var SPEED_PRESETS = [0.1, 0.25, 0.5, 1, 1.5, 2, 4, 10];") {
+			t.Errorf("SPEED_PRESETS no longer reaches %sx, so a trace measured in milliseconds "+
+				"or minutes cannot be watched at a sensible rate", rate)
+			break
+		}
+	}
+	// Additive on purpose: the original five are still there, because the chosen
+	// rate is remembered and dropping one would move somebody's saved preference.
+	for _, rate := range []string{"0.25", "0.5", "1.5", "2"} {
+		if !strings.Contains(js, rate) {
+			t.Errorf("SPEED_PRESETS dropped %sx; widening the range must not move a rate a "+
+				"reader has already chosen and had remembered", rate)
+		}
 	}
 	// The key is the whole point of moving the control rather than deleting it:
 	// a rate chosen here is remembered, and adoptScenarioSpeed is what keeps an
 	// authored `speed:` outranking it.
 	if !strings.Contains(js, "prefSet('dgm.speed', String(v))") {
-		t.Error("the sheet's speed menu no longer writes dgm.speed, so the choice is forgotten " +
+		t.Error("the speed menu no longer writes dgm.speed, so the choice is forgotten " +
 			"on the next page — which is the one thing a preference has to do")
 	}
 	// The sheet is a dialog and stays one: Esc and the backdrop close it, and a
 	// role that went missing would leave a screen reader reading a settings
 	// panel as part of the page behind it.
 	if !strings.Contains(js, "box.setAttribute('role', 'dialog')") {
-		t.Error("the settings sheet is no longer a dialog; it holds a control now, so what it " +
-			"is matters more than it did when it was a list")
+		t.Error("the shortcuts sheet is no longer a dialog; it is an overlay a reader opens " +
+			"deliberately, and a role that went missing would leave a screen reader reading " +
+			"it as part of the page behind it")
 	}
 	// The property cycleSpeed had and a <select> does not: it stepped to the
 	// next preset by value, so a scenario declaring `speed: 0.8` went somewhere
@@ -537,9 +761,11 @@ func TestSpeedLivesInTheSettingsSheet(t *testing.T) {
 				"rounder answer but a different one", part)
 		}
 	}
-	if !strings.Contains(css, ".dgm-help-row {") {
-		t.Error("runtime.css does not style .dgm-help-row, so the sheet's one setting is an " +
-			"unaligned label and menu above a grid that is carefully aligned")
+	// The sheet's one row went with the control. Styling a class nothing builds
+	// is dead weight in a sheet every page carries, so the rule left too.
+	if strings.Contains(css, ".dgm-help-row {") {
+		t.Error("runtime.css still styles .dgm-help-row, which nothing builds now that speed " +
+			"lives in the foot")
 	}
 	if !strings.Contains(css, ".dgm-help-section {") {
 		t.Error("runtime.css does not style .dgm-help-section; the sheet holds settings and " +
@@ -574,6 +800,31 @@ func TestCineAnnouncesItsState(t *testing.T) {
 		t.Error("aria-pressed is not written on the line after the is-on class in setFollow; " +
 			"apart, they are two facts about the camera that can drift, and the one a " +
 			"screen reader hears is the one nobody notices has drifted")
+	}
+}
+
+// TestADeepLinkedTimeCannotLandPastTheEnd pins the clamp on both of the paths
+// that turn a hash `t=` into a time. They used to disagree: applyHash went
+// through seek, which clamps at both ends, while the read on load clamped only
+// at zero — so `#t=30000` on an eighteen-second scenario, which is what
+// `frame --at 30s` builds, put "30.0s / 18.0s" on the clock while the scrubber,
+// bounded by its own max, sat at the end.
+func TestADeepLinkedTimeCannotLandPastTheEnd(t *testing.T) {
+	js := codeOnly(string(runtimeJS))
+
+	if strings.Contains(js, "this.time = Math.max(0, ms);") {
+		t.Error("a hash `t=` is clamped at zero but not at the scenario's duration, so a link " +
+			"past the end leaves the clock reading a time the scrubber has already stopped " +
+			"short of — and a scenario's own end is the only total the page ever shows")
+	}
+	// Twice, once per path, and by the same arithmetic: the guarantee is that
+	// the same link lands in the same place whether it was loaded or navigated
+	// to, which is a property of the two agreeing rather than of either alone.
+	const clamp = "this.time = Math.min(max, Math.max(0, ms));"
+	if n := strings.Count(js, clamp); n != 2 {
+		t.Errorf("runtime.js clamps a `t=` into range %d times, want exactly 2 — seek for a "+
+			"hashchange and the read in build() for a page loaded at a moment. Fewer means "+
+			"one of the two paths accepts a time past the end again", n)
 	}
 }
 
