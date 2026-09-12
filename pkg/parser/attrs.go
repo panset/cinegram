@@ -59,6 +59,12 @@ var frameAttrs = map[string]string{
 	"img": "string", "caption": "string",
 }
 
+// exhibitAttrs tie a document to the element it explains. The path itself is
+// not here: like a view's, it is written after `from`.
+var exhibitAttrs = map[string]string{
+	"for": "string",
+}
+
 // timingAttrs are the keys every action understands: where it sits inside its
 // step, how long it lasts, and how it is captioned and styled.
 var timingAttrs = map[string]string{

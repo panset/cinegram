@@ -607,3 +607,38 @@ func min3(a, b, c int) int {
 	}
 	return a
 }
+
+// validateExhibits checks what can be known about an exhibit without a
+// filesystem: that its id is unique, that its path is something the loader can
+// resolve, and that the element it is `for` exists.
+func validateExhibits(doc *ast.Document, t *symbol.Table, b *diag.Bag) {
+	ids := make(map[string]bool, len(doc.Exhibits))
+	for _, x := range doc.Exhibits {
+		if ids[x.ID] {
+			b.Errorf(x.At, "duplicate exhibit id %q", x.ID)
+			continue
+		}
+		ids[x.ID] = true
+
+		if x.Path == "" {
+			b.ErrorHintf(x.PathAt, "give the path to the file to show",
+				"exhibit %q has an empty path", x.ID)
+		} else if filepath.IsAbs(x.Path) {
+			b.ErrorHintf(x.PathAt, "use a path relative to this file so the document stays portable",
+				"exhibit %q has an absolute path", x.ID)
+		}
+
+		v, ok := x.Attrs.Get("for")
+		if !ok {
+			continue
+		}
+		if _, isNode := t.Node(v.Raw); isNode {
+			continue
+		}
+		if _, isGroup := t.Group(v.Raw); isGroup {
+			continue
+		}
+		hint, _ := suggestFrom(v.Raw, knownNames(t), "elements")
+		b.ErrorHintf(v.At, hint, "exhibit %q is for %q, which is not in the diagram", x.ID, v.Raw)
+	}
+}

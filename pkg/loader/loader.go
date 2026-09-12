@@ -14,6 +14,7 @@
 package loader
 
 import (
+	"bytes"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -47,6 +48,11 @@ type Unit struct {
 	// view paths resolve here: the parser never touches a filesystem, and the
 	// emitted page has to work from one anyway.
 	FrameData map[string]string
+
+	// ExhibitData maps each exhibit path, exactly as written, to the text of
+	// the file. An exhibit is shown as the characters it contains, so the
+	// page carries them as a JSON string rather than a data URI.
+	ExhibitData map[string]string
 }
 
 // Bundle is every document reachable from an entry file.
@@ -102,6 +108,7 @@ func Load(path string, readFile ReadFileFunc) (*Bundle, error) {
 	for i := 0; i < len(bundle.Units); i++ {
 		u := bundle.Units[i]
 		loadFrames(u, readFile)
+		loadExhibits(u, readFile)
 
 		for _, decl := range u.Result.Document.Views {
 			if decl.Path == "" || filepath.IsAbs(decl.Path) {
@@ -134,13 +141,14 @@ func Load(path string, readFile ReadFileFunc) (*Bundle, error) {
 func parseUnit(path, viewID, title string, content []byte) *Unit {
 	res, bag := parser.Parse(path, string(content))
 	return &Unit{
-		ViewID:    viewID,
-		Title:     title,
-		Path:      path,
-		Result:    res,
-		Bag:       bag,
-		Views:     map[string]string{},
-		FrameData: map[string]string{},
+		ViewID:      viewID,
+		Title:       title,
+		Path:        path,
+		Result:      res,
+		Bag:         bag,
+		Views:       map[string]string{},
+		FrameData:   map[string]string{},
+		ExhibitData: map[string]string{},
 	}
 }
 
@@ -260,4 +268,38 @@ func slug(s string) string {
 		}
 	}
 	return strings.Trim(b.String(), "-")
+}
+
+// loadExhibits reads every exhibit this unit declares.
+//
+// The file is carried as text, not inlined as a data URI: an exhibit is shown
+// as the characters it contains, selectable at full size. The one check is the
+// cheap one — a NUL byte says this is not text — rather than a guess at what
+// kind of text it is; YAML, JSON, a log and a config file are all exhibits.
+// An unreadable file is reported against the path and loading continues, the
+// same way a broken `view` or `img` is.
+func loadExhibits(u *Unit, readFile ReadFileFunc) {
+	dir := filepath.Dir(u.Path)
+
+	for _, x := range u.Result.Document.Exhibits {
+		if x.Path == "" || filepath.IsAbs(x.Path) {
+			continue // already reported by validation
+		}
+		if _, done := u.ExhibitData[x.Path]; done {
+			continue // two exhibits may show the same file
+		}
+
+		data, err := readFile(filepath.Clean(filepath.Join(dir, x.Path)))
+		if err != nil {
+			u.Bag.ErrorHintf(x.PathAt, hintFor(err),
+				"cannot read exhibit %q from %s", x.ID, x.Path)
+			continue
+		}
+		if bytes.IndexByte(data, 0) >= 0 {
+			u.Bag.ErrorHintf(x.PathAt, "an exhibit shows text: a manifest, a config file, a log excerpt",
+				"exhibit %q is not a text file: %s", x.ID, x.Path)
+			continue
+		}
+		u.ExhibitData[x.Path] = string(data)
+	}
 }

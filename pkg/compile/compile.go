@@ -44,7 +44,7 @@ const (
 // A document that declares views compiles here with those bindings unresolved —
 // use CompileBundle to follow them.
 func Compile(doc *ast.Document, table *symbol.Table, bag *diag.Bag) *ir.Timeline {
-	v := compileView(doc, table, "main", "", nil, nil, bag)
+	v := compileView(doc, table, "main", "", nil, nil, nil, bag)
 	return &ir.Timeline{Version: ir.Version, Root: v.ID, Views: []ir.View{v}}
 }
 
@@ -54,7 +54,7 @@ func CompileBundle(b *loader.Bundle) *ir.Timeline {
 	t := &ir.Timeline{Version: ir.Version, Root: b.Root}
 	for _, u := range b.Units {
 		t.Views = append(t.Views, compileView(
-			u.Result.Document, u.Result.Symbols, u.ViewID, u.Title, u.Views, u.FrameData, u.Bag))
+			u.Result.Document, u.Result.Symbols, u.ViewID, u.Title, u.Views, u.FrameData, u.ExhibitData, u.Bag))
 	}
 	return t
 }
@@ -62,8 +62,9 @@ func CompileBundle(b *loader.Bundle) *ir.Timeline {
 // compileView lowers one document. aliases maps the local `view` names the
 // document used onto canonical view ids; it is nil when compiling standalone.
 // frameData maps each storyboard image path onto the data URI the loader read
-// for it, and is likewise nil when there was no filesystem to read from.
-func compileView(doc *ast.Document, table *symbol.Table, id, title string, aliases, frameData map[string]string, bag *diag.Bag) ir.View {
+// for it, and exhibitData each exhibit path onto the file's text; both are
+// likewise nil when there was no filesystem to read from.
+func compileView(doc *ast.Document, table *symbol.Table, id, title string, aliases, frameData, exhibitData map[string]string, bag *diag.Bag) ir.View {
 	v := ir.View{
 		ID:      id,
 		Title:   title,
@@ -116,6 +117,7 @@ func compileView(doc *ast.Document, table *symbol.Table, id, title string, alias
 	}
 
 	v.Storyboard = compileStoryboard(doc.Storyboards, frameData)
+	v.Exhibits = compileExhibits(doc.Exhibits, exhibitData)
 	v.Bindings, v.Hidden = compileBindings(doc.Interactions, table, aliases)
 	return v
 }
@@ -146,6 +148,26 @@ func compileStoryboard(storyboards []*ast.Storyboard, frameData map[string]strin
 				Image:   frameData[f.Img],
 			})
 		}
+	}
+	return out
+}
+
+// compileExhibits carries every exhibit in declaration order, which is the
+// order the drawer lists them in. One whose file failed to load compiles with an
+// empty Text rather than being dropped — compilation stays total, and the
+// loader has already put the error in the bag.
+func compileExhibits(exhibits []*ast.Exhibit, data map[string]string) []ir.Exhibit {
+	if len(exhibits) == 0 {
+		return nil
+	}
+	out := make([]ir.Exhibit, 0, len(exhibits))
+	for _, x := range exhibits {
+		out = append(out, ir.Exhibit{
+			ID:    x.ID,
+			Title: x.Title,
+			Text:  data[x.Path],
+			For:   x.Attrs.String("for"),
+		})
 	}
 	return out
 }

@@ -48,6 +48,11 @@ type View struct {
 	// scenario of this view resolves against one list.
 	Storyboard *Storyboard `json:"storyboard,omitempty"`
 
+	// Exhibits are the documents behind the diagram — a manifest, a config
+	// file, a log excerpt — carried as text so the page stays self-contained,
+	// in declaration order.
+	Exhibits []Exhibit `json:"exhibits,omitempty"`
+
 	// Hidden lists elements that start concealed because a reveal binding
 	// points at them. It is derived during compilation, not authored: being
 	// revealable is what makes an element initially hidden.
@@ -89,6 +94,19 @@ type Frame struct {
 	ID      string `json:"id"`
 	Caption string `json:"caption,omitempty"`
 	Image   string `json:"image,omitempty"`
+}
+
+// Exhibit is a document shown beside the diagram: a card in a drawer until a
+// reader zooms it, readable then, and a card again after.
+//
+// Text is the file's content verbatim. It is empty when the document was
+// compiled without a loader to read it — the loader has then already reported
+// why — so a renderer shows the card and nothing in it rather than nothing.
+type Exhibit struct {
+	ID    string `json:"id"`
+	Title string `json:"title,omitempty"`
+	Text  string `json:"text"`
+	For   string `json:"for,omitempty"` // the node or group this document explains, lit while it is open
 }
 
 // Diagram carries the static structure, including the Mermaid source a

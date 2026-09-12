@@ -27,6 +27,7 @@ type Document struct {
 	Scenarios    []*Scenario
 	Storyboards  []*Storyboard // what the human sees while the diagram animates
 	Views        []*ViewDecl   // documents a click can drill into
+	Exhibits     []*Exhibit    // documents pinned to the stage for a reader to open
 	Interactions []*Binding    // what each clickable element does
 }
 
@@ -427,6 +428,19 @@ type ViewDecl struct {
 	Path   string // path as written, relative to the declaring file
 	At     source.Pos
 	PathAt source.Pos // reported against when the path cannot be resolved
+}
+
+// Exhibit is a document kept beside the stage — a manifest, a config file, a
+// log excerpt — that a reader opens next to the diagram it explains. It shares
+// the discipline of a view and a storyboard frame: a path as written, resolved
+// and read by pkg/loader, never bytes.
+type Exhibit struct {
+	ID     string
+	Title  string // shown on the card, or "" to fall back to the id
+	Path   string // path as written, relative to the declaring file
+	Attrs  Attrs  // for
+	At     source.Pos
+	PathAt source.Pos // reported against when the file cannot be read
 }
 
 // BindingKind names what clicking an element does.

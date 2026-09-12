@@ -1,0 +1,18 @@
+%% Exhibits compile in declaration order with the element they are for.
+%% Compiled standalone there is no loader to read the files, so Text is empty
+%% here; the loader test covers the read.
+flowchart LR
+  ing[Ingress]
+  svc[Service]
+  pod[Pod]
+
+  ing --> svc
+  svc --> pod
+
+exhibit deploy "Deployment manifest" from "manifests/deployment.yaml" { for: pod }
+exhibit service from "manifests/service.yaml" { for: svc }
+
+scenario "one request" { }
+  step in "The request arrives" {
+    flow ing -> svc -> pod { dur: 800ms }
+  }

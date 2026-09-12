@@ -1,0 +1,17 @@
+%% Exhibits: documents pinned to the stage, tied to the elements they explain.
+flowchart LR
+  ing[Ingress]
+  svc[Service]
+  pod[Pod]
+
+  ing --> svc
+  svc --> pod
+
+exhibit deploy "Deployment manifest" from "manifests/deployment.yaml" { for: pod }
+exhibit service from "manifests/service.yaml" { for: svc }
+exhibit notes "Runbook excerpt" from "runbook.md"
+
+scenario "one request" { }
+  step in "The request arrives" {
+    flow ing -> svc -> pod { dur: 800ms }
+  }

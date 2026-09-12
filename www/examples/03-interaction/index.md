@@ -14,3 +14,7 @@ A layered service, walked one layer at a time.
 
 A data platform, deliberately too big for one screen.
 
+## [one request, three manifests](04-manifests-in-the-margin.md)
+
+The manifests behind the boxes, in a drawer on the edge of the stage.
+

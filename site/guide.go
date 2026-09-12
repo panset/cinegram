@@ -33,7 +33,7 @@ var guidePages = []guidePage{
 		Slug:     "02-storytelling",
 		Title:    "Telling the story",
 		Summary:  "Turning a diagram that moves into one that explains: narration, state that persists, where to look, and what happens when it goes wrong.",
-		Sections: []string{"Narration", "Persistent state", "Attention", "Storyboard", "Failure paths"},
+		Sections: []string{"Narration", "Persistent state", "Attention", "Storyboard", "Exhibits", "Failure paths"},
 	},
 	{
 		Slug:     "03-presenting",

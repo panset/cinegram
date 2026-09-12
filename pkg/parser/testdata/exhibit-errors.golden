@@ -1,0 +1,39 @@
+diagram: flowchart (flowchart LR)
+direction: LR
+
+nodes:
+  a          label="A"                      shape=rect      
+  b          label="B"                      shape=rect      
+
+edges:
+  e0   a -> b style=normal head=arrow
+
+exhibits:
+  empty      title=""                   from=""
+  absolute   title=""                   from="/etc/config.yaml"
+  twice      title=""                   from="one.yaml"
+  twice      title=""                   from="two.yaml"
+  orphan     title=""                   from="three.yaml" for="c"
+  sideways   title=""                   from="four.yaml" colour="red"
+
+scenario "s"
+  step one "one"
+    flow a -> b
+
+diagnostics:
+  7:9: error: expected an exhibit name but found string "no id"
+    hint: write `exhibit <id> from "file.yaml"`
+  8:38: error: expected `from` but found string "x.yaml"
+    hint: write `exhibit noFrom from "file.yaml"`
+  9:23: error: expected a quoted file path but found "x"
+    hint: the path must be quoted, e.g. `from "manifests/deployment.yaml"`
+  9:24: error: unexpected character "."
+  10:20: error: exhibit "empty" has an empty path
+    hint: give the path to the file to show
+  11:23: error: exhibit "absolute" has an absolute path
+    hint: use a path relative to this file so the document stays portable
+  13:1: error: duplicate exhibit id "twice"
+  14:41: error: exhibit "orphan" is for "c", which is not in the diagram
+    hint: did you mean a?
+  15:45: warning: unknown exhibit attribute "colour"
+    hint: known here: for

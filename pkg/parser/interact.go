@@ -22,6 +22,7 @@ var topLevelKeywords = map[string]bool{
 	"storyboard": true,
 	"view":       true,
 	"interact":   true,
+	"exhibit":    true,
 }
 
 // isTopLevelKeyword reports whether word opens a block that belongs to the
@@ -42,6 +43,7 @@ type topLevel struct {
 	Scenarios    []*ast.Scenario
 	Storyboards  []*ast.Storyboard
 	Views        []*ast.ViewDecl
+	Exhibits     []*ast.Exhibit
 	Interactions []*ast.Binding
 }
 
@@ -71,6 +73,10 @@ func parseTopLevel(c *source.Cursor, b *diag.Bag) topLevel {
 			if v := parseViewDecl(s); v != nil {
 				out.Views = append(out.Views, v)
 			}
+		case s.atKeyword("exhibit"):
+			if x := parseExhibit(s); x != nil {
+				out.Exhibits = append(out.Exhibits, x)
+			}
 		case s.atKeyword("interact"):
 			out.Interactions = append(out.Interactions, parseInteract(s)...)
 		default:
@@ -86,8 +92,8 @@ func parseTopLevel(c *source.Cursor, b *diag.Bag) topLevel {
 				break
 			}
 
-			b.ErrorHintf(t.at, "blocks start with `scenario`, `storyboard`, `view` or `interact`",
-				"expected `scenario`, `storyboard`, `view` or `interact` but found %s", describe(t))
+			b.ErrorHintf(t.at, "blocks start with `scenario`, `storyboard`, `view`, `exhibit` or `interact`",
+				"expected `scenario`, `storyboard`, `view`, `exhibit` or `interact` but found %s", describe(t))
 
 			// Recovery must always advance. Every skip above stops rather than
 			// consuming under some condition, and a token that satisfies all of

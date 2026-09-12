@@ -104,6 +104,7 @@ suggestion rather than a silent no-op.
 | `variant`, `until` | scenario | Inherit another scenario's opening steps — see [Failure paths](02-storytelling.md#failure-paths). |
 | `outcome` | scenario | `ok` or `fail`. A failure is marked `✕` in the scenario picker. |
 | `img`, `caption` | storyboard frame | The picture to show and the line under it. At least one is required. |
+| `for` | exhibit | The element a document in the drawer explains, lit while its card is hovered or zoomed. |
 
 `color` reaches the page as a `--dgm-color` custom property on the particle or
 the node, which `runtime.css` reads with the theme colour as its fallback — so a

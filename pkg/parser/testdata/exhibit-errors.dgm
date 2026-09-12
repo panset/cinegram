@@ -1,0 +1,20 @@
+%% Every way an exhibit declaration can go wrong, and what it is told.
+flowchart LR
+  a[A]
+  b[B]
+  a --> b
+
+exhibit "no id" from "x.yaml"
+exhibit noFrom "Missing the keyword" "x.yaml"
+exhibit unquoted from x.yaml
+exhibit empty from ""
+exhibit absolute from "/etc/config.yaml"
+exhibit twice from "one.yaml"
+exhibit twice from "two.yaml"
+exhibit orphan from "three.yaml" { for: c }
+exhibit sideways from "four.yaml" { colour: red }
+
+scenario "s" { }
+  step one "one" {
+    flow a -> b
+  }

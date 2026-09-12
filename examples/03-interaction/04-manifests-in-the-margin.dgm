@@ -1,0 +1,51 @@
+%% The manifests behind the boxes, in a drawer on the edge of the stage.
+%% ---
+%% A diagram of a Kubernetes request path says there is a Service in front of
+%% a Deployment. It does not show the YAML that makes either exist, and the
+%% person reading the diagram usually wants to see it. An `exhibit` puts the
+%% file in the drawer on the stage's left edge: hover the handle for the
+%% cards, click a card to zoom the file, click anywhere to put it away. Each
+%% exhibit is `for` the element it explains, which lights up while its card
+%% is hovered or zoomed, so the file and the box are read as one thing.
+flowchart LR
+  client[Client]
+  ing[Ingress]
+
+  subgraph ns[namespace: shop]
+    svc[Service: orders]
+    dep[Deployment: orders]
+    pod1[Pod]
+    pod2[Pod]
+  end
+
+  client --> ing
+  ing --> svc
+  svc --> pod1
+  svc --> pod2
+  dep -. manages .-> pod1
+  dep -. manages .-> pod2
+
+exhibit ingress "ingress.yaml"    from "manifests/ingress.yaml"    { for: ing }
+exhibit service "service.yaml"    from "manifests/service.yaml"    { for: svc }
+exhibit deploy  "deployment.yaml" from "manifests/deployment.yaml" { for: dep }
+
+scenario "one request, three manifests" { speed: 1.0 }
+
+  step host "The Ingress matches the host" {
+    desc: "The rule in ingress.yaml is what routes shop.example.com to the orders Service. Open the drawer on the left and click the card to read it; the Ingress lights up while you do."
+    flow client -> ing { label: "GET /orders", dur: 700ms }
+    highlight ing { style: active }
+  }
+
+  step select "The Service selects by label" {
+    desc: "service.yaml has a selector, not a list of pods. Whatever carries app: orders is an endpoint, which is why the Deployment and the Service never mention each other."
+    flow ing -> svc { dur: 600ms }
+    highlight svc { style: active }
+  }
+
+  step endpoints "The Deployment keeps two of them running" {
+    desc: "deployment.yaml asks for replicas: 2 with that same label. Change the number there and the Service picks up the new pods without a change of its own."
+    flow svc -> pod1 { label: "10.1.2.3:8080", dur: 600ms }
+    dim pod2
+    highlight dep { style: busy }
+  }

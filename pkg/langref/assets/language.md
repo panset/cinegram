@@ -18,8 +18,8 @@ scenario "<name>" { <attrs> }             (one or more)
   Never rewrite it; only append blocks after it. Supported diagram types:
   `flowchart`/`graph`, `sequenceDiagram` and `stateDiagram-v2`
   (`stateDiagram` too).
-- The four top-level keywords are `scenario`, `storyboard`, `view`,
-  `interact` — any order, any number of each.
+- The five top-level keywords are `scenario`, `storyboard`, `view`,
+  `exhibit`, `interact` — any order, any number of each.
 - `%%` comments work in the animation half too. **Never emit an empty `%%`
   line** — it breaks Mermaid's own comment stripping.
 
@@ -213,6 +213,29 @@ storyboard "What the person signing in sees" {
   (it costs the chain nothing). A step that ends on a new screen needs enough
   `dur` to look at it.
 
+## Exhibits
+
+```
+exhibit deploy "deployment.yaml" from "manifests/deployment.yaml" { for: dep }
+exhibit svc    "service.yaml"    from "manifests/service.yaml"    { for: svc }
+```
+
+The files behind the diagram: the manifest, config file or log excerpt it is
+about. They live in a drawer on the stage's left edge, a slim handle at rest.
+Hovering the handle slides out a panel of cards, one per file; a click on the
+handle pins it open. Clicking a card zooms the file to a readable, scrollable
+copy over the diagram; a click anywhere else, or Esc, puts it away.
+
+- One declaration per file, at top level, in the `view` shape: the path is
+  quoted after `from`, relative to the declaring file, and read as **text**
+  (YAML, JSON, a log, anything without NUL bytes). The title is optional and
+  falls back to the id.
+- `for: <node or group>` ties the card to the element it explains, which is
+  lit while the card is hovered or zoomed. It counts as a reference for the
+  unreferenced-element warning.
+- Cards are listed in declaration order. Exhibits are per view; a
+  drilled-into view carries its own drawer.
+
 ## Variants (failure paths)
 
 ```
@@ -283,7 +306,7 @@ fix (a missing edge suggests what to add or reroute).
 
 ```
 document    := [frontmatter] diagram-header diagram-body { toplevel }
-toplevel    := scenario | storyboard | viewdecl | interact
+toplevel    := scenario | storyboard | viewdecl | exhibit | interact
 scenario    := "scenario" [ident|string] ["{" attrs "}"] { step }
 step        := "step" [ident] [string] "{" { key ":" value | action } "}"
 action      := "flow" ident {"->" ident} [attrblock]          // ≥2 idents, one line
@@ -295,6 +318,7 @@ action      := "flow" ident {"->" ident} [attrblock]          // ≥2 idents, on
 attrblock   := "{" { ident ":" value [","] } "}"              // opens on the action's line
 storyboard  := "storyboard" [string] "{" { "frame" ident "{" ("img"|"caption") ":" string … "}" } "}"
 viewdecl    := "view" ident [string] "from" string
+exhibit     := "exhibit" ident [string] "from" string [attrblock]      // attrs: for
 interact    := "interact" "{" { "click" ident "->" ("view" ident | "reveal" ident {"," ident}
                               | "step" ident | "url" string) [attrblock] } "}"
 ```

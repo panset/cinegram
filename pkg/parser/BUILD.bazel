@@ -6,6 +6,7 @@ go_library(
         "attrs.go",
         "comments.go",
         "coverage.go",
+        "exhibit.go",
         "flowchart.go",
         "interact.go",
         "link.go",

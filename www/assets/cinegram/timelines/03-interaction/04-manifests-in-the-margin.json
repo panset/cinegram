@@ -1,0 +1,221 @@
+{
+  "version": 2,
+  "root": "04-manifests-in-the-margin",
+  "views": [
+    {
+      "id": "04-manifests-in-the-margin",
+      "title": "one request, three manifests",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% The manifests behind the boxes, in a drawer on the edge of the stage.\n%% ---\n%% A diagram of a Kubernetes request path says there is a Service in front of\n%% a Deployment. It does not show the YAML that makes either exist, and the\n%% person reading the diagram usually wants to see it. An `exhibit` puts the\n%% file in the drawer on the stage's left edge: hover the handle for the\n%% cards, click a card to zoom the file, click anywhere to put it away. Each\n%% exhibit is `for` the element it explains, which lights up while its card\n%% is hovered or zoomed, so the file and the box are read as one thing.\nflowchart LR\n  client[Client]\n  ing[Ingress]\n  subgraph ns[namespace: shop]\n    svc[Service: orders]\n    dep[Deployment: orders]\n    pod1[Pod]\n    pod2[Pod]\n  end\n  client --\u003e ing\n  ing --\u003e svc\n  svc --\u003e pod1\n  svc --\u003e pod2\n  dep -. manages .-\u003e pod1\n  dep -. manages .-\u003e pod2\n"
+      },
+      "nodes": [
+        {
+          "id": "client",
+          "label": "Client",
+          "shape": "rect"
+        },
+        {
+          "id": "ing",
+          "label": "Ingress",
+          "shape": "rect"
+        },
+        {
+          "id": "svc",
+          "label": "Service: orders",
+          "shape": "rect",
+          "group": "ns"
+        },
+        {
+          "id": "dep",
+          "label": "Deployment: orders",
+          "shape": "rect",
+          "group": "ns"
+        },
+        {
+          "id": "pod1",
+          "label": "Pod",
+          "shape": "rect",
+          "group": "ns"
+        },
+        {
+          "id": "pod2",
+          "label": "Pod",
+          "shape": "rect",
+          "group": "ns"
+        }
+      ],
+      "groups": [
+        {
+          "id": "ns",
+          "label": "namespace: shop",
+          "children": [
+            "svc",
+            "dep",
+            "pod1",
+            "pod2"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "client",
+          "to": "ing",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "ing",
+          "to": "svc",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e2",
+          "from": "svc",
+          "to": "pod1",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e3",
+          "from": "svc",
+          "to": "pod2",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e4",
+          "from": "dep",
+          "to": "pod1",
+          "label": "manages",
+          "style": "dotted",
+          "head": "arrow"
+        },
+        {
+          "id": "e5",
+          "from": "dep",
+          "to": "pod2",
+          "label": "manages",
+          "style": "dotted",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "one request, three manifests",
+          "duration": 1900,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "host",
+              "name": "The Ingress matches the host",
+              "desc": "The rule in ingress.yaml is what routes shop.example.com to the orders Service. Open the drawer on the left and click the card to read it; the Ingress lights up while you do.",
+              "start": 0,
+              "end": 700,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 700,
+                  "edge": "e0",
+                  "from": "client",
+                  "to": "ing",
+                  "label": "GET /orders"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 0,
+                  "end": 700,
+                  "target": "ing",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "select",
+              "name": "The Service selects by label",
+              "desc": "service.yaml has a selector, not a list of pods. Whatever carries app: orders is an endpoint, which is why the Deployment and the Service never mention each other.",
+              "start": 700,
+              "end": 1300,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 700,
+                  "end": 1300,
+                  "edge": "e1",
+                  "from": "ing",
+                  "to": "svc"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 700,
+                  "end": 1300,
+                  "target": "svc",
+                  "style": "active"
+                }
+              ]
+            },
+            {
+              "id": "endpoints",
+              "name": "The Deployment keeps two of them running",
+              "desc": "deployment.yaml asks for replicas: 2 with that same label. Change the number there and the Service picks up the new pods without a change of its own.",
+              "start": 1300,
+              "end": 1900,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 1300,
+                  "end": 1900,
+                  "edge": "e2",
+                  "from": "svc",
+                  "to": "pod1",
+                  "label": "10.1.2.3:8080"
+                },
+                {
+                  "kind": "dim",
+                  "start": 1300,
+                  "end": 1900,
+                  "target": "pod2"
+                },
+                {
+                  "kind": "highlight",
+                  "start": 1300,
+                  "end": 1900,
+                  "target": "dep",
+                  "style": "busy"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "exhibits": [
+        {
+          "id": "ingress",
+          "title": "ingress.yaml",
+          "text": "apiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: orders\n  namespace: shop\n  annotations:\n    nginx.ingress.kubernetes.io/rewrite-target: /\nspec:\n  ingressClassName: nginx\n  rules:\n    - host: shop.example.com\n      http:\n        paths:\n          - path: /orders\n            pathType: Prefix\n            backend:\n              service:\n                name: orders\n                port:\n                  number: 80\n",
+          "for": "ing"
+        },
+        {
+          "id": "service",
+          "title": "service.yaml",
+          "text": "apiVersion: v1\nkind: Service\nmetadata:\n  name: orders\n  namespace: shop\nspec:\n  type: ClusterIP\n  selector:\n    app: orders          # whatever carries this label is an endpoint\n  ports:\n    - name: http\n      port: 80\n      targetPort: 8080\n",
+          "for": "svc"
+        },
+        {
+          "id": "deploy",
+          "title": "deployment.yaml",
+          "text": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: orders\n  namespace: shop\nspec:\n  replicas: 2            # the Service never learns this number\n  selector:\n    matchLabels:\n      app: orders\n  template:\n    metadata:\n      labels:\n        app: orders\n    spec:\n      containers:\n        - name: api\n          image: shop/orders:1.4.2\n          ports:\n            - containerPort: 8080\n          readinessProbe:\n            httpGet:\n              path: /healthz\n              port: 8080\n",
+          "for": "dep"
+        }
+      ]
+    }
+  ]
+}

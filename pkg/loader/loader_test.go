@@ -219,6 +219,44 @@ func TestBadFrameImagesAreReportedNotFatal(t *testing.T) {
 	}
 }
 
+// TestExhibitsAreReadAsText checks that an exhibit's file arrives verbatim,
+// keyed by the path as written, and that a file that is not text is reported
+// rather than shown.
+func TestExhibitsAreReadAsText(t *testing.T) {
+	files := map[string]string{
+		"diagrams/top.dgm": doc(
+			"exhibit deploy \"Deployment\" from \"manifests/deploy.yaml\" { for: a }\n" +
+				"exhibit again from \"manifests/deploy.yaml\"\n" +
+				"exhibit gone from \"manifests/nope.yaml\"\n" +
+				"exhibit binary from \"logo.png\"\n\n" +
+				"scenario \"x\"\n  step s \"walk\" {\n    flow a -> b\n  }\n"),
+		// Resolved relative to the declaring file, exactly as a view path is.
+		"diagrams/manifests/deploy.yaml": "kind: Deployment\nspec:\n  replicas: 2   # </script>\n",
+		"diagrams/logo.png":              "\x89PNG\r\n\x00\x00",
+	}
+
+	b, err := Load("diagrams/top.dgm", fakeFS(files))
+	if err != nil {
+		t.Fatalf("Load returned a fatal error for an unreadable exhibit: %v", err)
+	}
+	data := b.Units[0].ExhibitData
+	if got, want := data["manifests/deploy.yaml"], files["diagrams/manifests/deploy.yaml"]; got != want {
+		t.Errorf("exhibit text = %q, want the file verbatim %q", got, want)
+	}
+	// Two exhibits naming one file read it once and share the entry; the
+	// missing and the binary one contribute nothing.
+	if len(data) != 1 {
+		t.Errorf("ExhibitData = %v, want exactly the one readable file", data)
+	}
+	got := b.Bags()[0].String()
+	if !strings.Contains(got, `cannot read exhibit "gone"`) {
+		t.Errorf("missing exhibit not reported:\n%s", got)
+	}
+	if !strings.Contains(got, `exhibit "binary" is not a text file`) {
+		t.Errorf("binary exhibit not reported:\n%s", got)
+	}
+}
+
 func TestMissingEntryFileIsFatal(t *testing.T) {
 	if _, err := Load("nope.dgm", fakeFS(nil)); err == nil {
 		t.Fatal("Load succeeded for a missing entry file")

@@ -1320,6 +1320,201 @@ body.dgm-standalone {
   color: var(--dgm-muted);
 }
 
+/* --- exhibits: the drawer ---------------------------------------------------
+ *
+ * The files behind the diagram, in a drawer on the stage's left edge. At rest
+ * it is a slim handle with the file count written down its length; open, a
+ * panel of cards slides out over the picture, each a thumbnail of one file.
+ * Zooming a card puts a readable copy in the middle of the stage. The strip
+ * the handle occupies is reserved from the stage's padding, the way the tool
+ * rail's is on the right, so a diagram scaled to fit never lands under it.
+ * The z-index is the minimap's tier: above pills and notes, below the
+ * lightbox and the help sheet. */
+.dgm-stage.dgm-has-exhibits { padding-left: 46px; }
+
+.dgm-drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 9;
+  display: flex;
+  flex-direction: row;
+  pointer-events: none;
+}
+
+.dgm-drawer-handle {
+  pointer-events: auto;
+  width: 26px;
+  margin: 0;
+  padding: 10px 0;
+  box-sizing: border-box;
+  border: 0;
+  border-right: 1px solid var(--dgm-border);
+  border-radius: 12px 0 0 12px;
+  background: var(--dgm-panel);
+  color: var(--dgm-muted);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+/* The chevron points the way the panel will move, and turns round once it
+   has: the same glyph reads "open me" shut and "put me away" open. */
+.dgm-drawer-chevron {
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 600;
+  transition: transform 0.18s ease;
+}
+
+.dgm-drawer.is-open .dgm-drawer-chevron { transform: rotate(180deg); }
+
+.dgm-drawer-handle:hover,
+.dgm-drawer.is-open .dgm-drawer-handle { color: var(--dgm-accent); }
+.dgm-drawer.is-pinned .dgm-drawer-handle { background: var(--dgm-bg); }
+
+.dgm-drawer-handle:focus-visible {
+  outline: 2px solid var(--dgm-accent);
+  outline-offset: -2px;
+}
+
+.dgm-drawer-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Closed, the panel has no width and takes no clicks; open, it is a column
+   of cards the reader can scroll. Width animates rather than a transform so
+   the text is crisp the moment it stops. */
+.dgm-drawer-panel {
+  pointer-events: none;
+  width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  background: var(--dgm-panel);
+  border-right: 1px solid var(--dgm-border);
+  box-shadow: 6px 0 18px rgba(0, 0, 0, 0.18);
+  transition: width 0.18s ease, padding 0.18s ease;
+}
+
+.dgm-drawer.is-open .dgm-drawer-panel {
+  pointer-events: auto;
+  width: 248px;
+  padding: 12px;
+  overflow-y: auto;
+}
+
+.dgm-exhibit {
+  flex: none;
+  max-height: 104px;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 1px solid var(--dgm-border);
+  border-radius: 8px;
+  background: var(--dgm-bg);
+  cursor: zoom-in;
+  transition: border-color 0.15s ease;
+}
+
+.dgm-exhibit:hover,
+.dgm-exhibit:focus-visible {
+  border-color: var(--dgm-accent);
+  outline: none;
+}
+
+.dgm-exhibit-title {
+  padding: 6px 8px 4px;
+  border-bottom: 1px solid var(--dgm-border);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dgm-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dgm-exhibit-body {
+  margin: 0;
+  padding: 6px 8px;
+  font: 8px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--dgm-muted);
+  white-space: pre;
+  overflow: hidden;
+  tab-size: 2;
+}
+
+/* The zoom: one file, readable, in the middle of the stage. */
+.dgm-exhibit-zoom {
+  position: absolute;
+  z-index: 10;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(620px, calc(100% - 48px));
+  max-height: calc(100% - 48px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--dgm-accent);
+  border-radius: 10px;
+  background: var(--dgm-panel);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  cursor: auto;
+}
+
+/* The zoom is appended after the drawer, so while the panel is open it can
+   centre itself in the room that is left rather than over the cards — and
+   over the element it is `for`, which the reader should see lit beside it. */
+.dgm-drawer.is-open ~ .dgm-exhibit-zoom {
+  left: calc(50% + 137px);
+  width: min(620px, calc(100% - 322px));
+}
+
+.dgm-exhibit-zoom .dgm-exhibit-title { font-size: 11px; }
+
+.dgm-exhibit-zoom .dgm-exhibit-body {
+  flex: 1;
+  min-height: 0;
+  font-size: 12px;
+  color: var(--dgm-fg);
+  overflow: auto;
+  user-select: text;
+}
+
+/* The element an exhibit is `for`, lit the way a highlight lights it, while
+   its card is hovered or zoomed. */
+.dgm-exhibited rect,
+.dgm-exhibited circle,
+.dgm-exhibited polygon,
+.dgm-exhibited path {
+  stroke: var(--dgm-accent) !important;
+  stroke-width: 3px !important;
+  filter: drop-shadow(0 0 8px var(--dgm-accent));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dgm-drawer-panel,
+  .dgm-drawer-handle,
+  .dgm-drawer-chevron,
+  .dgm-exhibit { transition-duration: 0.01ms; }
+}
+
 /* --- storyboard lightbox --------------------------------------------------
  *
  * Same overlay tier as the help dialog, one layer above it: Esc closes the
