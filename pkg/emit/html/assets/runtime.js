@@ -1793,6 +1793,16 @@
     // Keyboard readers reach the handle by Tab; focus inside opens it too.
     drawer.addEventListener('focusin', function () { self.setDrawer(true, self.drawerPinned); });
 
+    // The stage reads a wheel as zoom, a press as the start of a pan and a
+    // click as the transport. Inside the drawer those gestures are the
+    // reader's own — scrolling the panel, choosing a card — so they stop
+    // here, and the wheel is left to scroll natively.
+    stopStageGestures(drawer);
+    drawer.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      if (self.zoomed) self.unzoomExhibit();
+    });
+
     this.stage.appendChild(drawer);
     this.drawer = drawer;
     this.setDrawer(this.drawerPinned, this.drawerPinned);
@@ -1844,12 +1854,22 @@
     body.className = 'dgm-exhibit-body';
     body.textContent = x.text || '';
     zoom.appendChild(body);
-    // A click inside is a reader selecting text, not "anywhere else".
+    // A wheel inside scrolls the file and a press selects text; neither is
+    // the stage's, and a click inside is not "anywhere else".
+    stopStageGestures(zoom);
     zoom.addEventListener('click', function (ev) { ev.stopPropagation(); });
     this.stage.appendChild(zoom);
     this.zoomed = zoom;
     this.lightExhibit(x);
   };
+
+  // stopStageGestures keeps the stage's wheel-to-zoom and press-to-pan from
+  // reaching through an element that has its own use for them.
+  function stopStageGestures(element) {
+    ['wheel', 'pointerdown', 'mousedown', 'touchstart'].forEach(function (type) {
+      element.addEventListener(type, function (ev) { ev.stopPropagation(); });
+    });
+  }
 
   Player.prototype.unzoomExhibit = function () {
     if (this.zoomed && this.zoomed.parentNode) this.zoomed.parentNode.removeChild(this.zoomed);
