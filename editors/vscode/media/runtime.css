@@ -1416,6 +1416,35 @@ body.dgm-standalone {
   width: 248px;
   padding: 12px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Scrollbars that stay on screen. Where the platform draws overlay
+   scrollbars a long file gives no sign that there is more of it, and the
+   stage's own wheel means "zoom the diagram" everywhere else — so the panel
+   and the zoomed file say, visibly, that they scroll. */
+.dgm-drawer-panel,
+.dgm-exhibit-zoom .dgm-exhibit-body {
+  scrollbar-width: thin;
+  scrollbar-color: var(--dgm-muted) transparent;
+}
+
+.dgm-drawer-panel::-webkit-scrollbar,
+.dgm-exhibit-zoom .dgm-exhibit-body::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.dgm-drawer-panel::-webkit-scrollbar-thumb,
+.dgm-exhibit-zoom .dgm-exhibit-body::-webkit-scrollbar-thumb {
+  background: var(--dgm-muted);
+  border-radius: 5px;
+  border: 3px solid var(--dgm-panel);
+}
+
+.dgm-drawer-panel::-webkit-scrollbar-track,
+.dgm-exhibit-zoom .dgm-exhibit-body::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .dgm-exhibit {
@@ -1436,7 +1465,11 @@ body.dgm-standalone {
   outline: none;
 }
 
+/* flex: none, because the title is a flex child of the zoom, whose body
+   wants the height of the whole file: left to shrink, the strip collapsed
+   to a sliver with the file's first line showing through it. */
 .dgm-exhibit-title {
+  flex: none;
   padding: 6px 8px 4px;
   border-bottom: 1px solid var(--dgm-border);
   font-size: 10px;
@@ -1466,8 +1499,8 @@ body.dgm-standalone {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: min(620px, calc(100% - 48px));
-  max-height: calc(100% - 48px);
+  width: min(780px, calc(100% - 48px));
+  max-height: calc(100% - 32px);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -1483,7 +1516,7 @@ body.dgm-standalone {
    over the element it is `for`, which the reader should see lit beside it. */
 .dgm-drawer.is-open ~ .dgm-exhibit-zoom {
   left: calc(50% + 137px);
-  width: min(620px, calc(100% - 322px));
+  width: min(780px, calc(100% - 322px));
 }
 
 .dgm-exhibit-zoom .dgm-exhibit-title { font-size: 11px; }
@@ -1494,6 +1527,7 @@ body.dgm-standalone {
   font-size: 12px;
   color: var(--dgm-fg);
   overflow: auto;
+  overscroll-behavior: contain;
   user-select: text;
 }
 
