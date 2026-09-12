@@ -16,6 +16,15 @@ one drawn for it instead of scoring identically and swapping.
 Unbound nodes, edges or click sources surface in a warning banner on the page
 rather than silently failing.
 
+**An edge's label is bound with its path.** Mermaid draws captions in a
+separate `g.edgeLabels` layer, so a class on the path alone leaves the caption
+behind: `hide` a node and its "calls" would float in empty space.
+`attachEdgeLabels` pairs each bound path with its label, by the `data-id`
+mermaid 11 stamps on both when the path carries one, otherwise by the label
+sitting on the path's midpoint. Reveal's collapse and the timeline's `hidden`
+and `unfocused` reach the label through `bind.label`; the flow classes do not,
+because `stroke` inherits in SVG and would outline the text.
+
 ## Two strategies, not one per diagram type
 
 `index()` picks between them on `ir.Diagram.Type`.

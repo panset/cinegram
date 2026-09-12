@@ -192,7 +192,63 @@
         map[edge.id] = { path: paths[best], flip: bestFlip };
       }
     }
+    attachEdgeLabels(svg, map);
     return map;
+  }
+
+  // attachEdgeLabels pairs each bound path with the caption mermaid drew for
+  // the same edge, so whatever conceals or dims the arrow can take its label
+  // with it — a "calls" floating in empty space beside a hidden node
+  // reads as a rendering bug, exactly as a dangling arrow does.
+  //
+  // Mermaid 11 stamps the label's inner group with the edge's data-id, and the
+  // path may carry the same one; when both do, the pairing is exact. Any label
+  // left over goes to the path whose midpoint it sits on, which is where
+  // mermaid places it — the same defensive geometry the paths themselves are
+  // matched by, and the only strategy an older mermaid leaves.
+  function attachEdgeLabels(svg, map) {
+    var labels = Array.prototype.slice.call(svg.querySelectorAll('.edgeLabels .edgeLabel'));
+    labels = labels.filter(function (g) { return (g.textContent || '').trim(); });
+    if (!labels.length) return;
+
+    var byId = {};
+    labels.forEach(function (g) {
+      var inner = g.querySelector('.label[data-id]');
+      if (inner) byId[inner.getAttribute('data-id')] = g;
+    });
+
+    var taken = [];
+    var unpaired = [];
+    for (var id in map) {
+      var did = map[id].path.getAttribute('data-id');
+      if (did && byId[did]) {
+        map[id].label = byId[did];
+        taken.push(byId[did]);
+      } else {
+        unpaired.push(id);
+      }
+    }
+
+    var mids = {};
+    unpaired.forEach(function (id) {
+      var p = map[id].path;
+      var len = 0;
+      try { len = p.getTotalLength(); } catch (e) { len = 0; }
+      if (len) mids[id] = clientPoint(p, p.getPointAtLength(len / 2));
+    });
+    labels.forEach(function (g) {
+      if (taken.indexOf(g) >= 0) return;
+      var c = centreOf(g);
+      var best = null, bestD = Infinity;
+      for (var id in mids) {
+        var d = dist(c, mids[id]);
+        if (d < bestD) { bestD = d; best = id; }
+      }
+      if (best !== null) {
+        map[best].label = g;
+        delete mids[best];
+      }
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -409,6 +465,7 @@
     this.lastFrame = 0;
     this.nodeState = {};
     this.edgeState = {};
+    this.edgeLabelState = {};
     this.particles = {};
     this.notes = {};
     this.pills = {};
@@ -3136,6 +3193,7 @@
     this.pills = {};
     this.nodeState = {};
     this.edgeState = {};
+    this.edgeLabelState = {};
     this.overlay.innerHTML = '';
 
     // Surface anything that failed to bind. A silently half-animated diagram
@@ -3259,7 +3317,10 @@
 
       v.edges.forEach(function (e) {
         var bind = self.edges[e.id];
-        if (bind) setCollapsed(bind.path, !!(conceal[e.from] || conceal[e.to]));
+        if (!bind) return;
+        var off = !!(conceal[e.from] || conceal[e.to]);
+        setCollapsed(bind.path, off);
+        if (bind.label) setCollapsed(bind.label, off);
       });
     }
 
@@ -4288,7 +4349,22 @@
       var bind = self.edges[id];
       return bind ? bind.path : null;
     });
+
+    // A caption follows its arrow's visibility and nothing else. The flow
+    // classes tint a path's stroke, and stroke inherits in SVG: mirrored onto
+    // the label group they would outline the text in the accent colour.
+    var wantLabel = {};
+    for (var id in want) {
+      var cls = want[id].cls.split(' ').filter(function (c) { return LABEL_STATES[c]; }).join(' ');
+      if (cls) wantLabel[id] = nodeState(cls, '');
+    }
+    this.edgeLabelState = applyStates(this.edgeLabelState, wantLabel, function (id) {
+      var bind = self.edges[id];
+      return bind && bind.label ? bind.label : null;
+    });
   };
+
+  var LABEL_STATES = { hidden: true, unfocused: true };
 
   // EASINGS remap a track's linear progress. Each is a pure function of p over
   // [0,1] with f(0)=0 and f(1)=1, which is what keeps seeking equivalent to
