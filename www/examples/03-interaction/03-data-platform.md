@@ -162,4 +162,4 @@ A data platform, deliberately too big for one screen.
     ```
 
 ← [a priced order request](../03-interaction/02-layered-arch.md)  
-→ [the upgrade](../04-diagram-types/01-websocket-handshake.md)
+→ [one request, three manifests](../03-interaction/04-manifests-in-the-margin.md)

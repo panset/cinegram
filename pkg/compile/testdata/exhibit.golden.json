@@ -1,0 +1,98 @@
+{
+  "version": 2,
+  "root": "main",
+  "views": [
+    {
+      "id": "main",
+      "title": "one request",
+      "diagram": {
+        "type": "flowchart",
+        "direction": "LR",
+        "mermaid": "%% Exhibits compile in declaration order with the element they are for.\n%% Compiled standalone there is no loader to read the files, so Text is empty\n%% here; the loader test covers the read.\nflowchart LR\n  ing[Ingress]\n  svc[Service]\n  pod[Pod]\n  ing --\u003e svc\n  svc --\u003e pod\n"
+      },
+      "nodes": [
+        {
+          "id": "ing",
+          "label": "Ingress",
+          "shape": "rect"
+        },
+        {
+          "id": "svc",
+          "label": "Service",
+          "shape": "rect"
+        },
+        {
+          "id": "pod",
+          "label": "Pod",
+          "shape": "rect"
+        }
+      ],
+      "groups": [],
+      "edges": [
+        {
+          "id": "e0",
+          "from": "ing",
+          "to": "svc",
+          "style": "normal",
+          "head": "arrow"
+        },
+        {
+          "id": "e1",
+          "from": "svc",
+          "to": "pod",
+          "style": "normal",
+          "head": "arrow"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "s0",
+          "name": "one request",
+          "duration": 800,
+          "speed": 1,
+          "loop": false,
+          "autoplay": false,
+          "steps": [
+            {
+              "id": "in",
+              "name": "The request arrives",
+              "start": 0,
+              "end": 800,
+              "tracks": [
+                {
+                  "kind": "flow",
+                  "start": 0,
+                  "end": 400,
+                  "edge": "e0",
+                  "from": "ing",
+                  "to": "svc"
+                },
+                {
+                  "kind": "flow",
+                  "start": 400,
+                  "end": 800,
+                  "edge": "e1",
+                  "from": "svc",
+                  "to": "pod"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "exhibits": [
+        {
+          "id": "deploy",
+          "title": "Deployment manifest",
+          "text": "",
+          "for": "pod"
+        },
+        {
+          "id": "service",
+          "text": "",
+          "for": "svc"
+        }
+      ]
+    }
+  ]
+}

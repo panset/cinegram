@@ -29,7 +29,7 @@
         {
           "comment": "The four blocks the scenario half of the language opens with. This list is the contract in isTopLevelKeyword (pkg/parser/interact.go); a diagram parser must hand the cursor back at every one of them.",
           "name": "keyword.control.block.dgm",
-          "match": "^\\s*\\b(scenario|storyboard|interact|view)\\b"
+          "match": "^\\s*\\b(scenario|storyboard|interact|view|exhibit)\\b"
         },
         {
           "name": "keyword.control.step.dgm",

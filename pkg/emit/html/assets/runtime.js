@@ -720,6 +720,22 @@
     this.stage = el('div', 'dgm-stage');
     this.overlay = el('div', 'dgm-overlay');
     this.stage.appendChild(this.overlay);
+    // A zoomed exhibit goes away on a click anywhere — the diagram, the step
+    // list, the caption — the way a reader expects a popover to. The card and
+    // the zoom stop their own clicks, so this never fires for the click that
+    // opened it. Registered once: build runs once.
+    var player = this;
+    document.addEventListener('click', function () {
+      if (!player.zoomed) return;
+      player.unzoomExhibit();
+      player.settleDrawer();
+    });
+    this.drawer = null;
+    this.drawerOpen = false;
+    this.drawerPinned = false;
+    this.drawerHover = false;
+    this.zoomed = null;
+    this.lit = null;
 
     // The minimap, built once beside the overlay and re-appended by render()
     // for the same reason: the stage is emptied there. It starts off screen
@@ -1365,6 +1381,8 @@
     if (ev.key === '?') { ev.preventDefault(); this.toggleHelp(); return; }
     if (ev.key === 'Escape') {
       if (this.lightboxIsOpen()) { ev.preventDefault(); this.closeLightbox(); return; }
+      if (this.zoomed) { ev.preventDefault(); this.unzoomExhibit(); this.settleDrawer(); return; }
+      if (this.drawerOpen) { ev.preventDefault(); this.setDrawer(false, false); return; }
       if (this.helpOpen()) { ev.preventDefault(); this.toggleHelp(); return; }
       // Escape means "get me out of the mode I am in", innermost first.
       if (this.present) { ev.preventDefault(); this.setPresenter(false); return; }
@@ -1684,6 +1702,159 @@
       if (frame && frame.image) this.openLightbox(frame);
       else this.closeLightbox();
     }
+  };
+
+  // --- exhibits -----------------------------------------------------------
+  //
+  // The documents a diagram is about — the manifests, configs and log
+  // excerpts behind its boxes — kept in a drawer on the stage's left edge so
+  // they cost the picture nothing until asked for. At rest the drawer is a
+  // slim handle saying how many files are there. Hovering it slides out a
+  // panel of cards, one per file, that goes back when the pointer leaves; a
+  // click on the handle pins the panel open, for touch and keyboard readers
+  // and for anyone who wants it to stay. A click on a card zooms the file to
+  // a readable, scrollable, selectable copy over the diagram; a click
+  // anywhere else, or Esc, puts it away. Hovering a card lights the element
+  // the exhibit is `for`, and so does the zoom, so the file and the box it
+  // explains read as one thing.
+  //
+  // The drawer is HTML in the stage, outside the SVG, so a render replaces it
+  // wholesale as it does the chrome inside the picture; whether it was pinned
+  // open survives, because that is the reader's choice, not the picture's.
+  var DRAWER_HOVER_DELAY = 140;
+
+  Player.prototype.syncExhibits = function () {
+    var self = this;
+    this.unzoomExhibit();
+    if (this.drawer && this.drawer.parentNode) this.drawer.parentNode.removeChild(this.drawer);
+    this.drawer = null;
+
+    var list = this.view().exhibits || [];
+    this.stage.classList.toggle('dgm-has-exhibits', list.length > 0);
+    if (!list.length) return;
+
+    var drawer = el('div', 'dgm-drawer');
+    var handle = document.createElement('button');
+    handle.type = 'button';
+    handle.className = 'dgm-drawer-handle';
+    handle.title = 'The files behind this diagram';
+    // The chevron says "this opens" the way every drawer handle does; the
+    // stylesheet turns it round while the panel is out.
+    handle.appendChild(elText('span', 'dgm-drawer-chevron', '\u00bb'));
+    handle.appendChild(elText('span', 'dgm-drawer-label',
+      list.length + (list.length === 1 ? ' file' : ' files')));
+    handle.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      self.setDrawer(!self.drawerPinned, !self.drawerPinned);
+    });
+    drawer.appendChild(handle);
+
+    var panel = el('div', 'dgm-drawer-panel');
+    list.forEach(function (x) {
+      var card = el('div', 'dgm-exhibit');
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('role', 'button');
+      card.setAttribute('aria-label', 'Zoom ' + (x.title || x.id));
+      card.appendChild(elText('div', 'dgm-exhibit-title', x.title || x.id));
+      var body = document.createElement('pre');
+      body.className = 'dgm-exhibit-body';
+      body.textContent = x.text || '';
+      card.appendChild(body);
+      card.addEventListener('mouseenter', function () { if (!self.zoomed) self.lightExhibit(x); });
+      card.addEventListener('mouseleave', function () { if (!self.zoomed) self.unlightExhibit(); });
+      card.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        self.zoomExhibit(x);
+      });
+      card.addEventListener('keydown', function (ev) {
+        if (ev.key !== 'Enter' && ev.key !== ' ') return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        card.click();
+      });
+      panel.appendChild(card);
+    });
+    drawer.appendChild(panel);
+
+    // Hover opens after a beat, so a pointer crossing the edge on its way
+    // somewhere else does not flash the panel; leaving closes it unless the
+    // reader pinned it or is reading a zoom.
+    var timer = null;
+    drawer.addEventListener('mouseenter', function () {
+      self.drawerHover = true;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () { timer = null; self.setDrawer(true, self.drawerPinned); }, DRAWER_HOVER_DELAY);
+    });
+    drawer.addEventListener('mouseleave', function () {
+      self.drawerHover = false;
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (!self.drawerPinned && !self.zoomed) self.setDrawer(false, false);
+    });
+    // Keyboard readers reach the handle by Tab; focus inside opens it too.
+    drawer.addEventListener('focusin', function () { self.setDrawer(true, self.drawerPinned); });
+
+    this.stage.appendChild(drawer);
+    this.drawer = drawer;
+    this.setDrawer(this.drawerPinned, this.drawerPinned);
+  };
+
+  // setDrawer is the one writer of the drawer's state: open or shut, and
+  // whether the reader asked for it to stay that way.
+  Player.prototype.setDrawer = function (open, pinned) {
+    this.drawerOpen = !!open;
+    this.drawerPinned = !!pinned;
+    if (!this.drawer) return;
+    this.drawer.classList.toggle('is-open', this.drawerOpen);
+    this.drawer.classList.toggle('is-pinned', this.drawerPinned);
+    var handle = this.drawer.querySelector('.dgm-drawer-handle');
+    if (handle) handle.setAttribute('aria-expanded', this.drawerOpen ? 'true' : 'false');
+    if (!this.drawerOpen) this.unzoomExhibit();
+  };
+
+  // settleDrawer closes a drawer that only a zoom was holding open: the
+  // pointer left it while the reader was reading, and now the reading is done.
+  Player.prototype.settleDrawer = function () {
+    if (this.drawerOpen && !this.drawerPinned && !this.drawerHover) this.setDrawer(false, false);
+  };
+
+  // lightExhibit marks the element an exhibit is `for`. dgm-exhibited is in
+  // STICKY, so the clock's own class rewrites leave it on the element until
+  // unlightExhibit takes it off.
+  Player.prototype.lightExhibit = function (x) {
+    this.unlightExhibit();
+    var target = x['for'] ? this.elementFor(x['for']) : null;
+    if (target) {
+      target.classList.add('dgm-exhibited');
+      this.lit = target;
+    }
+  };
+
+  Player.prototype.unlightExhibit = function () {
+    if (this.lit) this.lit.classList.remove('dgm-exhibited');
+    this.lit = null;
+  };
+
+  Player.prototype.zoomExhibit = function (x) {
+    this.unzoomExhibit();
+    var zoom = el('div', 'dgm-exhibit-zoom');
+    zoom.setAttribute('role', 'dialog');
+    zoom.setAttribute('aria-label', x.title || x.id);
+    zoom.appendChild(elText('div', 'dgm-exhibit-title', x.title || x.id));
+    var body = document.createElement('pre');
+    body.className = 'dgm-exhibit-body';
+    body.textContent = x.text || '';
+    zoom.appendChild(body);
+    // A click inside is a reader selecting text, not "anywhere else".
+    zoom.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    this.stage.appendChild(zoom);
+    this.zoomed = zoom;
+    this.lightExhibit(x);
+  };
+
+  Player.prototype.unzoomExhibit = function () {
+    if (this.zoomed && this.zoomed.parentNode) this.zoomed.parentNode.removeChild(this.zoomed);
+    this.zoomed = null;
+    this.unlightExhibit();
   };
 
   // --- storyboard lightbox ----------------------------------------------
@@ -3081,6 +3252,9 @@
         self.stage.appendChild(self.map);
         self.stage.appendChild(self.rail);
         if (refocus && self.rail.contains(refocus)) refocus.focus();
+        // Exhibits live in the stage too, and the emptying above took them
+        // with it: they are rebuilt here, after the stage is whole again.
+        self.syncExhibits();
         self.holder = holder;
         self.mapClone = null;
         self.mapKeys = null;
@@ -4774,7 +4948,7 @@
   // whole class attribute on every frame that changes its state; without this
   // exemption a node would silently lose its click affordance, and a revealed
   // element would flicker back to hidden, the moment the clock touched it.
-  var STICKY = { 'dgm-clickable': true, 'dgm-collapsed': true, 'dgm-actor': true };
+  var STICKY = { 'dgm-clickable': true, 'dgm-collapsed': true, 'dgm-actor': true, 'dgm-exhibited': true };
 
   // baseClass strips the dgm-* state classes we previously added, so state
   // changes never accumulate on an element.

@@ -1,0 +1,20 @@
+diagram: flowchart (flowchart LR)
+direction: LR
+
+nodes:
+  ing        label="Ingress"                shape=rect      
+  svc        label="Service"                shape=rect      
+  pod        label="Pod"                    shape=rect      
+
+edges:
+  e0   ing -> svc style=normal head=arrow
+  e1   svc -> pod style=normal head=arrow
+
+exhibits:
+  deploy     title="Deployment manifest" from="manifests/deployment.yaml" for="pod"
+  service    title=""                   from="manifests/service.yaml" for="svc"
+  notes      title="Runbook excerpt"    from="runbook.md"
+
+scenario "one request"
+  step in "The request arrives"
+    flow ing -> svc -> pod {dur="800ms"}

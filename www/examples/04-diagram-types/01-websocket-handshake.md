@@ -73,5 +73,5 @@ A WebSocket upgrade, as a sequenceDiagram.
       }
     ```
 
-← [a row's journey](../03-interaction/03-data-platform.md)  
+← [one request, three manifests](../03-interaction/04-manifests-in-the-margin.md)  
 → [tcp connection](../04-diagram-types/02-tcp-connection.md)

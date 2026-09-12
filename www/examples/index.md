@@ -14,7 +14,7 @@ payment checkout · cut over to v1.5 · authorization code flow · sign in with 
 
 ## [interaction](03-interaction/index.md)
 
-the cascade · a priced order request · a row's journey
+the cascade · a priced order request · a row's journey · one request, three manifests
 
 ## [diagram types](04-diagram-types/index.md)
 

@@ -155,6 +155,7 @@ suggestion rather than a silent no-op.
 | `variant`, `until` | scenario | Inherit another scenario's opening steps — see [Failure paths](#failure-paths). |
 | `outcome` | scenario | `ok` or `fail`. A failure is marked `✕` in the scenario picker. |
 | `img`, `caption` | storyboard frame | The picture to show and the line under it. At least one is required. |
+| `for` | exhibit | The element a document in the drawer explains, lit while its card is hovered or zoomed. |
 
 `color` reaches the page as a `--dgm-color` custom property on the particle or
 the node, which `runtime.css` reads with the theme colour as its fallback — so a
@@ -500,6 +501,35 @@ path and give the failure path the full width.
 
 `examples/02-storytelling/04-oidc-login.dgm` is the worked example, with its frames in
 `examples/02-storytelling/frames/`.
+
+## Exhibits
+
+A diagram of a request path says a Service sits in front of a Deployment. It
+does not show the YAML that makes either exist, and the person reading it
+usually wants to. An `exhibit` puts a file in a drawer on the stage's edge:
+
+```
+exhibit service "service.yaml"    from "manifests/service.yaml"    { for: svc }
+exhibit deploy  "deployment.yaml" from "manifests/deployment.yaml" { for: dep }
+```
+
+At rest the drawer is a slim handle down the left edge of the stage, saying
+how many files are there, so the picture keeps its room. Hover the handle and
+a panel of cards slides out, each the file's first lines in a tiny monospace,
+enough to read as "a manifest lives here"; click the handle and the panel stays.
+Click a card and the file zooms to a readable, scrollable copy over the
+diagram, until Esc or a click anywhere else. An exhibit `for` an element lights
+that element while its card is hovered or zoomed, so the file and the box it
+explains are read as one thing.
+
+The declaration has the shape of a `view`: the path is quoted after `from`,
+resolved relative to the declaring file, and read by the loader as text — YAML,
+JSON, a log excerpt, a config file, anything without a NUL byte in it — so the
+emitted page stays self-contained. Cards are listed in declaration order, and
+exhibits are per view, so a drilled-into diagram carries its own drawer.
+
+`examples/03-interaction/04-manifests-in-the-margin.dgm` is the worked example, with
+its files in `examples/03-interaction/manifests/`.
 
 ## Failure paths
 

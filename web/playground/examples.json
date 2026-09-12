@@ -61,6 +61,17 @@
     "files": ["03-interaction/03-data-platform.dgm"]
   },
   {
+    "id": "manifests-in-the-margin",
+    "title": "Manifests in the margin (exhibits)",
+    "entry": "03-interaction/04-manifests-in-the-margin.dgm",
+    "files": [
+      "03-interaction/04-manifests-in-the-margin.dgm",
+      "03-interaction/manifests/ingress.yaml",
+      "03-interaction/manifests/service.yaml",
+      "03-interaction/manifests/deployment.yaml"
+    ]
+  },
+  {
     "id": "websocket-handshake",
     "title": "WebSocket upgrade (sequence)",
     "entry": "04-diagram-types/01-websocket-handshake.dgm",

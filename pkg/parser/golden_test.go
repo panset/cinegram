@@ -124,6 +124,18 @@ func renderParse(res *Result, bag *diag.Bag) string {
 		}
 	}
 
+	if exhibits := res.Document.Exhibits; len(exhibits) > 0 {
+		b.WriteString("\nexhibits:\n")
+		for _, x := range exhibits {
+			fmt.Fprintf(&b, "  %-10s title=%-20q from=%q", x.ID, x.Title, x.Path)
+			for _, k := range x.Attrs.Keys() {
+				v, _ := x.Attrs.Get(k)
+				fmt.Fprintf(&b, " %s=%q", k, v.Raw)
+			}
+			b.WriteByte('\n')
+		}
+	}
+
 	for _, sb := range res.Document.Storyboards {
 		fmt.Fprintf(&b, "\nstoryboard %q\n", sb.Title)
 		for _, f := range sb.Frames {

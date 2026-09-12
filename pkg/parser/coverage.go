@@ -51,6 +51,14 @@ func checkUnreferenced(doc *ast.Document, t *symbol.Table, b *diag.Bag) {
 		}
 	}
 
+	// An exhibit `for` an element is about it, which is as much a reference
+	// as an action would be.
+	for _, x := range doc.Exhibits {
+		if v, ok := x.Attrs.Get("for"); ok {
+			seen[v.Raw] = true
+		}
+	}
+
 	for _, n := range t.Nodes() {
 		if seen[n.ID] {
 			continue
